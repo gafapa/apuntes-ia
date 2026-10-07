@@ -1,0 +1,174 @@
+import { useState } from 'react';
+import { ChevronRight, FileText, FolderOpen, Moon, Plus, Settings, Sun } from 'lucide-react';
+import { useEstado } from '../lib/estado';
+import { api } from '../lib/api';
+import { BotonIcono, cx } from './ui';
+import { ModalNuevaAsignatura, ModalNuevoDocumento } from './Modales';
+import { ModalAjustes } from './ModalAjustes';
+
+export function BarraLateral() {
+  const { asignaturas, seleccion, seleccionar } = useEstado();
+  const [plegadas, setPlegadas] = useState<Record<string, boolean>>({});
+  const [nuevaAsig, setNuevaAsig] = useState(false);
+  const [nuevoDocEn, setNuevoDocEn] = useState<string>();
+  const [ajustes, setAjustes] = useState(false);
+
+  return (
+    <aside className="flex w-64 shrink-0 flex-col border-r border-borde bg-panel">
+      <button
+        onClick={() => seleccionar({})}
+        className="flex items-center gap-2.5 px-4 pt-4 pb-3 text-left cursor-pointer"
+        title="Inicio"
+      >
+        <img src="./icono.png" alt="" className="size-8" />
+        <div>
+          <div className="font-semibold tracking-tight leading-tight">Apuntes IA</div>
+          <div className="text-[11.5px] text-texto-3 leading-tight">Apuntes con agentes de IA</div>
+        </div>
+      </button>
+
+      <div className="flex items-center justify-between px-4 pt-3 pb-1">
+        <span className="text-[11px] font-semibold tracking-wider text-texto-3 uppercase">Asignaturas</span>
+        <BotonIcono titulo="Nueva asignatura" onClick={() => setNuevaAsig(true)}>
+          <Plus className="size-4" />
+        </BotonIcono>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto px-2 pb-3">
+        {asignaturas.length === 0 && (
+          <button
+            onClick={() => setNuevaAsig(true)}
+            className="mx-2 mt-2 w-[calc(100%-1rem)] rounded-lg border border-dashed border-borde px-3 py-4 text-center text-[13px] text-texto-3 hover:border-acento hover:text-acento cursor-pointer"
+          >
+            Crea tu primera asignatura
+          </button>
+        )}
+        {asignaturas.map((a) => {
+          const abierta = !plegadas[a.id];
+          const activa = seleccion.asignatura === a.id && !seleccion.documento;
+          return (
+            <div key={a.id} className="mt-0.5">
+              <div
+                className={cx(
+                  'group flex items-center gap-1 rounded-lg pr-1 transition-colors',
+                  activa ? 'bg-acento-suave' : 'hover:bg-panel-2',
+                )}
+              >
+                <button
+                  className="flex size-7 items-center justify-center text-texto-3 cursor-pointer"
+                  onClick={() => setPlegadas({ ...plegadas, [a.id]: abierta })}
+                  aria-label={abierta ? 'Plegar' : 'Desplegar'}
+                >
+                  <ChevronRight className={cx('size-3.5 transition-transform', abierta && 'rotate-90')} />
+                </button>
+                <button
+                  className={cx('flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left cursor-pointer', activa && 'text-acento font-medium')}
+                  onClick={() => seleccionar({ asignatura: a.id })}
+                >
+                  <span className="size-2.5 shrink-0 rounded-full" style={{ background: a.color }} />
+                  <span className="truncate">{a.nombre}</span>
+                </button>
+                <BotonIcono
+                  titulo="Nuevo documento"
+                  className="size-6 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                  onClick={() => setNuevoDocEn(a.id)}
+                >
+                  <Plus className="size-3.5" />
+                </BotonIcono>
+              </div>
+              {abierta && (
+                <div className="ml-5 border-l border-borde pl-2">
+                  {a.documentos.map((d) => {
+                    const sel = seleccion.asignatura === a.id && seleccion.documento === d.id;
+                    return (
+                      <button
+                        key={d.id}
+                        onClick={() => seleccionar({ asignatura: a.id, documento: d.id })}
+                        className={cx(
+                          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors cursor-pointer',
+                          sel ? 'bg-acento-suave text-acento font-medium' : 'text-texto-2 hover:bg-panel-2 hover:text-texto',
+                        )}
+                      >
+                        <FileText className="size-3.5 shrink-0 opacity-70" />
+                        <span className="truncate">{d.titulo}</span>
+                      </button>
+                    );
+                  })}
+                  {a.documentos.length === 0 && (
+                    <button
+                      onClick={() => setNuevoDocEn(a.id)}
+                      className="px-2 py-1.5 text-[12.5px] text-texto-3 hover:text-acento cursor-pointer"
+                    >
+                      + Añadir documento
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+
+      <PieBarra onAjustes={() => setAjustes(true)} />
+
+      <ModalNuevaAsignatura abierto={nuevaAsig} onCerrar={() => setNuevaAsig(false)} />
+      <ModalNuevoDocumento asignatura={nuevoDocEn} onCerrar={() => setNuevoDocEn(undefined)} />
+      <ModalAjustes abierto={ajustes} onCerrar={() => setAjustes(false)} />
+    </aside>
+  );
+}
+
+function PieBarra({ onAjustes }: { onAjustes: () => void }) {
+  const { uso, motores, conectado } = useEstado();
+  const [oscuro, setOscuro] = useState(() => document.documentElement.classList.contains('dark'));
+  const cambiarTema = () => {
+    const v = !oscuro;
+    setOscuro(v);
+    document.documentElement.classList.toggle('dark', v);
+    try {
+      localStorage.setItem('tema', v ? 'oscuro' : 'claro');
+    } catch {}
+  };
+  const pct = uso?.cincoHoras !== undefined ? Math.round(uso.cincoHoras * 100) : undefined;
+  const reinicio = uso?.reinicio ? new Date(uso.reinicio * 1000).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : '';
+
+  return (
+    <div className="border-t border-borde px-4 py-3 space-y-3">
+      {pct !== undefined && (
+        <div title={`Uso de la suscripción de Claude en la ventana de 5 horas${reinicio ? ` · se reinicia a las ${reinicio}` : ''}`}>
+          <div className="mb-1 flex justify-between text-[11.5px] text-texto-3">
+            <span>Uso de Claude (5 h)</span>
+            <span className={cx(pct >= 80 && 'text-aviso font-medium')}>{pct}%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-panel-2">
+            <div
+              className={cx('h-full rounded-full transition-all', pct >= 80 ? 'bg-aviso' : 'bg-acento')}
+              style={{ width: `${Math.max(2, pct)}%` }}
+            />
+          </div>
+        </div>
+      )}
+      <div className="flex items-center gap-1">
+        <div className="flex flex-1 items-center gap-3 text-[11.5px] text-texto-3">
+          {!conectado && <span className="text-error">Sin conexión</span>}
+          {conectado &&
+            motores?.map((m) => (
+              <span key={m.motor} className="flex items-center gap-1.5" title={m.version ?? 'No instalado'}>
+                <span className={cx('size-1.5 rounded-full', m.instalado && m.sesion ? 'bg-ok' : m.instalado ? 'bg-aviso' : 'bg-texto-3/50')} />
+                {m.motor === 'claude' ? 'Claude' : 'Codex'}
+              </span>
+            ))}
+        </div>
+        <BotonIcono titulo="Abrir carpeta de datos" onClick={() => api.abrirCarpeta()}>
+          <FolderOpen className="size-4" />
+        </BotonIcono>
+        <BotonIcono titulo={oscuro ? 'Tema claro' : 'Tema oscuro'} onClick={cambiarTema}>
+          {oscuro ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        </BotonIcono>
+        <BotonIcono titulo="Ajustes" onClick={onAjustes}>
+          <Settings className="size-4" />
+        </BotonIcono>
+      </div>
+    </div>
+  );
+}

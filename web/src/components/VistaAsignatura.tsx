@@ -1,0 +1,222 @@
+import { useEffect, useState } from 'react';
+import { FileText, Plus, Trash2 } from 'lucide-react';
+import type { AsignaturaDetalle } from '../../../shared/tipos';
+import { api } from '../lib/api';
+import { useEstado } from '../lib/estado';
+import { AreaTexto, Boton, Campo, Entrada, Vacio, confirmar, cx } from './ui';
+import { GestorFuentes } from './GestorFuentes';
+import { ModalNuevoDocumento } from './Modales';
+
+const COLORES = ['#7c5cff', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#64748b'];
+
+type Pestana = 'documentos' | 'contexto' | 'material';
+
+export function VistaAsignatura({ asignatura }: { asignatura: string }) {
+  const { seleccionar, cargarAsignaturas, avisar, versiones } = useEstado();
+  const [a, setA] = useState<AsignaturaDetalle>();
+  const [pestana, setPestana] = useState<Pestana>('documentos');
+  const [nuevoDoc, setNuevoDoc] = useState(false);
+  const version = versiones[`${asignatura}/`];
+
+  useEffect(() => {
+    api.asignatura(asignatura).then(setA).catch((e) => avisar(e.message, 'error'));
+  }, [asignatura, version, avisar]);
+
+  if (!a) return null;
+
+  const eliminar = async () => {
+    const ok = await confirmar(`¿Eliminar la asignatura «${a.nombre}»?`, {
+      texto: 'Se moverá con todos sus documentos a la papelera de la carpeta de datos (.papelera), de donde podrás recuperarla.',
+      boton: 'Eliminar',
+      peligro: true,
+    });
+    if (!ok) return;
+    await api.eliminarAsignatura(a.id);
+    await cargarAsignaturas();
+    seleccionar({});
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="mx-auto max-w-4xl px-10 pt-10 pb-16">
+        <div className="flex items-start gap-4">
+          <div className="mt-1.5 size-4 rounded-full" style={{ background: a.color }} />
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl font-semibold tracking-tight">{a.nombre}</h1>
+            <p className="mt-0.5 text-texto-2">
+              {[a.nivel, a.idioma].filter(Boolean).join(' · ')}
+              {a.destinatarios && <span className="text-texto-3"> · Para: {a.destinatarios}</span>}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-8 flex gap-1 border-b border-borde">
+          {(
+            [
+              ['documentos', `Documentos (${a.documentos.length})`],
+              ['contexto', 'Contexto y destinatarios'],
+              ['material', 'Material de la asignatura'],
+            ] as [Pestana, string][]
+          ).map(([id, txt]) => (
+            <button
+              key={id}
+              onClick={() => setPestana(id)}
+              className={cx(
+                '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors cursor-pointer',
+                pestana === id ? 'border-acento text-acento' : 'border-transparent text-texto-2 hover:text-texto',
+              )}
+            >
+              {txt}
+            </button>
+          ))}
+        </div>
+
+        <div className="pt-6">
+          {pestana === 'documentos' &&
+            (a.documentos.length === 0 ? (
+              <Vacio
+                icono={<FileText className="size-6" />}
+                titulo="Sin documentos todavía"
+                texto="Cada documento es un bloque de apuntes (un tema, una unidad…) con sus propias secciones."
+                accion={
+                  <Boton variante="primario" icono={<Plus className="size-4" />} onClick={() => setNuevoDoc(true)}>
+                    Nuevo documento
+                  </Boton>
+                }
+              />
+            ) : (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
+                {a.documentos.map((d) => (
+                  <button
+                    key={d.id}
+                    onClick={() => seleccionar({ asignatura: a.id, documento: d.id })}
+                    className="rounded-xl border border-borde bg-panel p-4 text-left shadow-suave transition-all hover:-translate-y-0.5 hover:border-acento/50 cursor-pointer"
+                  >
+                    <FileText className="mb-3 size-5 text-acento" />
+                    <div className="font-medium leading-snug">{d.titulo}</div>
+                    {d.objetivo && <p className="mt-1 line-clamp-2 text-[13px] text-texto-2">{d.objetivo}</p>}
+                    <div className="mt-3 text-xs text-texto-3">
+                      Actualizado {new Date(d.actualizado).toLocaleDateString('es', { day: 'numeric', month: 'short' })}
+                    </div>
+                  </button>
+                ))}
+                <button
+                  onClick={() => setNuevoDoc(true)}
+                  className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-borde text-texto-3 transition-colors hover:border-acento hover:text-acento cursor-pointer"
+                >
+                  <Plus className="size-5" />
+                  Nuevo documento
+                </button>
+              </div>
+            ))}
+
+          {pestana === 'contexto' && (
+            <FormContexto
+              a={a}
+              onGuardado={(n) => {
+                setA(n);
+                cargarAsignaturas();
+              }}
+            />
+          )}
+
+          {pestana === 'material' && (
+            <GestorFuentes
+              asignatura={a.id}
+              descripcion="Material común a toda la asignatura (opcional): programación, libro, apuntes del profesor… Los agentes lo consultan en todos los documentos. Si no aportas nada, investigarán por su cuenta."
+            />
+          )}
+        </div>
+
+        {pestana === 'contexto' && (
+          <div className="mt-12 flex items-center justify-between rounded-xl border border-error/30 px-5 py-4">
+            <div>
+              <div className="text-sm font-medium">Eliminar asignatura</div>
+              <div className="text-xs text-texto-3">Se mueve a la papelera junto con sus documentos.</div>
+            </div>
+            <Boton tam="sm" icono={<Trash2 className="size-3.5" />} onClick={eliminar} className="text-error">
+              Eliminar
+            </Boton>
+          </div>
+        )}
+      </div>
+      <ModalNuevoDocumento asignatura={nuevoDoc ? a.id : undefined} onCerrar={() => setNuevoDoc(false)} />
+    </div>
+  );
+}
+
+function FormContexto({ a, onGuardado }: { a: AsignaturaDetalle; onGuardado: (a: AsignaturaDetalle) => void }) {
+  const { avisar } = useEstado();
+  const inicial = { nombre: a.nombre, nivel: a.nivel, destinatarios: a.destinatarios, idioma: a.idioma, estilo: a.estilo, color: a.color, contexto: a.contexto };
+  const [f, setF] = useState(inicial);
+  const [guardando, setGuardando] = useState(false);
+  const cambiado = JSON.stringify(f) !== JSON.stringify(inicial);
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      onGuardado(await api.guardarAsignatura(a.id, f));
+      avisar('Asignatura guardada', 'ok');
+    } catch (e) {
+      avisar((e as Error).message, 'error');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-4">
+        <Campo etiqueta="Nombre">
+          <Entrada value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} />
+        </Campo>
+        <Campo etiqueta="Nivel o curso">
+          <Entrada value={f.nivel} onChange={(e) => setF({ ...f, nivel: e.target.value })} />
+        </Campo>
+      </div>
+      <Campo etiqueta="Destinatarios" ayuda="Edad, nivel previo, objetivo (examen, repaso, divulgación)… Los documentos pueden sobrescribirlo.">
+        <AreaTexto rows={2} value={f.destinatarios} onChange={(e) => setF({ ...f, destinatarios: e.target.value })} />
+      </Campo>
+      <div className="grid grid-cols-2 gap-4">
+        <Campo etiqueta="Idioma">
+          <Entrada value={f.idioma} onChange={(e) => setF({ ...f, idioma: e.target.value })} />
+        </Campo>
+        <Campo etiqueta="Color">
+          <div className="flex h-9 items-center gap-2">
+            {COLORES.map((c) => (
+              <button
+                key={c}
+                type="button"
+                aria-label={`Color ${c}`}
+                onClick={() => setF({ ...f, color: c })}
+                className={cx('size-6 rounded-full transition-transform cursor-pointer', f.color === c && 'ring-2 ring-offset-2 ring-offset-panel scale-110')}
+                style={{ background: c, ['--tw-ring-color' as string]: c }}
+              />
+            ))}
+          </div>
+        </Campo>
+      </div>
+      <Campo etiqueta="Estilo de redacción" ayuda="Tono, formato preferido, extensión de párrafos, uso de ejemplos…">
+        <AreaTexto
+          rows={2}
+          value={f.estilo}
+          onChange={(e) => setF({ ...f, estilo: e.target.value })}
+          placeholder="Claro y directo, con ejemplos cotidianos y un resumen al final de cada sección"
+        />
+      </Campo>
+      <Campo etiqueta="Contexto de la asignatura" ayuda="Temario, enfoque, criterios de evaluación, qué se da por sabido… Todo lo que deban tener en cuenta los agentes. Admite Markdown.">
+        <AreaTexto rows={10} className="font-mono text-[13px]" value={f.contexto} onChange={(e) => setF({ ...f, contexto: e.target.value })} />
+      </Campo>
+      <div className="flex justify-end gap-2">
+        {cambiado && (
+          <Boton variante="fantasma" onClick={() => setF(inicial)}>
+            Descartar
+          </Boton>
+        )}
+        <Boton variante="primario" disabled={!cambiado} cargando={guardando} onClick={guardar}>
+          Guardar cambios
+        </Boton>
+      </div>
+    </div>
+  );
+}

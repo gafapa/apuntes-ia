@@ -1,0 +1,157 @@
+// Detección de Claude Code y Codex CLI, y lanzamiento de sus procesos.
+import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import type { EstadoMotor, Motor } from '../../shared/tipos';
+
+const WIN = process.platform === 'win32';
+
+/** Rutas habituales de instalación. Las apps de escritorio en macOS no heredan el PATH de la terminal. */
+function candidatas(motor: Motor): string[] {
+  const home = os.homedir();
+  if (WIN) {
+    const appdata = process.env.APPDATA ?? path.join(home, 'AppData', 'Roaming');
+    const local = process.env.LOCALAPPDATA ?? path.join(home, 'AppData', 'Local');
+    return [
+      path.join(home, '.local', 'bin', `${motor}.exe`),
+      path.join(appdata, 'npm', `${motor}.cmd`),
+      path.join(local, 'Programs', motor, `${motor}.exe`),
+      path.join(local, 'Microsoft', 'WinGet', 'Links', `${motor}.exe`),
+    ];
+  }
+  return [
+    path.join(home, '.local', 'bin', motor),
+    path.join(home, '.claude', 'local', motor),
+    '/opt/homebrew/bin/' + motor,
+    '/usr/local/bin/' + motor,
+    '/usr/bin/' + motor,
+    path.join(home, '.npm-global', 'bin', motor),
+    path.join(home, '.volta', 'bin', motor),
+  ];
+}
+
+function enPath(motor: Motor): string | undefined {
+  const exts = WIN ? ['.exe', '.cmd', '.bat', ''] : [''];
+  for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
+    if (!dir) continue;
+    for (const ext of exts) {
+      const p = path.join(dir, motor + ext);
+      if (existsSync(p)) return p;
+    }
+  }
+  return undefined;
+}
+
+const rutasCache = new Map<Motor, string | undefined>();
+
+export function rutaMotor(motor: Motor): string | undefined {
+  if (!rutasCache.has(motor)) {
+    rutasCache.set(motor, enPath(motor) ?? candidatas(motor).find((p) => existsSync(p)));
+  }
+  return rutasCache.get(motor);
+}
+
+/** Entrecomilla un argumento para cmd.exe (solo se usa con .cmd/.bat en Windows). */
+function citarCmd(arg: string): string {
+  if (/^[\w\-.:\\/=]+$/.test(arg)) return arg;
+  return `"${arg.replace(/"/g, '""')}"`;
+}
+
+/**
+ * Lanza un ejecutable. En Windows los .cmd (instalaciones con npm) requieren shell;
+ * por eso los textos largos (prompts) se pasan siempre por stdin y nunca como argumento.
+ */
+export function lanzar(ejecutable: string, args: string[], opciones: SpawnOptions = {}): ChildProcess {
+  const necesitaShell = WIN && /\.(cmd|bat)$/i.test(ejecutable);
+  // Electron empaquetado añade ELECTRON_RUN_AS_NODE en algunos casos; no debe heredarse.
+  const env = { ...process.env, ...opciones.env };
+  delete env.ELECTRON_RUN_AS_NODE;
+  if (necesitaShell) {
+    const linea = [ejecutable, ...args].map(citarCmd).join(' ');
+    return spawn(linea, { ...opciones, env, shell: true, windowsHide: true });
+  }
+  return spawn(ejecutable, args, { ...opciones, env, windowsHide: true });
+}
+
+function ejecutar(ejecutable: string, args: string[], timeoutMs = 20000): Promise<{ codigo: number | null; salida: string }> {
+  return new Promise((resolve) => {
+    let salida = '';
+    let hijo: ChildProcess;
+    try {
+      hijo = lanzar(ejecutable, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (e) {
+      resolve({ codigo: -1, salida: String(e) });
+      return;
+    }
+    const t = setTimeout(() => hijo.kill(), timeoutMs);
+    hijo.stdout?.on('data', (d) => (salida += d));
+    hijo.stderr?.on('data', (d) => (salida += d));
+    hijo.on('error', (e) => {
+      clearTimeout(t);
+      resolve({ codigo: -1, salida: String(e) });
+    });
+    hijo.on('close', (codigo) => {
+      clearTimeout(t);
+      resolve({ codigo, salida: salida.trim() });
+    });
+  });
+}
+
+export async function comprobarMotor(motor: Motor): Promise<EstadoMotor> {
+  rutasCache.delete(motor);
+  const ruta = rutaMotor(motor);
+  if (!ruta) return { motor, instalado: false, sesion: false };
+  const v = await ejecutar(ruta, ['--version']);
+  if (v.codigo !== 0) return { motor, instalado: false, ruta, sesion: false, detalle: v.salida.slice(0, 300) };
+  const version = v.salida.split(/\r?\n/)[0];
+  if (motor === 'claude') {
+    const s = await ejecutar(ruta, ['auth', 'status']);
+    let sesion = false;
+    try {
+      sesion = JSON.parse(s.salida.slice(s.salida.indexOf('{'))).loggedIn === true;
+    } catch {
+      sesion = s.codigo === 0 && !/not logged in/i.test(s.salida);
+    }
+    return { motor, instalado: true, ruta, version, sesion };
+  }
+  const s = await ejecutar(ruta, ['login', 'status']);
+  return { motor, instalado: true, ruta, version, sesion: s.codigo === 0 && /logged in/i.test(s.salida) };
+}
+
+// ---------- Instalación e inicio de sesión (en una terminal visible) ----------
+
+export function comandoInstalacion(motor: Motor): string {
+  if (motor === 'claude') {
+    return WIN ? 'irm https://claude.ai/install.ps1 | iex' : 'curl -fsSL https://claude.ai/install.sh | bash';
+  }
+  return 'npm install -g @openai/codex';
+}
+
+export function comandoSesion(motor: Motor): string {
+  const ruta = rutaMotor(motor) ?? motor;
+  const r = WIN ? `& '${ruta}'` : `'${ruta}'`;
+  return motor === 'claude' ? `${r} auth login` : `${r} login`;
+}
+
+/** Abre una terminal del sistema que ejecuta el comando y queda abierta. */
+export function abrirTerminal(comando: string) {
+  if (WIN) {
+    const cod = Buffer.from(comando, 'utf16le').toString('base64');
+    spawn('cmd.exe', ['/c', 'start', '""', 'powershell.exe', '-NoExit', '-EncodedCommand', cod], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false,
+    }).unref();
+  } else if (process.platform === 'darwin') {
+    const script = `tell application "Terminal" to do script ${JSON.stringify(comando)}\ntell application "Terminal" to activate`;
+    spawn('osascript', ['-e', script], { detached: true, stdio: 'ignore' }).unref();
+  } else {
+    spawn('x-terminal-emulator', ['-e', 'bash', '-lc', `${comando}; exec bash`], { detached: true, stdio: 'ignore' }).unref();
+  }
+}
+
+export function abrirCarpeta(ruta: string) {
+  const cmd = WIN ? 'explorer.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+  spawn(cmd, [ruta], { detached: true, stdio: 'ignore' }).unref();
+}

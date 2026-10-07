@@ -1,0 +1,44 @@
+appId: es.apuntesia.app
+productName: Apuntes IA
+copyright: Copyright © 2026 Pablo Gallego
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**
+  - dist-web/**
+  - build/icon.png
+  - package.json
+  - "!**/*.map"
+
+# Pandoc y Typst van fuera del asar para poder ejecutarlos
+extraResources:
+  - from: resources-bin/${os}
+    to: bin
+    filter: ["**/*", "!.*"]
+
+asar: true
+
+win:
+  target: nsis
+  icon: build/icon.ico
+  artifactName: Apuntes-IA-Setup-${version}.${ext}
+
+nsis:
+  oneClick: true
+  perMachine: false # se instala para el usuario actual, sin pedir permisos de administrador
+  deleteAppDataOnUninstall: false # los apuntes están en Documentos y nunca se borran
+  shortcutName: Apuntes IA
+  createDesktopShortcut: always
+
+mac:
+  target: dmg
+  category: public.app-category.education
+  artifactName: Apuntes-IA-${version}-${arch}.${ext}
+
+linux:
+  target: AppImage
+  category: Education
+  artifactName: Apuntes-IA-${version}.${ext}

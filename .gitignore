@@ -1,0 +1,6 @@
+node_modules/
+dist/
+dist-web/
+release/
+resources-bin/
+*.log
