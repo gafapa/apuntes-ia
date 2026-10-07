@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Apuntes IA</title>
+    <meta name="description" content="Crea apuntes con un equipo de agentes de IA que investigan, redactan, revisan e ilustran en paralelo." />
+    <link rel="icon" href="icono.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --fondo: #f7f7fb;
+        --panel: #ffffff;
+        --borde: #e4e4ee;
+        --texto: #1b1b29;
+        --texto-2: #5b5b73;
+        --acento: #6d4aff;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --fondo: #0f1117;
+          --panel: #161922;
+          --borde: #2a2f3d;
+          --texto: #e9e9f2;
+          --texto-2: #a3a3b8;
+          --acento: #8b6dff;
+        }
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--fondo); color: var(--texto); font: 16px/1.6 Inter, system-ui, sans-serif; }
+      main { max-width: 960px; margin: 0 auto; padding: 64px 16px; }
+      header { text-align: center; }
+      header img { width: 104px; height: 104px; }
+      h1 { font-size: clamp(2rem, 5vw, 3rem); letter-spacing: -0.03em; margin: 12px 0 8px; }
+      .lema { color: var(--texto-2); font-size: 1.15rem; max-width: 620px; margin: 0 auto; }
+      .descargas { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 36px 0 12px; }
+      .descargas a { display: block; min-width: 200px; padding: 14px 20px; border-radius: 12px; text-decoration: none; text-align: center; border: 1px solid var(--borde); background: var(--panel); color: var(--texto); font-weight: 600; }
+      .descargas a small { display: block; font-weight: 400; color: var(--texto-2); font-size: 0.8rem; }
+      .descargas a.principal { background: var(--acento); border-color: var(--acento); color: #fff; }
+      .descargas a.principal small { color: #ffffffcc; }
+      .nota { text-align: center; color: var(--texto-2); font-size: 0.85rem; }
+      .rejilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 56px; }
+      .tarjeta { background: var(--panel); border: 1px solid var(--borde); border-radius: 14px; padding: 20px; }
+      .tarjeta h3 { margin: 0 0 6px; font-size: 1rem; }
+      .tarjeta p { margin: 0; color: var(--texto-2); font-size: 0.92rem; }
+      h2 { margin-top: 64px; letter-spacing: -0.02em; }
+      ol { color: var(--texto-2); padding-left: 1.2em; }
+      ol b { color: var(--texto); }
+      code { background: var(--panel); border: 1px solid var(--borde); padding: 1px 6px; border-radius: 6px; font-size: 0.85em; }
+      footer { margin-top: 64px; text-align: center; color: var(--texto-2); font-size: 0.85rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <img src="icono.png" alt="" />
+        <h1>Apuntes IA</h1>
+        <p class="lema">Crea apuntes con un equipo de agentes de IA que investigan, redactan, revisan e ilustran en paralelo. Tú diriges; ellos trabajan.</p>
+      </header>
+
+      <div class="descargas">
+        <a class="principal" href="https://github.com/TU_USUARIO/apuntes-ia/releases/latest/download/Apuntes-IA-Setup.exe">Descargar para Windows<small>Windows 10 y 11</small></a>
+        <a href="https://github.com/TU_USUARIO/apuntes-ia/releases/latest/download/Apuntes-IA-mac-arm64.dmg">macOS<small>Apple Silicon</small></a>
+        <a href="https://github.com/TU_USUARIO/apuntes-ia/releases/latest/download/Apuntes-IA-linux.AppImage">Linux<small>AppImage</small></a>
+      </div>
+      <p class="nota">Gratis y de código abierto. Se actualiza sola. Tus apuntes se guardan en tu equipo.</p>
+
+      <div class="rejilla">
+        <div class="tarjeta"><h3>📚 Una asignatura, muchos documentos</h3><p>Cada asignatura guarda su contexto y sus destinatarios; cada documento puede tener los suyos.</p></div>
+        <div class="tarjeta"><h3>🔎 Investigador</h3><p>Lee tu material (PDF, Word, diapositivas…) o, si no aportas nada, busca fuentes fiables en la web.</p></div>
+        <div class="tarjeta"><h3>✍️ Redactores en paralelo</h3><p>Un agente por sección, siguiendo un índice director que tú apruebas.</p></div>
+        <div class="tarjeta"><h3>✅ Revisores</h3><p>Estilo, rigor y verificación de datos. Proponen cambios; tú decides cuáles aceptar.</p></div>
+        <div class="tarjeta"><h3>🖼️ Visuales</h3><p>Diagramas, imágenes con licencia libre e ilustraciones generadas con IA, donde de verdad ayudan.</p></div>
+        <div class="tarjeta"><h3>📄 Word, LibreOffice y PDF</h3><p>Con portada, índice y tus propias plantillas de estilos. Incluye autoevaluación con soluciones.</p></div>
+      </div>
+
+      <h2>Qué necesitas</h2>
+      <ol>
+        <li><b>Claude Code</b> con una suscripción Claude Pro o Max, y/o <b>Codex</b> con ChatGPT Plus o Pro. La app usa tu suscripción: no hace falta ninguna clave de API.</li>
+        <li>Si no los tienes, el asistente del primer arranque te ayuda a instalarlos e iniciar sesión.</li>
+        <li>Las imágenes generadas con IA necesitan Codex; todo lo demás funciona con cualquiera de los dos.</li>
+      </ol>
+      <p class="nota">En Windows, la primera vez puede aparecer el aviso de SmartScreen: pulsa «Más información» → «Ejecutar de todas formas».</p>
+
+      <footer>Apuntes IA · Licencia MIT</footer>
+    </main>
+  </body>
+</html>

@@ -24,6 +24,8 @@ export interface OpcionesServidor {
   dirEstatico?: string; // interfaz compilada (en desarrollo la sirve Vite)
   dirBin?: string; // Pandoc y Typst
   version?: string;
+  /** Reinicia la app instalando la actualización descargada (solo en la app empaquetada). */
+  instalarActualizacion?: () => void;
   puerto?: number;
   host?: string;
 }
@@ -140,7 +142,13 @@ export async function crearServidor(op: OpcionesServidor) {
   });
 
   app.get('/api/motores', async () => refrescarMotores());
-  app.get('/api/version', async () => ({ version: op.version ?? 'desarrollo' }));
+  app.get('/api/version', async () => ({ version: op.version ?? 'desarrollo', actualizacion }));
+  let actualizacion: { estado: 'disponible' | 'descargada'; version: string } | undefined;
+  app.post('/api/actualizacion/instalar', async () => {
+    if (!op.instalarActualizacion || actualizacion?.estado !== 'descargada') throw new ErrorUsuario('No hay ninguna actualización lista');
+    setTimeout(() => op.instalarActualizacion!(), 300);
+    return { ok: true };
+  });
   app.post('/api/motores/:motor/:accion', async (req) => {
     const { motor, accion } = req.params as { motor: Motor; accion: string };
     if (motor !== 'claude' && motor !== 'codex') throw new ErrorUsuario('Motor desconocido');
@@ -431,6 +439,10 @@ export async function crearServidor(op: OpcionesServidor) {
   const direccion = await app.listen({ port: op.puerto ?? 0, host: op.host ?? '127.0.0.1' });
   return {
     url: direccion.replace('[::1]', 'localhost'),
+    avisarActualizacion(estado: 'disponible' | 'descargada', version: string) {
+      actualizacion = { estado, version };
+      difundir({ tipo: 'actualizacion', estado, version });
+    },
     async cerrar() {
       for (const t of cola.listar()) if (t.estado === 'ejecutando' || t.estado === 'en-cola') cola.cancelar(t.id);
       vigilante?.close();

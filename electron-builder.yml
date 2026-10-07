@@ -24,7 +24,7 @@ asar: true
 win:
   target: nsis
   icon: build/icon.ico
-  artifactName: Apuntes-IA-Setup-${version}.${ext}
+  artifactName: Apuntes-IA-Setup.${ext}
 
 nsis:
   oneClick: true
@@ -36,9 +36,17 @@ nsis:
 mac:
   target: dmg
   category: public.app-category.education
-  artifactName: Apuntes-IA-${version}-${arch}.${ext}
+  artifactName: Apuntes-IA-mac-${arch}.${ext}
 
 linux:
   target: AppImage
   category: Education
-  artifactName: Apuntes-IA-${version}.${ext}
+  artifactName: Apuntes-IA-linux.${ext}
+
+# Actualizaciones automáticas: las versiones se publican en GitHub Releases.
+# Cambia owner/repo por los de tu repositorio.
+publish:
+  provider: github
+  owner: TU_USUARIO
+  repo: apuntes-ia
+  releaseType: release

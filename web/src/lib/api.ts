@@ -76,7 +76,9 @@ export const api = {
   eliminarFuente: (a: string, nombre: string, d?: string) => pedir('DELETE', `${d ? doc(a, d) : asig(a)}/fuentes/${e(nombre)}`),
 
   agentes: () => pedir<InfoAgente[]>('GET', '/api/agentes'),
-  version: () => pedir<{ version: string }>('GET', '/api/version'),
+  version: () =>
+    pedir<{ version: string; actualizacion?: { estado: 'disponible' | 'descargada'; version: string } }>('GET', '/api/version'),
+  instalarActualizacion: () => pedir('POST', '/api/actualizacion/instalar'),
 
   // Flujo del documento
   flujo: (a: string, d: string) => pedir<EstadoFlujo>('GET', `${doc(a, d)}/flujo`),

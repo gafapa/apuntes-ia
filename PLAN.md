@@ -109,8 +109,8 @@ orquestador o relanzar un agente concreto sobre una sección.
 ## Fases de desarrollo
 
 1. ✅ **Base** (hecha el 2026-10-07; incluye además responder a un agente para continuar su sesión): estructura Electron + React, CRUD de asignaturas y documentos, editor con vista previa, ejecutor de agentes (claude/codex) con salida en vivo y cola con límite, asistente de primer arranque y un primer instalador `.exe` funcionando (para validar el empaquetado desde el principio).
-2. **Flujo principal**: investigador → índice → redactores en paralelo → exportación DOCX/ODT/PDF. *(Primera versión ya usable.)*
-3. **Revisión**: revisores de estilo y calidad, verificador de fuentes, tarjetas de sugerencias con diff.
-4. **Visuales**: director visual + ilustrador (Codex), Mermaid, galería de recursos.
-5. **Extras**: glosario de la asignatura, autoevaluación, chat con el orquestador, plantillas de exportación, editor de prompts de los agentes.
-6. **Publicación**: GitHub Actions para Windows/macOS/Linux, actualizaciones automáticas, página de descarga.
+2. ✅ **Flujo principal**: investigador → índice → redactores en paralelo → exportación DOCX/ODT/PDF. *(Primera versión ya usable.)*
+3. ✅ **Revisión**: revisores de estilo y calidad, verificador de fuentes, tarjetas de sugerencias con diff.
+4. ✅ **Visuales**: director visual + ilustrador (Codex), Mermaid, galería de recursos.
+5. ✅ **Extras**: glosario de la asignatura, autoevaluación, chat con el orquestador, plantillas de exportación, editor de prompts de los agentes.
+6. ✅ **Publicación**: GitHub Actions para Windows/macOS/Linux, actualizaciones automáticas, página de descarga.

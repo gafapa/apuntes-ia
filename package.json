@@ -1,7 +1,7 @@
 {
   "name": "apuntes-ia",
   "productName": "Apuntes IA",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Crea apuntes con varios agentes de IA (Claude Code y Codex) trabajando en paralelo",
   "author": "Pablo Gallego",
   "license": "MIT",
@@ -17,13 +17,15 @@
     "build": "npm run build:web && npm run build:main",
     "typecheck": "tsc --noEmit",
     "fetch-bin": "node scripts/fetch-bin.mjs",
-    "dist": "npm run build && npm run fetch-bin && electron-builder --win",
-    "start": "npm run build && electron ."
+    "dist": "npm run build && npm run fetch-bin && electron-builder",
+    "start": "npm run build && electron .",
+    "dist:publicar": "npm run build && npm run fetch-bin && electron-builder --publish always"
   },
   "dependencies": {
     "@fastify/multipart": "^10.1.2",
     "@fastify/static": "^10.1.5",
     "@fastify/websocket": "^11.3.3",
+    "electron-updater": "^6.8.9",
     "fastify": "^5.12.5",
     "tree-kill": "^1.2.2"
   },
@@ -66,5 +68,9 @@
     "electron@44.6.0": true,
     "electron-winstaller@5.4.0": true,
     "esbuild@0.28.2": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TU_USUARIO/apuntes-ia.git"
   }
 }

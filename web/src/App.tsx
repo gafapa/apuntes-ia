@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { CheckCircle2, Info, XCircle } from 'lucide-react';
 import { useEstado } from './lib/estado';
+import { api } from './lib/api';
 import { BarraLateral } from './components/BarraLateral';
 import { VistaInicio } from './components/VistaInicio';
 import { VistaAsignatura } from './components/VistaAsignatura';
@@ -16,6 +17,7 @@ export default function App() {
     cargarAsignaturas();
     cargarAjustes();
     cargarMotores().catch(() => {});
+    api.version().then((v) => v.actualizacion && useEstado.setState({ actualizacion: v.actualizacion })).catch(() => {});
   }, [cargarAsignaturas, cargarAjustes, cargarMotores]);
 
   const existe = asignaturas.some((a) => a.id === seleccion.asignatura);

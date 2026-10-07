@@ -1,5 +1,6 @@
 // Proceso principal de Electron: arranca el servidor local y abre la ventana.
 import { app, BrowserWindow, Menu, dialog, shell } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import path from 'node:path';
 import { crearServidor } from '../server/index';
 
@@ -31,6 +32,7 @@ async function iniciar() {
       ? path.join(process.resourcesPath, 'bin')
       : path.join(__dirname, '..', 'resources-bin', { win32: 'win', darwin: 'mac' }[process.platform as string] ?? 'linux'),
     version: app.getVersion(),
+    instalarActualizacion: () => autoUpdater.quitAndInstall(),
   });
 
   ventana = new BrowserWindow({
@@ -69,6 +71,19 @@ async function iniciar() {
   });
 
   await ventana.loadURL(urlApp);
+  comprobarActualizaciones();
+}
+
+/** Busca versiones nuevas en GitHub Releases y las descarga en segundo plano. */
+function comprobarActualizaciones() {
+  if (!app.isPackaged) return;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('update-available', (i) => servidor?.avisarActualizacion('disponible', i.version));
+  autoUpdater.on('update-downloaded', (i) => servidor?.avisarActualizacion('descargada', i.version));
+  autoUpdater.on('error', (e) => console.warn('Actualizaciones:', e?.message ?? e));
+  autoUpdater.checkForUpdates().catch(() => {});
+  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 6 * 60 * 60 * 1000);
 }
 
 app.on('window-all-closed', () => app.quit());

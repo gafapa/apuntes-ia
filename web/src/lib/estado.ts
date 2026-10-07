@@ -30,6 +30,7 @@ interface Estado {
   seccionActiva?: string;
   /** Petición de abrir una sección en el editor (desde el flujo). */
   irASeccion?: string;
+  actualizacion?: { estado: 'disponible' | 'descargada'; version: string };
 
   cargarAsignaturas(): Promise<void>;
   seleccionar(s: Seleccion): void;
@@ -132,6 +133,9 @@ function conectar() {
         useEstado.setState({ trabajos: { ...trabajos, [t.id]: { ...t, eventos: [...t.eventos, msg.evento] } } });
         break;
       }
+      case 'actualizacion':
+        useEstado.setState({ actualizacion: { estado: msg.estado, version: msg.version } });
+        break;
       case 'uso':
         useEstado.setState({ uso: msg.uso });
         break;

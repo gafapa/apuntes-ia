@@ -19,12 +19,37 @@ con la variable `APUNTES_DATOS`.
 ## Instalador
 
 ```bash
-npm run dist         # → release/Apuntes-IA-Setup-x.y.z.exe
+npm run dist         # → release/Apuntes-IA-Setup.exe (o .dmg / .AppImage según el sistema)
 ```
 
 `npm run dist` compila, descarga Pandoc y Typst (`scripts/fetch-bin.mjs`, se guardan en
 `resources-bin/`) y genera el instalador con electron-builder. El instalador no pide
 permisos de administrador y los apuntes quedan en `Documentos/Apuntes IA`.
+
+## Publicar una versión
+
+1. Crea el repositorio en GitHub y sustituye `TU_USUARIO` en `electron-builder.yml`,
+   `package.json` (`repository`) y `docs/index.html`.
+2. Sube la versión: `npm version 0.3.0 && git push && git push --tags`.
+3. GitHub Actions (`.github/workflows/publicar.yml`) compila Windows, macOS y Linux y crea
+   la *release*. Las apps instaladas la detectan, la descargan solas y ofrecen reiniciar.
+4. Página de descarga: activa GitHub Pages con la carpeta `docs/`.
+
+## Flujo de un documento
+
+| Fase | Agente | Qué produce |
+|---|---|---|
+| 1. Investigación (opcional) | Investigador | `investigacion.md`: dossier con fuentes |
+| 2. Índice | Arquitecto | `indice.json`: secciones con objetivo, contenidos y extensión; el usuario lo edita y aprueba |
+| 3. Redacción | Redactor (uno por sección, en paralelo) | `secciones/NN-*.md` |
+| 4. Revisión (opcional) | Estilo, calidad, fuentes | `sugerencias.json`: cambios que el usuario acepta o rechaza |
+| 5. Visuales (opcional) | Director visual + ilustrador | `visuales.json` y, al aprobar, diagramas Mermaid, imágenes de Wikimedia o generadas con Codex |
+| 6. Autoevaluación (opcional) | Autoevaluación | última sección con preguntas y soluciones |
+| 7. Exportar | (Pandoc + Typst) | `exportados/*.docx / .odt / .pdf` |
+
+Además: orquestador (chat libre, conoce el estado del flujo) y glosario de la asignatura.
+Los agentes que proponen cosas escriben un JSON en `.agentes/` y es el servidor quien lo
+valida e incorpora, para que varios agentes trabajen a la vez sin pisarse.
 
 ## Estructura
 

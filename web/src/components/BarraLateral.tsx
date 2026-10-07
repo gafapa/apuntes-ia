@@ -119,7 +119,7 @@ export function BarraLateral() {
 }
 
 function PieBarra({ onAjustes }: { onAjustes: () => void }) {
-  const { uso, motores, conectado } = useEstado();
+  const { uso, motores, conectado, actualizacion } = useEstado();
   const [oscuro, setOscuro] = useState(() => document.documentElement.classList.contains('dark'));
   const cambiarTema = () => {
     const v = !oscuro;
@@ -134,6 +134,14 @@ function PieBarra({ onAjustes }: { onAjustes: () => void }) {
 
   return (
     <div className="border-t border-borde px-4 py-3 space-y-3">
+      {actualizacion?.estado === 'descargada' && (
+        <button
+          onClick={() => api.instalarActualizacion()}
+          className="w-full rounded-lg bg-acento-suave px-3 py-2 text-left text-[12.5px] text-acento hover:bg-acento hover:text-white cursor-pointer"
+        >
+          <b>Versión {actualizacion.version} lista.</b> Pulsa para reiniciar y actualizar.
+        </button>
+      )}
       {pct !== undefined && (
         <div title={`Uso de la suscripción de Claude en la ventana de 5 horas${reinicio ? ` · se reinicia a las ${reinicio}` : ''}`}>
           <div className="mb-1 flex justify-between text-[11.5px] text-texto-3">

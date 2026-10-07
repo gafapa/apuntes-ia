@@ -1,0 +1,39 @@
+# Compila los instaladores de Windows, macOS y Linux y los publica en GitHub Releases
+# al subir una etiqueta de versión:  git tag v0.2.0 && git push origin v0.2.0
+name: Publicar versión
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  compilar:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - so: windows-latest
+            plataforma: win
+          - so: macos-latest
+            plataforma: mac
+          - so: ubuntu-latest
+            plataforma: linux
+    runs-on: ${{ matrix.so }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: node scripts/fetch-bin.mjs ${{ matrix.plataforma }}
+      - name: Instalador y publicación
+        run: npx electron-builder --${{ matrix.plataforma }} --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
