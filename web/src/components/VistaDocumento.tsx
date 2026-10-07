@@ -54,10 +54,24 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
   }, [irASeccion]);
 
   useEffect(() => {
-    api.documento(asignatura, documento).then(setDoc).catch((e) => {
-      avisar(e.message, 'error');
-      seleccionar({ asignatura });
-    });
+    let cancelado = false;
+    const cargar = (intento = 0) =>
+      api
+        .documento(asignatura, documento)
+        .then((d) => !cancelado && setDoc(d))
+        .catch((e) => {
+          if (cancelado) return;
+          if (e.status === 404) {
+            avisar(e.message, 'error');
+            seleccionar({ asignatura });
+          } else if (intento < 20) {
+            setTimeout(() => cargar(intento + 1), 1000); // el servidor puede estar reiniciándose
+          }
+        });
+    cargar();
+    return () => {
+      cancelado = true;
+    };
   }, [asignatura, documento, avisar, seleccionar]);
 
   if (!doc || !asig) return null;

@@ -26,7 +26,7 @@ async function pedir<T>(metodo: string, url: string, cuerpo?: unknown): Promise<
     body: cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined,
   });
   const datos = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error((datos as { error?: string }).error ?? `Error ${r.status}`);
+  if (!r.ok) throw Object.assign(new Error((datos as { error?: string }).error ?? `Error ${r.status}`), { status: r.status });
   return datos as T;
 }
 

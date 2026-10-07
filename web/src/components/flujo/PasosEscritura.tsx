@@ -37,6 +37,16 @@ export function PasoRedaccion({ a, d, estado, trabajos }: Props) {
     if (nuevas.length) setElegidas((e) => new Set([...e, ...nuevas]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firma]);
+  // Al terminar de redactar una sección, se desmarca
+  const enCurso = useRef(new Set<string>());
+  const firmaActivos = activos.map((t) => t.seccion).join('|');
+  useEffect(() => {
+    const ahora = new Set(activos.map((t) => t.seccion!).filter(Boolean));
+    const terminadas = [...enCurso.current].filter((x) => !ahora.has(x));
+    enCurso.current = ahora;
+    if (terminadas.length) setElegidas((e) => new Set([...e].filter((x) => !terminadas.includes(x))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firmaActivos]);
   const hechas = secciones.length > 0 && secciones.every((s) => s.palabras >= MIN_PALABRAS);
   const libres = [...elegidas].filter((x) => !redactando.has(x) && secciones.some((s) => s.archivo === x));
 
@@ -57,6 +67,7 @@ export function PasoRedaccion({ a, d, estado, trabajos }: Props) {
         secciones.length > 0 && (
           <BotonAgente
             texto={libres.length ? `Redactar ${libres.length === 1 ? '1 sección' : `${libres.length} secciones`}` : 'Redactar'}
+            variante={hechas ? 'secundario' : 'primario'}
             icono={<PenLine className="size-4" />}
             disabled={!libres.length}
             onLanzar={(ind) => api.redactar(a, d, libres, ind)}
@@ -244,6 +255,9 @@ function TarjetaSugerencia({ s, onDecidir }: { s: Sugerencia; onDecidir: (ids: s
   const [propuesta, setPropuesta] = useState(s.propuesta);
   const [ocupado, setOcupado] = useState(false);
   const trozos = useMemo(() => diferencias(s.original, s.propuesta), [s.original, s.propuesta]);
+  // Si cambia casi todo, el resaltado palabra a palabra es ilegible: mejor «antes» y «después»
+  const iguales = trozos.filter((t) => t.tipo === 'igual').reduce((n, t) => n + t.texto.trim().length, 0);
+  const enBloques = iguales < 0.45 * Math.max(s.original.length, s.propuesta.length);
   const decidir = async (d: 'aceptar' | 'rechazar') => {
     setOcupado(true);
     await onDecidir([s.id], d, editando ? propuesta : undefined);
@@ -258,6 +272,13 @@ function TarjetaSugerencia({ s, onDecidir }: { s: Sugerencia; onDecidir: (ids: s
       </div>
       {editando ? (
         <AreaTexto rows={4} className="text-[13px]" value={propuesta} onChange={(e) => setPropuesta(e.target.value)} />
+      ) : enBloques ? (
+        <div className="space-y-1.5 text-[13.5px] leading-relaxed">
+          <p className="rounded-md border-l-2 border-error/60 bg-error/8 px-2.5 py-1.5 whitespace-pre-wrap text-texto-2 line-through decoration-error/40">
+            {s.original}
+          </p>
+          <p className="rounded-md border-l-2 border-ok/70 bg-ok/10 px-2.5 py-1.5 whitespace-pre-wrap">{s.propuesta}</p>
+        </div>
       ) : (
         <p className="text-[13.5px] leading-relaxed whitespace-pre-wrap">
           {trozos.map((t, i) =>

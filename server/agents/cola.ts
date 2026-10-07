@@ -184,6 +184,8 @@ export class Cola extends EventEmitter {
             '--verbose',
             '--permission-mode', 'acceptEdits',
             '--allowedTools', 'Read,Write,Edit,MultiEdit,Glob,Grep,WebSearch,WebFetch,TodoWrite',
+            // Sin terminal: los agentes de apuntes no la necesitan y así no pierden tiempo intentándolo
+            '--disallowedTools', 'Bash,PowerShell,Task,Agent,NotebookEdit',
             ...(p.dirsExtra ?? []).flatMap((d) => ['--add-dir', d]),
             ...(p.reanudar ? ['--resume', p.reanudar] : []),
           ]
