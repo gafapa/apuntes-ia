@@ -2,7 +2,7 @@
 import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import type { Asignatura, AsignaturaDetalle, Documento, Fuente, Seccion } from '../shared/tipos';
+import type { Asignatura, AsignaturaDetalle, Documento, Exportado, Fuente, Recurso, Seccion } from '../shared/tipos';
 
 const COLORES = ['#7c5cff', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#8b5cf6'];
 
@@ -304,5 +304,105 @@ export class Almacen {
 
   async eliminarFuente(asig: string, nombre: string, doc?: string) {
     await fs.rm(path.join(this.dirFuentes(asig, doc), nombreSeguro(nombre)));
+  }
+
+  // ---------- Archivos auxiliares del documento ----------
+
+  /** Archivos de la raíz del documento que se pueden leer y editar desde la interfaz. */
+  static ARCHIVOS_EDITABLES = ['investigacion.md'];
+
+  async leerJsonDoc<T>(asig: string, doc: string, nombre: string, defecto: T): Promise<T> {
+    try {
+      return await leerJson<T>(path.join(this.dirDocumento(asig, doc), nombreSeguro(nombre)));
+    } catch {
+      return defecto;
+    }
+  }
+
+  /** Escritura atómica (archivo temporal + renombrado) para no dejar JSON a medias. */
+  async escribirJsonDoc(asig: string, doc: string, nombre: string, datos: unknown) {
+    const destino = path.join(this.dirDocumento(asig, doc), nombreSeguro(nombre));
+    const tmp = path.join(path.dirname(destino), `.tmp-${Date.now()}-${nombre}`);
+    await escribirJson(tmp, datos);
+    await fs.rename(tmp, destino);
+  }
+
+  async leerArchivoDoc(asig: string, doc: string, nombre: string): Promise<string> {
+    return leerTexto(path.join(this.dirDocumento(asig, doc), nombreSeguro(nombre)));
+  }
+
+  async guardarArchivoDoc(asig: string, doc: string, nombre: string, contenido: string) {
+    if (!Almacen.ARCHIVOS_EDITABLES.includes(nombre)) throw new ErrorUsuario('Archivo no editable');
+    await fs.writeFile(path.join(this.dirDocumento(asig, doc), nombre), contenido, 'utf8');
+  }
+
+  async infoArchivoDoc(asig: string, doc: string, nombre: string) {
+    try {
+      const st = await fs.stat(path.join(this.dirDocumento(asig, doc), nombreSeguro(nombre)));
+      return { modificado: st.mtime.toISOString(), tamano: st.size };
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Texto de todas las secciones, en orden. */
+  async textoCompleto(asig: string, doc: string): Promise<{ archivo: string; texto: string }[]> {
+    const secciones = await this.listarSecciones(asig, doc);
+    return Promise.all(secciones.map(async (s) => ({ archivo: s.archivo, texto: await this.leerSeccion(asig, doc, s.archivo) })));
+  }
+
+  async listarRecursos(asig: string, doc: string): Promise<Recurso[]> {
+    const dir = path.join(this.dirDocumento(asig, doc), 'recursos');
+    await fs.mkdir(dir, { recursive: true });
+    const textos = (await this.textoCompleto(asig, doc)).map((t) => t.texto).join('\n');
+    const res: Recurso[] = [];
+    for (const e of await fs.readdir(dir, { withFileTypes: true })) {
+      if (!e.isFile() || e.name.startsWith('.')) continue;
+      const st = await fs.stat(path.join(dir, e.name));
+      res.push({ nombre: e.name, tamano: st.size, modificado: st.mtime.toISOString(), usado: textos.includes(`recursos/${e.name}`) });
+    }
+    return res.sort((a, b) => b.modificado.localeCompare(a.modificado));
+  }
+
+  async eliminarRecurso(asig: string, doc: string, nombre: string) {
+    await fs.rm(path.join(this.dirDocumento(asig, doc), 'recursos', nombreSeguro(nombre)));
+  }
+
+  async listarExportados(asig: string, doc: string): Promise<Exportado[]> {
+    const dir = path.join(this.dirDocumento(asig, doc), 'exportados');
+    await fs.mkdir(dir, { recursive: true });
+    const res: Exportado[] = [];
+    for (const e of await fs.readdir(dir, { withFileTypes: true })) {
+      if (!e.isFile() || e.name.startsWith('.') || e.name.startsWith('~$')) continue;
+      const st = await fs.stat(path.join(dir, e.name));
+      res.push({ nombre: e.name, formato: path.extname(e.name).slice(1), tamano: st.size, modificado: st.mtime.toISOString() });
+    }
+    return res.sort((a, b) => b.modificado.localeCompare(a.modificado));
+  }
+
+  rutaExportado(asig: string, doc: string, nombre: string) {
+    return path.join(this.dirDocumento(asig, doc), 'exportados', nombreSeguro(nombre));
+  }
+
+  // ---------- Glosario y plantillas de la asignatura ----------
+
+  async leerGlosario(asig: string) {
+    return leerTexto(path.join(this.dirAsignatura(asig), 'glosario.md'));
+  }
+
+  async guardarGlosario(asig: string, texto: string) {
+    await fs.writeFile(path.join(this.dirAsignatura(asig), 'glosario.md'), texto, 'utf8');
+  }
+
+  /** Plantilla de Word/LibreOffice propia de la asignatura (plantilla.docx / plantilla.odt). */
+  rutaPlantilla(asig: string, formato: 'docx' | 'odt') {
+    return path.join(this.dirAsignatura(asig), `plantilla.${formato}`);
+  }
+
+  async plantillas(asig: string) {
+    return {
+      docx: existsSync(this.rutaPlantilla(asig, 'docx')),
+      odt: existsSync(this.rutaPlantilla(asig, 'odt')),
+    };
   }
 }

@@ -9,4 +9,5 @@ crearServidor({
   archivoAjustes: path.join(datos, '.ajustes-dev.json'),
   carpetaDatosPorDefecto: datos,
   puerto: 4317,
+  dirBin: path.resolve('resources-bin', { win32: 'win', darwin: 'mac' }[process.platform as string] ?? 'linux'),
 }).then(({ url }) => console.log(`Servidor en ${url} · datos en ${datos}`));

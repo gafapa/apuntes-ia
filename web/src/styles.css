@@ -115,7 +115,9 @@ body {
 .apunte th, .apunte td { border: 1px solid var(--borde); padding: 0.45em 0.7em; text-align: left; }
 .apunte th { background: var(--panel-2); font-weight: 600; }
 .apunte hr { border: 0; border-top: 1px solid var(--borde); margin: 2em 0; }
-.apunte .mermaid { display: flex; justify-content: center; margin: 1em 0; }
+.apunte .mermaid { display: flex; justify-content: center; margin: 1em 0; cursor: zoom-in; }
+.apunte img { cursor: zoom-in; }
+.visor-svg svg { max-width: none !important; width: min(88vw, 1400px); height: auto; max-height: 85vh; }
 .apunte .mermaid-error { color: var(--error); font-size: 0.85em; white-space: pre-wrap; }
 .apunte .katex-display { overflow-x: auto; overflow-y: hidden; }
 

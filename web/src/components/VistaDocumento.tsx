@@ -22,8 +22,13 @@ import { AreaTexto, Boton, BotonIcono, Campo, Entrada, Insignia, Vacio, confirma
 import { Editor } from './Editor';
 import { VistaPrevia } from './VistaPrevia';
 import { GestorFuentes } from './GestorFuentes';
+import { GaleriaRecursos } from './GaleriaRecursos';
+import { VistaFlujo } from './flujo/VistaFlujo';
+import { useFlujo } from './flujo/comun';
+import { PanelExportar } from './flujo/PasosFinales';
+import { Modal } from './ui';
 
-type Pestana = 'apuntes' | 'ficha' | 'material';
+type Pestana = 'flujo' | 'apuntes' | 'recursos' | 'ficha' | 'material';
 type Modo = 'editar' | 'dividido' | 'vista';
 const TODO = '__todo__';
 
@@ -31,7 +36,22 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
   const { asignaturas, seleccionar, avisar, cargarAsignaturas } = useEstado();
   const asig = asignaturas.find((a) => a.id === asignatura);
   const [doc, setDoc] = useState<Documento>();
-  const [pestana, setPestana] = useState<Pestana>('apuntes');
+  const [pestana, setPestana] = useState<Pestana>(() => (localStorage.getItem(`pestana:${asignatura}/${documento}`) as Pestana) || 'flujo');
+  const [exportar, setExportar] = useState(false);
+  const flujo = useFlujo(asignatura, documento);
+  const irASeccion = useEstado((s) => s.irASeccion);
+
+  const cambiarPestana = (p: Pestana) => {
+    setPestana(p);
+    try {
+      localStorage.setItem(`pestana:${asignatura}/${documento}`, p);
+    } catch {}
+  };
+
+  // Desde el flujo se puede pedir abrir una sección concreta en el editor
+  useEffect(() => {
+    if (irASeccion) setPestana('apuntes');
+  }, [irASeccion]);
 
   useEffect(() => {
     api.documento(asignatura, documento).then(setDoc).catch((e) => {
@@ -64,14 +84,16 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
         <div className="ml-auto flex items-center gap-1 rounded-lg bg-panel-2 p-0.5">
           {(
             [
+              ['flujo', 'Flujo'],
               ['apuntes', 'Apuntes'],
+              ['recursos', 'Recursos'],
               ['ficha', 'Ficha'],
               ['material', 'Material'],
             ] as [Pestana, string][]
           ).map(([id, txt]) => (
             <button
               key={id}
-              onClick={() => setPestana(id)}
+              onClick={() => cambiarPestana(id)}
               className={cx(
                 'rounded-md px-3 py-1 text-[13px] font-medium transition-colors cursor-pointer',
                 pestana === id ? 'bg-panel text-texto shadow-sm' : 'text-texto-2 hover:text-texto',
@@ -81,12 +103,14 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
             </button>
           ))}
         </div>
-        <Boton tam="sm" icono={<Download className="size-3.5" />} disabled title="La exportación a Word, ODT y PDF llega en la siguiente fase">
+        <Boton tam="sm" icono={<Download className="size-3.5" />} onClick={() => setExportar(true)}>
           Exportar
         </Boton>
       </header>
 
+      {pestana === 'flujo' && <VistaFlujo a={asignatura} d={documento} estado={flujo.estado} trabajos={flujo.trabajos} recargar={flujo.recargar} />}
       {pestana === 'apuntes' && <Apuntes asignatura={asignatura} documento={documento} />}
+      {pestana === 'recursos' && <GaleriaRecursos a={asignatura} d={documento} />}
       {pestana === 'ficha' && (
         <div className="flex-1 overflow-y-auto">
           <FichaDocumento
@@ -99,6 +123,9 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
           />
         </div>
       )}
+      <Modal abierto={exportar} onCerrar={() => setExportar(false)} titulo="Exportar apuntes" descripcion={doc.titulo}>
+        <PanelExportar a={asignatura} d={documento} estado={flujo.estado} recargar={flujo.recargar} />
+      </Modal>
       {pestana === 'material' && (
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-3xl px-10 py-8">
@@ -138,10 +165,20 @@ function Apuntes({ asignatura, documento }: { asignatura: string; documento: str
     return lista;
   }, [asignatura, documento]);
 
-  // Carga inicial
+  // Carga inicial (o la sección pedida desde el flujo)
   useEffect(() => {
-    cargarSecciones().then((l) => setActiva(l[0]?.archivo ?? TODO));
+    cargarSecciones().then((l) => {
+      const pedida = useEstado.getState().irASeccion;
+      useEstado.setState({ irASeccion: undefined });
+      setActiva(pedida && l.some((s) => s.archivo === pedida) ? pedida : l[0]?.archivo ?? TODO);
+    });
   }, [cargarSecciones]);
+  const irASeccion = useEstado((s) => s.irASeccion);
+  useEffect(() => {
+    if (!irASeccion) return;
+    useEstado.setState({ irASeccion: undefined });
+    cargarSecciones().then(() => setActiva(irASeccion));
+  }, [irASeccion, cargarSecciones]);
 
   useEffect(() => {
     useEstado.setState({ seccionActiva: activa && activa !== TODO ? activa : undefined });

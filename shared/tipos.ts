@@ -36,6 +36,8 @@ export interface Seccion {
   palabras: number;
 }
 
+export const ARCHIVO_AUTOEVALUACION = /autoevaluacion\.md$/;
+
 export interface Fuente {
   nombre: string;
   tamano: number;
@@ -63,6 +65,9 @@ export interface Trabajo {
   inicio?: number;
   fin?: number;
   resultado?: string;
+  paso?: PasoFlujo; // fase del flujo a la que pertenece
+  seccion?: string; // sección sobre la que trabaja (archivo)
+  ref?: string; // elemento relacionado (p. ej. id de una propuesta visual)
   sesion?: string; // id de la sesión del motor, para poder continuar la conversación
   eventos: EventoTrabajo[];
 }
@@ -89,10 +94,115 @@ export interface Ajustes {
   maxSimultaneos: number;
   motorPorDefecto: Motor;
   asistenteCompletado: boolean;
+  /** Personalización por agente: motor e instrucciones propias. */
+  agentes: Record<string, { motor?: Motor; instrucciones?: string }>;
+}
+
+export interface InfoAgente {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  motor: Motor; // motor por defecto del agente
+  soloMotor?: Motor; // si solo puede funcionar con un motor
+  instrucciones: string; // instrucciones por defecto
+}
+
+// ---------- Flujo de trabajo de un documento ----------
+
+export type PasoFlujo =
+  | 'chat'
+  | 'investigacion'
+  | 'indice'
+  | 'redaccion'
+  | 'revision'
+  | 'visuales'
+  | 'autoevaluacion'
+  | 'glosario';
+
+export interface EntradaIndice {
+  id: string;
+  titulo: string;
+  objetivo: string;
+  contenidos: string[];
+  extension: string; // p. ej. "600-800 palabras"
+  visuales: string; // ideas de apoyo visual
+  archivo?: string; // sección creada a partir de esta entrada
+}
+
+export interface Indice {
+  entradas: EntradaIndice[];
+  notas: string;
+  aprobado: boolean;
+  actualizado: string;
+}
+
+export type TipoRevision = 'estilo' | 'calidad' | 'fuentes';
+
+export interface Sugerencia {
+  id: string;
+  tipo: TipoRevision;
+  seccion: string;
+  original: string; // texto exacto a sustituir
+  propuesta: string;
+  motivo: string;
+  gravedad: 'baja' | 'media' | 'alta';
+  estado: 'pendiente' | 'aceptada' | 'rechazada' | 'fallida';
+  trabajo: string;
+  creado: string;
+}
+
+export type TipoVisual = 'diagrama' | 'imagen-ia' | 'imagen-web';
+
+export interface PropuestaVisual {
+  id: string;
+  seccion: string;
+  ancla: string; // párrafo tras el que se inserta
+  tipo: TipoVisual;
+  titulo: string;
+  descripcion: string;
+  estado: 'propuesta' | 'generando' | 'insertada' | 'descartada' | 'error';
+  archivo?: string; // recurso generado
+  credito?: string; // autoría/licencia de imágenes de internet
+  error?: string;
+  creado: string;
+}
+
+export interface Exportado {
+  nombre: string;
+  formato: string;
+  tamano: number;
+  modificado: string;
+}
+
+export interface Recurso {
+  nombre: string;
+  tamano: number;
+  modificado: string;
+  usado: boolean; // aparece en alguna sección
+}
+
+export interface EstadoFlujo {
+  investigacion?: { palabras: number; actualizado: string };
+  indice?: Indice;
+  secciones: Seccion[];
+  sugerencias: Sugerencia[];
+  visuales: PropuestaVisual[];
+  autoevaluacion?: string; // archivo de la sección de autoevaluación
+  exportados: Exportado[];
+}
+
+export interface OpcionesExportacion {
+  formato: 'docx' | 'odt' | 'pdf';
+  portada: boolean;
+  indice: boolean;
+  numerar: boolean;
+  autoevaluacion: boolean;
+  saltoSeccion: boolean; // cada sección empieza en página nueva
 }
 
 export type MensajeWS =
   | { tipo: 'trabajo'; trabajo: Trabajo }
   | { tipo: 'evento'; id: string; evento: EventoTrabajo }
   | { tipo: 'uso'; uso: UsoSuscripcion }
-  | { tipo: 'archivos'; asignatura: string; documento?: string; ruta: string };
+  | { tipo: 'archivos'; asignatura: string; documento?: string; ruta: string }
+  | { tipo: 'actualizacion'; estado: 'disponible' | 'descargada'; version: string };

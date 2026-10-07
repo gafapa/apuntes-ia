@@ -27,6 +27,10 @@ async function iniciar() {
     archivoAjustes: path.join(app.getPath('userData'), 'ajustes.json'),
     carpetaDatosPorDefecto: path.join(app.getPath('documents'), 'Apuntes IA'),
     dirEstatico: path.join(__dirname, '..', 'dist-web'),
+    dirBin: app.isPackaged
+      ? path.join(process.resourcesPath, 'bin')
+      : path.join(__dirname, '..', 'resources-bin', { win32: 'win', darwin: 'mac' }[process.platform as string] ?? 'linux'),
+    version: app.getVersion(),
   });
 
   ventana = new BrowserWindow({

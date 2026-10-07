@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { FolderOpen, RefreshCw } from 'lucide-react';
-import type { Motor } from '../../../shared/tipos';
+import type { Ajustes, Motor } from '../../../shared/tipos';
 import { api } from '../lib/api';
 import { useEstado } from '../lib/estado';
 import { Boton, Campo, Entrada, Modal, cx } from './ui';
 import { TarjetaMotor } from './TarjetaMotor';
+import { EditorAgentes } from './EditorAgentes';
 
 export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar: () => void }) {
   const { ajustes, motores, cargarMotores, cargarAjustes, cargarAsignaturas, avisar } = useEstado();
@@ -13,12 +14,19 @@ export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar
   const [carpeta, setCarpeta] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [comprobando, setComprobando] = useState(false);
+  const [pestana, setPestana] = useState<'general' | 'agentes'>('general');
+  const [agentes, setAgentes] = useState<Ajustes['agentes']>({});
+  const [version, setVersion] = useState('');
+  useEffect(() => {
+    api.version().then((v) => setVersion(v.version)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!abierto || !ajustes) return;
     setMax(ajustes.maxSimultaneos);
     setMotor(ajustes.motorPorDefecto);
     setCarpeta(ajustes.carpetaDatos);
+    setAgentes(ajustes.agentes ?? {});
     cargarMotores().catch(() => {});
   }, [abierto, ajustes, cargarMotores]);
 
@@ -26,7 +34,7 @@ export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar
     setGuardando(true);
     try {
       const cambiaCarpeta = carpeta.trim() !== ajustes?.carpetaDatos;
-      await api.guardarAjustes({ maxSimultaneos: max, motorPorDefecto: motor, carpetaDatos: carpeta });
+      await api.guardarAjustes({ maxSimultaneos: max, motorPorDefecto: motor, carpetaDatos: carpeta, agentes });
       await cargarAjustes();
       if (cambiaCarpeta) {
         await cargarAsignaturas();
@@ -42,8 +50,30 @@ export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar
   };
 
   return (
-    <Modal abierto={abierto} onCerrar={onCerrar} titulo="Ajustes" ancho="max-w-xl">
+    <Modal abierto={abierto} onCerrar={onCerrar} titulo="Ajustes" descripcion={version && `Apuntes IA ${version}`} ancho="max-w-2xl">
       <div className="space-y-6">
+        <div className="-mt-1 flex gap-1 border-b border-borde">
+          {(
+            [
+              ['general', 'General'],
+              ['agentes', 'Agentes'],
+            ] as const
+          ).map(([id, txt]) => (
+            <button
+              key={id}
+              onClick={() => setPestana(id)}
+              className={cx(
+                '-mb-px border-b-2 px-3 py-2 text-sm font-medium cursor-pointer',
+                pestana === id ? 'border-acento text-acento' : 'border-transparent text-texto-2 hover:text-texto',
+              )}
+            >
+              {txt}
+            </button>
+          ))}
+        </div>
+        {pestana === 'agentes' && <EditorAgentes valor={agentes} onCambio={setAgentes} />}
+        {pestana === 'general' && (
+        <>
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">Asistentes de IA</h3>
@@ -92,6 +122,8 @@ export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar
             <Boton type="button" icono={<FolderOpen className="size-4" />} onClick={() => api.abrirCarpeta()} title="Abrir carpeta" />
           </div>
         </Campo>
+        </>
+        )}
 
         <div className="flex items-center justify-between pt-2">
           <Boton

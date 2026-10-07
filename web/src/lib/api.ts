@@ -1,5 +1,13 @@
 import type {
   Ajustes,
+  EstadoFlujo,
+  Exportado,
+  Indice,
+  InfoAgente,
+  OpcionesExportacion,
+  PropuestaVisual,
+  Recurso,
+  TipoRevision,
   Asignatura,
   AsignaturaDetalle,
   Documento,
@@ -67,9 +75,63 @@ export const api = {
   },
   eliminarFuente: (a: string, nombre: string, d?: string) => pedir('DELETE', `${d ? doc(a, d) : asig(a)}/fuentes/${e(nombre)}`),
 
+  agentes: () => pedir<InfoAgente[]>('GET', '/api/agentes'),
+  version: () => pedir<{ version: string }>('GET', '/api/version'),
+
+  // Flujo del documento
+  flujo: (a: string, d: string) => pedir<EstadoFlujo>('GET', `${doc(a, d)}/flujo`),
+  investigar: (a: string, d: string, indicaciones?: string) => pedir<Trabajo>('POST', `${doc(a, d)}/flujo/investigar`, { indicaciones }),
+  proponerIndice: (a: string, d: string, indicaciones?: string) => pedir<Trabajo>('POST', `${doc(a, d)}/flujo/indice`, { indicaciones }),
+  guardarIndice: (a: string, d: string, indice: Indice) => pedir<Indice>('PUT', `${doc(a, d)}/flujo/indice`, indice),
+  aprobarIndice: (a: string, d: string) => pedir<Indice>('POST', `${doc(a, d)}/flujo/indice/aprobar`),
+  redactar: (a: string, d: string, archivos: string[], indicaciones?: string) =>
+    pedir<Trabajo[]>('POST', `${doc(a, d)}/flujo/redactar`, { archivos, indicaciones }),
+  revisar: (a: string, d: string, tipos: TipoRevision[], archivos?: string[], indicaciones?: string) =>
+    pedir<Trabajo[]>('POST', `${doc(a, d)}/flujo/revisar`, { tipos, archivos, indicaciones }),
+  decidirSugerencias: (a: string, d: string, ids: string[], decision: 'aceptar' | 'rechazar', propuesta?: string) =>
+    pedir<{ aplicadas: number; fallidas: number }>('POST', `${doc(a, d)}/flujo/sugerencias/${decision}`, { ids, propuesta }),
+  limpiarSugerencias: (a: string, d: string) => pedir('DELETE', `${doc(a, d)}/flujo/sugerencias`),
+  proponerVisuales: (a: string, d: string, archivos?: string[], indicaciones?: string) =>
+    pedir<Trabajo>('POST', `${doc(a, d)}/flujo/visuales`, { archivos, indicaciones }),
+  editarPropuesta: (a: string, d: string, id: string, cambios: Partial<PropuestaVisual>) =>
+    pedir<PropuestaVisual>('PUT', `${doc(a, d)}/flujo/visuales/${e(id)}`, cambios),
+  generarVisual: (a: string, d: string, id: string, indicaciones?: string) =>
+    pedir<Trabajo>('POST', `${doc(a, d)}/flujo/visuales/${e(id)}/generar`, { indicaciones }),
+  limpiarVisuales: (a: string, d: string) => pedir('DELETE', `${doc(a, d)}/flujo/visuales`),
+  autoevaluacion: (a: string, d: string, indicaciones?: string) => pedir<Trabajo>('POST', `${doc(a, d)}/flujo/autoevaluacion`, { indicaciones }),
+  leerArchivo: (a: string, d: string, nombre: string) => pedir<{ contenido: string }>('GET', `${doc(a, d)}/archivo/${e(nombre)}`),
+  guardarArchivo: (a: string, d: string, nombre: string, contenido: string) => pedir('PUT', `${doc(a, d)}/archivo/${e(nombre)}`, { contenido }),
+
+  recursos: (a: string, d: string) => pedir<Recurso[]>('GET', `${doc(a, d)}/recursos`),
+  subirRecursos: async (a: string, d: string, archivos: File[]) => {
+    const fd = new FormData();
+    for (const f of archivos) fd.append('archivo', f, f.name);
+    const r = await fetch(`${doc(a, d)}/recursos`, { method: 'POST', body: fd });
+    if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? 'Error al subir');
+    return (await r.json()) as { guardados: string[] };
+  },
+  eliminarRecurso: (a: string, d: string, nombre: string) => pedir('DELETE', `${doc(a, d)}/recursos/${e(nombre)}`),
+
+  exportar: (a: string, d: string, opciones: OpcionesExportacion, diagramas: Record<string, string>) =>
+    pedir<Exportado>('POST', `${doc(a, d)}/exportar`, { opciones, diagramas }),
+  abrirExportado: (a: string, d: string, nombre: string) => pedir('POST', `${doc(a, d)}/exportados/${e(nombre)}/abrir`),
+
+  glosario: (a: string) => pedir<{ contenido: string }>('GET', `${asig(a)}/glosario`),
+  guardarGlosario: (a: string, contenido: string) => pedir('PUT', `${asig(a)}/glosario`, { contenido }),
+  actualizarGlosario: (a: string, indicaciones?: string) => pedir<Trabajo>('POST', `${asig(a)}/glosario/actualizar`, { indicaciones }),
+  plantillas: (a: string) => pedir<{ docx: boolean; odt: boolean }>('GET', `${asig(a)}/plantillas`),
+  subirPlantilla: async (a: string, archivo: File) => {
+    const fd = new FormData();
+    fd.append('plantilla', archivo, archivo.name);
+    const r = await fetch(`${asig(a)}/plantillas`, { method: 'POST', body: fd });
+    if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? 'Error al subir');
+    return (await r.json()) as { docx: boolean; odt: boolean };
+  },
+  eliminarPlantilla: (a: string, formato: 'docx' | 'odt') => pedir<{ docx: boolean; odt: boolean }>('DELETE', `${asig(a)}/plantillas/${formato}`),
+
   trabajos: () => pedir<Trabajo[]>('GET', '/api/trabajos'),
   trabajo: (id: string) => pedir<Trabajo>('GET', `/api/trabajos/${e(id)}`),
-  lanzar: (datos: { agente?: string; motor?: Motor; tarea: string; asignatura: string; documento?: string; seccion?: string }) =>
+  lanzar: (datos: { motor?: Motor; tarea: string; asignatura: string; documento?: string; seccion?: string }) =>
     pedir<Trabajo>('POST', '/api/trabajos', datos),
   responder: (id: string, texto: string) => pedir<Trabajo>('POST', `/api/trabajos/${e(id)}/responder`, { texto }),
   cancelar: (id: string) => pedir('POST', `/api/trabajos/${e(id)}/cancelar`),

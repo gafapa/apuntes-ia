@@ -6,10 +6,11 @@ import { useEstado } from '../lib/estado';
 import { AreaTexto, Boton, Campo, Entrada, Vacio, confirmar, cx } from './ui';
 import { GestorFuentes } from './GestorFuentes';
 import { ModalNuevoDocumento } from './Modales';
+import { PestanaGlosario, PestanaPlantillas } from './PestanasAsignatura';
 
 const COLORES = ['#7c5cff', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#64748b'];
 
-type Pestana = 'documentos' | 'contexto' | 'material';
+type Pestana = 'documentos' | 'contexto' | 'material' | 'glosario' | 'plantillas';
 
 export function VistaAsignatura({ asignatura }: { asignatura: string }) {
   const { seleccionar, cargarAsignaturas, avisar, versiones } = useEstado();
@@ -55,7 +56,9 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
             [
               ['documentos', `Documentos (${a.documentos.length})`],
               ['contexto', 'Contexto y destinatarios'],
-              ['material', 'Material de la asignatura'],
+              ['material', 'Material'],
+              ['glosario', 'Glosario'],
+              ['plantillas', 'Plantillas'],
             ] as [Pestana, string][]
           ).map(([id, txt]) => (
             <button
@@ -120,6 +123,8 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
             />
           )}
 
+          {pestana === 'glosario' && <PestanaGlosario a={a.id} />}
+          {pestana === 'plantillas' && <PestanaPlantillas a={a.id} />}
           {pestana === 'material' && (
             <GestorFuentes
               asignatura={a.id}

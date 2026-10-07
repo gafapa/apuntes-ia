@@ -7,10 +7,10 @@ import { renderizar } from '../lib/markdown';
 import { BotonIcono, Insignia, cx } from './ui';
 
 const SUGERENCIAS = [
-  'Propón un índice de secciones para este documento y crea un archivo por sección con su título',
-  'Redacta la sección abierta a partir del material aportado',
-  'Revisa la sección abierta y mejora la claridad para los destinatarios',
-  'Añade un diagrama Mermaid que resuma la sección abierta',
+  '¿Qué le falta a este documento para estar completo?',
+  'Añade un ejemplo práctico a la sección abierta',
+  'Haz un resumen en forma de esquema al final de la sección abierta',
+  'Revisa que las secciones no repitan contenidos entre sí',
 ];
 
 export function PanelAgentes() {

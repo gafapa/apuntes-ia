@@ -28,6 +28,8 @@ interface Estado {
   conectado: boolean;
   /** Sección abierta en el editor (se envía como contexto a los agentes). */
   seccionActiva?: string;
+  /** Petición de abrir una sección en el editor (desde el flujo). */
+  irASeccion?: string;
 
   cargarAsignaturas(): Promise<void>;
   seleccionar(s: Seleccion): void;

@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import type { ChildProcess } from 'node:child_process';
 import treeKill from 'tree-kill';
-import type { EventoTrabajo, Motor, Trabajo, UsoSuscripcion } from '../../shared/tipos';
+import type { EventoTrabajo, Motor, PasoFlujo, Trabajo, UsoSuscripcion } from '../../shared/tipos';
 import { lanzar, rutaMotor } from './motores';
 
 export interface PeticionTrabajo {
@@ -18,6 +18,17 @@ export interface PeticionTrabajo {
   cwd: string;
   dirsExtra?: string[]; // carpetas adicionales accesibles (p. ej. la de la asignatura)
   reanudar?: string; // id de sesión del motor para continuar una conversación
+  paso?: PasoFlujo;
+  seccion?: string;
+  ref?: string;
+  /**
+   * Se ejecuta cuando el agente termina bien (también tras cada respuesta del usuario).
+   * Si lanza un error, el trabajo se marca como fallido con ese mensaje y el usuario
+   * puede responder al agente para que lo corrija.
+   */
+  alTerminar?: (t: Trabajo) => Promise<string | void>;
+  /** Se ejecuta si el trabajo falla o se cancela. */
+  alFallar?: (t: Trabajo) => Promise<void> | void;
 }
 
 const MAX_EVENTOS = 400;
@@ -51,6 +62,9 @@ export class Cola extends EventEmitter {
       titulo: p.titulo,
       asignatura: p.asignatura,
       documento: p.documento,
+      paso: p.paso,
+      seccion: p.seccion,
+      ref: p.ref,
       estado: 'en-cola',
       creado: Date.now(),
       eventos: [],
@@ -132,7 +146,9 @@ export class Cola extends EventEmitter {
     t.fin = Date.now();
     if (texto) this.evento(t, estado === 'error' ? 'error' : 'estado', texto);
     this.procesos.delete(t.id);
+    const p = this.peticiones.get(t.id);
     this.peticiones.delete(t.id);
+    if (estado !== 'ok') Promise.resolve(p?.alFallar?.(t)).catch((e) => console.error(e));
     this.emitir(t);
     this.emit('terminado', t);
     this.siguiente();
@@ -233,7 +249,11 @@ export class Cola extends EventEmitter {
       if (t.estado === 'cancelado') return;
       if (t.resultado === undefined && ultimoMensaje) t.resultado = ultimoMensaje;
       if (codigo === 0 && !errorReportado) {
-        this.terminar(t, 'ok', 'Terminado');
+        if (!p.alTerminar) return this.terminar(t, 'ok', 'Terminado');
+        this.evento(t, 'estado', 'Procesando el resultado…');
+        p.alTerminar(t)
+          .then((msg) => this.terminar(t, 'ok', msg || 'Terminado'))
+          .catch((e) => this.terminar(t, 'error', String(e?.message ?? e)));
       } else {
         const detalle = stderr.trim().split(/\r?\n/).filter((l) => !/Reading additional input/i.test(l)).slice(-3).join('\n');
         this.terminar(t, 'error', `Ha terminado con errores${detalle ? `:\n${detalle}` : ` (código ${codigo})`}`);

@@ -9,6 +9,7 @@ export async function cargarAjustes(archivo: string, carpetaPorDefecto: string):
     maxSimultaneos: 3,
     motorPorDefecto: 'claude',
     asistenteCompletado: false,
+    agentes: {},
   };
   try {
     return { ...base, ...JSON.parse(await fs.readFile(archivo, 'utf8')) };

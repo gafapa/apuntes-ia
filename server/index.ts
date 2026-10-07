@@ -8,17 +8,22 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { WebSocket } from 'ws';
-import type { Ajustes, MensajeWS, Motor } from '../shared/tipos';
+import type { Ajustes, EstadoMotor, Indice, MensajeWS, Motor, OpcionesExportacion, PropuestaVisual, TipoRevision } from '../shared/tipos';
 import { Almacen, ErrorUsuario } from './store';
 import { Cola } from './agents/cola';
-import { AGENTES, construirPrompt } from './agents/agentes';
-import { abrirCarpeta, abrirTerminal, comandoInstalacion, comandoSesion, comprobarMotor } from './agents/motores';
+import { AGENTES } from './agents/agentes';
+import { abrirArchivo, abrirCarpeta, abrirTerminal, comandoInstalacion, comandoSesion, comprobarMotor } from './agents/motores';
 import { cargarAjustes, guardarAjustes } from './ajustes';
+import { Flujo } from './flujo';
+import { exportar } from './exportar';
+import { asegurarTextos } from './conversion';
 
 export interface OpcionesServidor {
   archivoAjustes: string; // dónde se guardan los ajustes (fuera de la carpeta de datos)
   carpetaDatosPorDefecto: string;
   dirEstatico?: string; // interfaz compilada (en desarrollo la sirve Vite)
+  dirBin?: string; // Pandoc y Typst
+  version?: string;
   puerto?: number;
   host?: string;
 }
@@ -28,8 +33,17 @@ export async function crearServidor(op: OpcionesServidor) {
   let almacen = new Almacen(ajustes.carpetaDatos);
   await almacen.iniciar();
   const cola = new Cola(ajustes.maxSimultaneos);
+  const dirBin = op.dirBin ?? '';
 
-  const app = Fastify({ logger: false, bodyLimit: 20 * 1024 * 1024 });
+  // Estado de los motores (se refresca al consultarlo desde la interfaz)
+  let motores: EstadoMotor[] = [];
+  const refrescarMotores = async () => (motores = await Promise.all([comprobarMotor('claude'), comprobarMotor('codex')]));
+  refrescarMotores().catch(() => {});
+  const motoresListos = () => new Set(motores.filter((m) => m.instalado && m.sesion).map((m) => m.motor));
+
+  const flujo = new Flujo({ almacen: () => almacen, cola, ajustes: () => ajustes, motoresListos, dirBin });
+
+  const app = Fastify({ logger: false, bodyLimit: 80 * 1024 * 1024 });
   await app.register(fastifyWebsocket);
   await app.register(fastifyMultipart, { limits: { fileSize: 200 * 1024 * 1024 } });
 
@@ -77,7 +91,7 @@ export async function crearServidor(op: OpcionesServidor) {
       vigilante = fs.watch(almacen.raiz, { recursive: true }, (_ev, archivo) => {
         if (!archivo) return;
         const ruta = String(archivo).replace(/\\/g, '/');
-        if (ruta.startsWith('.') || ruta.includes('/.tmp-')) return;
+        if (ruta.split('/').some((p) => p.startsWith('.'))) return; // temporales, .agentes, .texto…
         clearTimeout(pendientes.get(ruta));
         pendientes.set(
           ruta,
@@ -102,6 +116,15 @@ export async function crearServidor(op: OpcionesServidor) {
     if (typeof b.maxSimultaneos === 'number') nuevo.maxSimultaneos = Math.min(8, Math.max(1, Math.round(b.maxSimultaneos)));
     if (b.motorPorDefecto === 'claude' || b.motorPorDefecto === 'codex') nuevo.motorPorDefecto = b.motorPorDefecto;
     if (typeof b.asistenteCompletado === 'boolean') nuevo.asistenteCompletado = b.asistenteCompletado;
+    if (b.agentes && typeof b.agentes === 'object') {
+      nuevo.agentes = {};
+      for (const [id, c] of Object.entries(b.agentes)) {
+        if (!AGENTES[id] || !c) continue;
+        const motor = c.motor === 'claude' || c.motor === 'codex' ? c.motor : undefined;
+        const instrucciones = typeof c.instrucciones === 'string' && c.instrucciones.trim() ? c.instrucciones : undefined;
+        if (motor || instrucciones) nuevo.agentes[id] = { motor, instrucciones };
+      }
+    }
     if (typeof b.carpetaDatos === 'string' && b.carpetaDatos.trim() && b.carpetaDatos !== ajustes.carpetaDatos) {
       const dir = path.resolve(b.carpetaDatos.trim());
       await fsp.mkdir(dir, { recursive: true });
@@ -116,7 +139,8 @@ export async function crearServidor(op: OpcionesServidor) {
     return ajustes;
   });
 
-  app.get('/api/motores', async () => Promise.all([comprobarMotor('claude'), comprobarMotor('codex')]));
+  app.get('/api/motores', async () => refrescarMotores());
+  app.get('/api/version', async () => ({ version: op.version ?? 'desarrollo' }));
   app.post('/api/motores/:motor/:accion', async (req) => {
     const { motor, accion } = req.params as { motor: Motor; accion: string };
     if (motor !== 'claude' && motor !== 'codex') throw new ErrorUsuario('Motor desconocido');
@@ -135,6 +159,7 @@ export async function crearServidor(op: OpcionesServidor) {
     let dir = almacen.raiz;
     if (asignatura) dir = documento ? almacen.dirDocumento(asignatura, documento) : almacen.dirAsignatura(asignatura);
     if (sub && ['fuentes', 'recursos', 'exportados', 'secciones'].includes(sub)) dir = path.join(dir, sub);
+    if (!path.resolve(dir).startsWith(path.resolve(almacen.raiz))) throw new ErrorUsuario('Ruta no válida');
     await fsp.mkdir(dir, { recursive: true });
     abrirCarpeta(dir);
     return { ok: true };
@@ -213,6 +238,7 @@ export async function crearServidor(op: OpcionesServidor) {
         await pipeline(parte.file, fs.createWriteStream(destino));
         guardados.push(path.basename(destino));
       }
+      if (dirBin) asegurarTextos(almacen.dirFuentes(a, d), dirBin).catch(() => {});
       return { guardados };
     });
     app.delete(`${base}/:nombre`, async (req) => {
@@ -223,9 +249,7 @@ export async function crearServidor(op: OpcionesServidor) {
   }
 
   // ---------- Agentes ----------
-  app.get('/api/agentes', async () =>
-    Object.values(AGENTES).map(({ id, nombre, descripcion, motor }) => ({ id, nombre, descripcion, motor })),
-  );
+  app.get('/api/agentes', async () => Object.values(AGENTES));
   app.get('/api/trabajos', async () => cola.listar());
   app.get('/api/trabajos/:id', async (req) => {
     const t = cola.obtener((req.params as { id: string }).id);
@@ -251,30 +275,135 @@ export async function crearServidor(op: OpcionesServidor) {
   });
 
   app.post('/api/trabajos', async (req) => {
-    const b = req.body as { agente?: string; motor?: Motor; tarea: string; asignatura: string; documento?: string; seccion?: string };
-    const agente = AGENTES[b.agente ?? 'asistente'];
-    if (!agente) throw new ErrorUsuario('Agente desconocido');
-    if (!b.tarea?.trim()) throw new ErrorUsuario('Escribe qué quieres que haga');
-    const asignatura = await almacen.obtenerAsignatura(b.asignatura);
-    const documento = b.documento ? await almacen.obtenerDocumento(b.asignatura, b.documento) : undefined;
-    const secciones = documento ? await almacen.listarSecciones(b.asignatura, documento.id) : undefined;
-    const motor: Motor = b.motor === 'claude' || b.motor === 'codex' ? b.motor : ajustes.motorPorDefecto;
-    const dirAsig = almacen.dirAsignatura(asignatura.id);
-    const cwd = documento ? almacen.dirDocumento(asignatura.id, documento.id) : dirAsig;
-    return cola.encolar({
-      agente: agente.id,
-      nombreAgente: agente.nombre,
-      motor,
-      titulo: b.tarea.trim().split(/\r?\n/)[0].slice(0, 120),
-      asignatura: asignatura.id,
-      documento: documento?.id,
-      prompt: construirPrompt(agente, { asignatura, documento, secciones, seccionActiva: b.seccion }, b.tarea),
-      cwd,
-      dirsExtra: documento ? [dirAsig] : [],
-    });
+    const b = req.body as { motor?: Motor; tarea: string; asignatura: string; documento?: string; seccion?: string };
+    return flujo.chat(b.asignatura, b.documento, b.tarea ?? '', b.motor, b.seccion);
   });
 
   app.get('/api/uso', async () => cola.uso);
+
+  // ---------- Flujo de trabajo del documento ----------
+  const D = '/api/asignaturas/:a/documentos/:d';
+  type Cuerpo = { indicaciones?: string; archivos?: string[]; tipos?: TipoRevision[]; ids?: string[] };
+  const params = (req: FastifyRequest) => req.params as PD;
+  const cuerpo = (req: FastifyRequest) => (req.body ?? {}) as Cuerpo;
+
+  app.get(`${D}/flujo`, async (req) => flujo.estado(params(req).a, params(req).d));
+  app.post(`${D}/flujo/investigar`, async (req) => flujo.investigar(params(req).a, params(req).d, cuerpo(req).indicaciones));
+  app.post(`${D}/flujo/indice`, async (req) => flujo.proponerIndice(params(req).a, params(req).d, cuerpo(req).indicaciones));
+  app.put(`${D}/flujo/indice`, async (req) => flujo.guardarIndice(params(req).a, params(req).d, req.body as Indice));
+  app.post(`${D}/flujo/indice/aprobar`, async (req) => flujo.aprobarIndice(params(req).a, params(req).d));
+  app.post(`${D}/flujo/redactar`, async (req) =>
+    flujo.redactar(params(req).a, params(req).d, cuerpo(req).archivos ?? [], cuerpo(req).indicaciones),
+  );
+  app.post(`${D}/flujo/revisar`, async (req) => {
+    const tipos = (cuerpo(req).tipos ?? []).filter((t) => ['estilo', 'calidad', 'fuentes'].includes(t));
+    if (!tipos.length) throw new ErrorUsuario('Elige al menos un tipo de revisión');
+    return flujo.revisar(params(req).a, params(req).d, tipos, cuerpo(req).archivos, cuerpo(req).indicaciones);
+  });
+  app.post(`${D}/flujo/sugerencias/:decision`, async (req) => {
+    const { decision } = req.params as { decision: string };
+    if (decision !== 'aceptar' && decision !== 'rechazar') throw new ErrorUsuario('Decisión no válida');
+    const b = req.body as { ids: string[]; propuesta?: string };
+    return flujo.decidirSugerencias(params(req).a, params(req).d, b.ids ?? [], decision, b.propuesta);
+  });
+  app.delete(`${D}/flujo/sugerencias`, async (req) => {
+    await flujo.limpiarSugerencias(params(req).a, params(req).d);
+    return { ok: true };
+  });
+  app.post(`${D}/flujo/visuales`, async (req) =>
+    flujo.proponerVisuales(params(req).a, params(req).d, cuerpo(req).archivos, cuerpo(req).indicaciones),
+  );
+  app.put(`${D}/flujo/visuales/:id`, async (req) =>
+    flujo.editarPropuesta(params(req).a, params(req).d, (req.params as { id: string }).id, req.body as Partial<PropuestaVisual>),
+  );
+  app.post(`${D}/flujo/visuales/:id/generar`, async (req) =>
+    flujo.generarVisual(params(req).a, params(req).d, (req.params as { id: string }).id, cuerpo(req).indicaciones),
+  );
+  app.delete(`${D}/flujo/visuales`, async (req) => {
+    await flujo.limpiarVisuales(params(req).a, params(req).d);
+    return { ok: true };
+  });
+  app.post(`${D}/flujo/autoevaluacion`, async (req) => flujo.autoevaluacion(params(req).a, params(req).d, cuerpo(req).indicaciones));
+
+  // Glosario de la asignatura
+  app.post('/api/asignaturas/:a/glosario/actualizar', async (req) => flujo.glosario((req.params as PA).a, cuerpo(req).indicaciones));
+  app.get('/api/asignaturas/:a/glosario', async (req) => ({ contenido: await almacen.leerGlosario((req.params as PA).a) }));
+  app.put('/api/asignaturas/:a/glosario', async (req) => {
+    await almacen.guardarGlosario((req.params as PA).a, String((req.body as { contenido?: string }).contenido ?? ''));
+    return { ok: true };
+  });
+
+  // Archivos editables de la raíz del documento (dossier de investigación)
+  app.get(`${D}/archivo/:nombre`, async (req) => {
+    const { nombre } = req.params as { nombre: string };
+    if (!Almacen.ARCHIVOS_EDITABLES.includes(nombre)) throw new ErrorUsuario('Archivo no disponible', 404);
+    return { contenido: await almacen.leerArchivoDoc(params(req).a, params(req).d, nombre) };
+  });
+  app.put(`${D}/archivo/:nombre`, async (req) => {
+    const { nombre } = req.params as { nombre: string };
+    await almacen.guardarArchivoDoc(params(req).a, params(req).d, nombre, String((req.body as { contenido?: string }).contenido ?? ''));
+    return { ok: true };
+  });
+
+  // Recursos (imágenes)
+  app.get(`${D}/recursos`, async (req) => almacen.listarRecursos(params(req).a, params(req).d));
+  app.post(`${D}/recursos`, async (req) => {
+    const { a, d } = params(req);
+    const dir = path.join(almacen.dirDocumento(a, d), 'recursos');
+    await fsp.mkdir(dir, { recursive: true });
+    const guardados: string[] = [];
+    for await (const parte of req.files()) {
+      if (!/\.(png|jpe?g|gif|webp|svg)$/i.test(parte.filename)) {
+        parte.file.resume();
+        continue;
+      }
+      const limpio = path.basename(parte.filename).replace(/[^\w.-]+/g, '-');
+      let nombre = limpio;
+      for (let i = 2; fs.existsSync(path.join(dir, nombre)); i++) nombre = limpio.replace(/(\.\w+)$/, `-${i}$1`);
+      await pipeline(parte.file, fs.createWriteStream(path.join(dir, nombre)));
+      guardados.push(nombre);
+    }
+    return { guardados };
+  });
+  app.delete(`${D}/recursos/:nombre`, async (req) => {
+    await almacen.eliminarRecurso(params(req).a, params(req).d, (req.params as { nombre: string }).nombre);
+    return { ok: true };
+  });
+
+  // Exportación
+  app.post(`${D}/exportar`, async (req) => {
+    const b = req.body as { opciones: OpcionesExportacion; diagramas?: Record<string, string> };
+    if (!['docx', 'odt', 'pdf'].includes(b?.opciones?.formato)) throw new ErrorUsuario('Formato no válido');
+    if (!dirBin) throw new ErrorUsuario('La exportación no está disponible en este modo');
+    return exportar(almacen, dirBin, params(req).a, params(req).d, b.opciones, b.diagramas ?? {});
+  });
+  app.post(`${D}/exportados/:nombre/abrir`, async (req) => {
+    const ruta = almacen.rutaExportado(params(req).a, params(req).d, (req.params as { nombre: string }).nombre);
+    if (!fs.existsSync(ruta)) throw new ErrorUsuario('El archivo ya no existe', 404);
+    abrirArchivo(ruta);
+    return { ok: true };
+  });
+
+  // Plantillas de Word / LibreOffice de la asignatura
+  app.get('/api/asignaturas/:a/plantillas', async (req) => almacen.plantillas((req.params as PA).a));
+  app.post('/api/asignaturas/:a/plantillas', async (req) => {
+    const { a } = req.params as PA;
+    for await (const parte of req.files()) {
+      const ext = path.extname(parte.filename).toLowerCase();
+      if (ext !== '.docx' && ext !== '.odt') {
+        parte.file.resume();
+        throw new ErrorUsuario('La plantilla debe ser un .docx o un .odt');
+      }
+      await pipeline(parte.file, fs.createWriteStream(almacen.rutaPlantilla(a, ext.slice(1) as 'docx' | 'odt')));
+    }
+    return almacen.plantillas(a);
+  });
+  app.delete('/api/asignaturas/:a/plantillas/:formato', async (req) => {
+    const { a, formato } = req.params as PA & { formato: string };
+    if (formato !== 'docx' && formato !== 'odt') throw new ErrorUsuario('Formato no válido');
+    await fsp.rm(almacen.rutaPlantilla(a, formato), { force: true });
+    return almacen.plantillas(a);
+  });
 
   // ---------- Archivos de datos (imágenes de los apuntes) ----------
   app.get('/datos/*', async (req: FastifyRequest, rep: FastifyReply) => {

@@ -151,6 +151,12 @@ export function abrirTerminal(comando: string) {
   }
 }
 
+/** Abre un archivo con el programa predeterminado del sistema. */
+export function abrirArchivo(ruta: string) {
+  if (WIN) spawn('cmd.exe', ['/c', 'start', '""', ruta], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  else abrirCarpeta(ruta);
+}
+
 export function abrirCarpeta(ruta: string) {
   const cmd = WIN ? 'explorer.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open';
   spawn(cmd, [ruta], { detached: true, stdio: 'ignore' }).unref();
