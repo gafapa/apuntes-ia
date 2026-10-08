@@ -110,7 +110,9 @@ de verdad a entender o recordar: procesos, ciclos, clasificaciones, comparacione
 cronologías, mapas conceptuales. Decides el tipo más adecuado:
 - diagrama: esquemas, flujos, mapas conceptuales, cronologías (se dibujan con Mermaid). Es la
   opción preferente para todo lo que sea estructura o relación.
-- imagen-web: fotografías o ilustraciones reales que ya existen con licencia libre (Wikimedia Commons).
+- imagen-web: fotografías o ilustraciones reales que ya existen con licencia libre (museos, bibliotecas,
+  archivos, Wikimedia Commons). En historia, arte, literatura o geografía es la opción preferente para
+  fuentes primarias: retratos, pinturas, grabados, mapas antiguos, documentos, fotografías de época, objetos.
 - molecula: la fórmula estructural (2D) de un compuesto químico concreto; la app la dibuja a partir
   de PubChem, así que es exacta. Úsala en lugar de una imagen cuando haya que ver la estructura.
 - imagen-ia: ilustraciones que no existen y que una IA puede generar bien (escenas, ilustraciones

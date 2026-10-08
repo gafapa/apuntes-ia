@@ -1,15 +1,41 @@
 // Servidor MCP (stdio) que da a los agentes acceso al índice de las fuentes:
 // buscar fragmentos relevantes, listar las fuentes y leer una página concreta.
-// Lo lanzan Claude Code y Codex como proceso hijo. Argumentos: etiqueta=carpeta_de_fuentes ...
+// Con el argumento --imagenes, también busca imágenes con licencia libre en museos y bibliotecas.
+// Lo lanzan Claude Code y Codex como proceso hijo. Argumentos: [--imagenes] etiqueta=carpeta_de_fuentes ...
+// Las claves de las colecciones que las piden llegan en APUNTES_CLAVES_IMAGENES (JSON).
 import { buscar, formatear, leerPagina, listar } from './rag';
+import { buscarImagenes, credito, type ClavesImagenes } from './imagenesWeb';
 
 const carpetas: Record<string, string> = {};
+let conImagenes = false;
 for (const a of process.argv.slice(2)) {
+  if (a === '--imagenes') conImagenes = true;
   const i = a.indexOf('=');
   if (i > 0) carpetas[a.slice(0, i)] = a.slice(i + 1);
 }
+let claves: ClavesImagenes = {};
+try {
+  claves = JSON.parse(process.env.APUNTES_CLAVES_IMAGENES ?? '{}');
+} catch {}
 
-const HERRAMIENTAS = [
+const HERRAMIENTA_IMAGENES = {
+  name: 'buscar_imagenes',
+  description:
+    'Busca imágenes con licencia libre (dominio público, CC0, CC BY, CC BY-SA) en museos, bibliotecas y archivos: ' +
+    'Wikimedia Commons, Europeana (con Hispana y fondos españoles), Met, Art Institute of Chicago, Cleveland, Wellcome, Smithsonian y Openverse. ' +
+    'Ideal para fuentes primarias de historia y arte: retratos, pinturas, grabados, mapas antiguos, fotografías de época, objetos. ' +
+    'Cada resultado trae título, autor, fecha, institución, licencia, URL de la imagen y de su ficha.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      consulta: { type: 'string', description: 'Qué buscar, EN INGLÉS (los museos catalogan en inglés): p. ej. "Battle of Lepanto", "Philip II of Spain portrait"' },
+      consulta_local: { type: 'string', description: 'La misma búsqueda en español (o el idioma de los apuntes) para Commons y los fondos españoles de Europeana: p. ej. "batalla de Lepanto"' },
+    },
+    required: ['consulta'],
+  },
+};
+
+const HERRAMIENTAS_FUENTES = [
   {
     name: 'buscar_en_fuentes',
     description:
@@ -44,7 +70,20 @@ const HERRAMIENTAS = [
   },
 ];
 
+const HERRAMIENTAS = [...(Object.keys(carpetas).length ? HERRAMIENTAS_FUENTES : []), ...(conImagenes ? [HERRAMIENTA_IMAGENES] : [])];
+
 async function llamar(nombre: string, args: Record<string, unknown>): Promise<string> {
+  if (nombre === 'buscar_imagenes') {
+    const r = await buscarImagenes(String(args.consulta ?? ''), { consultaLocal: args.consulta_local ? String(args.consulta_local) : undefined, claves });
+    if (!r.resultados.length) return 'No se han encontrado imágenes con licencia libre. Prueba con otros términos (en inglés para los museos).';
+    return r.resultados
+      .slice(0, 30)
+      .map(
+        (x) =>
+          `- [${x.id}] ${credito(x)}${x.ancho ? ` (${x.ancho}×${x.alto} px)` : ''}\n  imagen: ${x.imagen}\n  ficha: ${x.pagina}`,
+      )
+      .join('\n');
+  }
   if (nombre === 'buscar_en_fuentes') {
     const r = await buscar(carpetas, String(args.consulta ?? ''), Math.min(15, Number(args.max) || 6), args.archivo ? String(args.archivo) : undefined);
     return r.length ? formatear(r) : 'No se han encontrado fragmentos relevantes. Prueba con otros términos.';

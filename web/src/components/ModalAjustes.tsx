@@ -16,6 +16,7 @@ export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar
   const [comprobando, setComprobando] = useState(false);
   const [pestana, setPestana] = useState<'general' | 'agentes'>('general');
   const [agentes, setAgentes] = useState<Ajustes['agentes']>({});
+  const [claves, setClaves] = useState<NonNullable<Ajustes['claves']>>({});
   const [version, setVersion] = useState('');
   useEffect(() => {
     api.version().then((v) => setVersion(v.version)).catch(() => {});
@@ -27,6 +28,7 @@ export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar
     setMotor(ajustes.motorPorDefecto);
     setCarpeta(ajustes.carpetaDatos);
     setAgentes(ajustes.agentes ?? {});
+    setClaves(ajustes.claves ?? {});
     cargarMotores().catch(() => {});
   }, [abierto, ajustes, cargarMotores]);
 
@@ -34,7 +36,7 @@ export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar
     setGuardando(true);
     try {
       const cambiaCarpeta = carpeta.trim() !== ajustes?.carpetaDatos;
-      await api.guardarAjustes({ maxSimultaneos: max, motorPorDefecto: motor, carpetaDatos: carpeta, agentes });
+      await api.guardarAjustes({ maxSimultaneos: max, motorPorDefecto: motor, carpetaDatos: carpeta, agentes, claves });
       await cargarAjustes();
       if (cambiaCarpeta) {
         await cargarAsignaturas();
@@ -115,6 +117,28 @@ export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar
             <input type="range" min={1} max={8} value={max} onChange={(e) => setMax(Number(e.target.value))} className="mt-2 w-full accent-[var(--acento)]" />
           </Campo>
         </section>
+
+        <Campo
+          etiqueta="Colecciones de imágenes"
+          ayuda="Museos, bibliotecas y archivos donde se buscan imágenes con licencia libre. La mayoría no necesitan clave; estas dos sí (gratuita)."
+        >
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="text-[12.5px] text-texto-2">
+              Europeana (incluye Hispana y fondos españoles) ·{' '}
+              <a className="text-acento hover:underline" href="https://pro.europeana.eu/page/get-api" target="_blank" rel="noreferrer">
+                pedir clave
+              </a>
+              <Entrada className="mt-1 font-mono text-[12.5px]" value={claves.europeana ?? ''} placeholder="Clave de Europeana" onChange={(e) => setClaves({ ...claves, europeana: e.target.value.trim() })} />
+            </label>
+            <label className="text-[12.5px] text-texto-2">
+              Smithsonian ·{' '}
+              <a className="text-acento hover:underline" href="https://api.data.gov/signup/" target="_blank" rel="noreferrer">
+                pedir clave
+              </a>
+              <Entrada className="mt-1 font-mono text-[12.5px]" value={claves.smithsonian ?? ''} placeholder="Clave de api.data.gov" onChange={(e) => setClaves({ ...claves, smithsonian: e.target.value.trim() })} />
+            </label>
+          </div>
+        </Campo>
 
         <Campo etiqueta="Carpeta de datos" ayuda="Donde se guardan asignaturas y apuntes. Si la cambias, no se mueven los datos existentes.">
           <div className="flex gap-2">

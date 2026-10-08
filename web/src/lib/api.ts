@@ -1,4 +1,6 @@
 import type {
+  BusquedaImagenes,
+  ResultadoImagen,
   ImagenFallida,
   Ajustes,
   ContadorTokens,
@@ -62,6 +64,10 @@ export const api = {
   uso: () => pedir<UsoSuscripcion>('GET', '/api/uso'),
   tokens: () => pedir<ContadorTokens>('GET', '/api/tokens'),
   molecula: (q: string) => pedir<Molecula>('GET', `/api/molecula?q=${e(q)}`),
+  buscarImagenes: (q: string, local?: string) =>
+    pedir<BusquedaImagenes>('GET', `/api/imagenes-web?q=${e(q)}${local ? `&local=${e(local)}` : ''}`),
+  guardarImagenWeb: (a: string, d: string, resultado: ResultadoImagen, seccion?: string) =>
+    pedir<{ archivo: string; markdown: string }>('POST', `${doc(a, d)}/imagenes-web`, { resultado, seccion }),
   reiniciarTokens: () => pedir<ContadorTokens>('DELETE', '/api/tokens'),
 
   asignaturas: () => pedir<AsignaturaResumen[]>('GET', '/api/asignaturas'),

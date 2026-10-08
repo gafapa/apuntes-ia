@@ -19,6 +19,7 @@ import { exportar } from './exportar';
 import { Contador } from './tokens';
 import { plantillaBase } from './plantillaBase';
 import { Moleculas } from './moleculas';
+import { buscarImagenes, miniatura, type ResultadoImagen } from './imagenesWeb';
 import { buscar as buscarRag, indexar } from './rag';
 
 export interface OpcionesServidor {
@@ -146,6 +147,10 @@ export async function crearServidor(op: OpcionesServidor) {
         const modelo = typeof c.modelo === 'string' && /^[\w.-]{1,60}$/.test(c.modelo.trim()) ? c.modelo.trim() : undefined;
         if (motor || instrucciones || esfuerzo || modelo) nuevo.agentes[id] = { motor, instrucciones, esfuerzo, modelo };
       }
+    }
+    if (b.claves && typeof b.claves === 'object') {
+      const clave = (v: unknown) => (typeof v === 'string' && /^[\w-]{3,100}$/.test(v.trim()) ? v.trim() : undefined);
+      nuevo.claves = { europeana: clave(b.claves.europeana), smithsonian: clave(b.claves.smithsonian) };
     }
     if (typeof b.carpetaDatos === 'string' && b.carpetaDatos.trim() && b.carpetaDatos !== ajustes.carpetaDatos) {
       const dir = path.resolve(b.carpetaDatos.trim());
@@ -310,6 +315,21 @@ export async function crearServidor(op: OpcionesServidor) {
 
   app.get('/api/uso', async () => cola.uso);
   app.get('/api/tokens', async () => contador.leer());
+  // Imágenes con licencia libre de museos, bibliotecas y archivos
+  app.get('/api/imagenes-web/miniatura', async (req, reply) => {
+    try {
+      const m = await miniatura(String((req.query as { url?: string }).url ?? ''));
+      reply.header('Content-Type', m.tipo).header('Cache-Control', 'max-age=86400');
+      return m.datos;
+    } catch (e) {
+      throw new ErrorUsuario((e as Error).message, 404);
+    }
+  });
+  app.get('/api/imagenes-web', async (req) => {
+    const { q, local } = req.query as { q?: string; local?: string };
+    if (!q?.trim()) throw new ErrorUsuario('Escribe qué buscar');
+    return buscarImagenes(q, { consultaLocal: local, claves: ajustes.claves });
+  });
   // Estructura de una molécula (nombre o SMILES) para los bloques ```molecula
   app.get('/api/molecula', async (req) => {
     try {
@@ -380,6 +400,10 @@ export async function crearServidor(op: OpcionesServidor) {
     return { ok: true };
   });
   app.get(`${D}/pies`, async (req) => flujo.sinPie(params(req).a, params(req).d));
+  app.post(`${D}/imagenes-web`, async (req) => {
+    const b = req.body as { resultado: ResultadoImagen; seccion?: string; pie?: string };
+    return flujo.guardarImagenWeb(params(req).a, params(req).d, b.resultado, b.seccion, b.pie);
+  });
   app.get(`${D}/imagenes-faltan`, async (req) => flujo.imagenesQueFaltan(params(req).a, params(req).d));
   app.post(`${D}/imagenes-faltan`, async (req) => flujo.repararImagenes(params(req).a, params(req).d));
   app.post(`${D}/pies`, async (req) => flujo.anadirPies(params(req).a, params(req).d));

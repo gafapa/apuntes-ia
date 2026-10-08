@@ -34,6 +34,8 @@ import type { Cola, Postproceso } from './agents/cola';
 import { PedirAlAgente } from './agents/cola';
 import { dimensiones } from './imagenes';
 import type { Moleculas } from './moleculas';
+import { credito as creditoObra, descargarImagen, type ResultadoImagen } from './imagenesWeb';
+import { hashTexto } from '../shared/hash';
 import { AGENTES, construirPrompt } from './agents/agentes';
 import { extraerJson, insertarTrasAncla, sustituirFragmento, buscarFragmento, contarPalabras } from './texto';
 import { asegurarTextos } from './conversion';
@@ -64,6 +66,7 @@ interface Lanzamiento {
   motor?: Motor; // forzar motor
   seccionActiva?: string;
   web?: boolean; // sobrescribe si el agente puede buscar en la web
+  imagenes?: boolean; // herramienta de búsqueda de imágenes en museos y bibliotecas
   esfuerzo?: Esfuerzo; // sobrescribe el esfuerzo del agente para esta tarea
   /** Contenido que se incluye en el mensaje para que el agente no tenga que leerlo (ahorra tokens). */
   incluir?: { dossier?: boolean; secciones?: string[]; glosario?: boolean; consulta?: string };
@@ -183,9 +186,18 @@ export class Flujo {
       esfuerzo: l.esfuerzo ?? personal.esfuerzo ?? AGENTES[l.agente].esfuerzo,
       // El modelo elegido es del motor configurado; si se usa el otro motor, su modelo por defecto
       modelo: motor === (personal.motor ?? AGENTES[l.agente].motor) ? personal.modelo : undefined,
-      mcp: conIndice
-        ? { ...this.dep.mcpFuentes!, args: [...this.dep.mcpFuentes!.args, ...Object.entries(carpetas).map(([k, v]) => `${k}=${v}`)] }
-        : undefined,
+      mcp:
+        this.dep.mcpFuentes && (conIndice || l.imagenes)
+          ? {
+              ...this.dep.mcpFuentes,
+              args: [
+                ...this.dep.mcpFuentes.args,
+                ...(l.imagenes ? ['--imagenes'] : []),
+                ...(conIndice ? Object.entries(carpetas).map(([k, v]) => `${k}=${v}`) : []),
+              ],
+              env: { ...this.dep.mcpFuentes.env, ...(l.imagenes ? { APUNTES_CLAVES_IMAGENES: JSON.stringify(this.dep.ajustes().claves ?? {}) } : {}) },
+            }
+          : undefined,
       cwd,
       dirsExtra: documento ? [dirAsig] : [],
       post: l.post,
@@ -876,17 +888,26 @@ Estilo de ilustración didáctica, limpia, fondo claro, sin marcas de agua. Si l
         ...comun,
         titulo: `Imagen de internet: ${p.titulo}`,
         web: true,
+        imagenes: !!this.dep.mcpFuentes,
         incluir: { secciones: [p.seccion] },
         tarea: `${contexto}
 
-Busca en la web una imagen real con licencia libre (preferentemente en Wikimedia Commons) que muestre exactamente eso, con buena resolución y legible.
-No descargues nada. Escribe en \`${salida}\` este JSON:
+Busca una imagen real con licencia libre que muestre exactamente eso, con buena resolución y legible.
+${
+  this.dep.mcpFuentes
+    ? 'Usa primero la herramienta `buscar_imagenes` (consulta en inglés y `consulta_local` en el idioma de los apuntes; prueba 2 o 3 formulaciones si hace falta): busca en museos, bibliotecas y archivos y ya comprueba la licencia. Para historia y arte, prefiere fuentes primarias (obras, grabados, mapas, fotografías de la época). Solo si no hay nada adecuado, busca en la web (preferentemente en Wikimedia Commons).'
+    : 'Búscala en la web, preferentemente en Wikimedia Commons.'
+}
+No descargues nada. Escribe en \`${salida}\` este JSON (copia los datos tal cual de la herramienta si la imagen viene de ella):
 
 {
   "url": "URL DIRECTA del archivo de imagen (jpg, png, svg o webp; en Wikimedia, la de upload.wikimedia.org)",
-  "pagina": "URL de la página de la imagen",
+  "pagina": "URL de la ficha o página de la imagen",
+  "titulo": "título de la obra",
   "autor": "autor o titular",
-  "licencia": "p. ej. CC BY-SA 4.0 o dominio público"
+  "fecha": "fecha de la obra, si se conoce",
+  "institucion": "museo, biblioteca o archivo que la conserva, si se conoce",
+  "licencia": "p. ej. CC0, Dominio público, CC BY 4.0 o CC BY-SA 4.0"
 }
 
 Solo licencias que permitan reutilizarla (CC0, dominio público, CC BY, CC BY-SA). NO modifiques la sección.`,
@@ -1028,6 +1049,34 @@ No descargues nada ni modifiques otros archivos. Escribe los resultados en \`${s
   }
 
   /** Imágenes enlazadas en las secciones cuyo archivo no existe (p. ej. capturas que debe hacer el docente). */
+  /**
+   * Descarga a `recursos/` una imagen encontrada en museos o bibliotecas y, si se indica una
+   * sección, la añade al final con su pie y su crédito. Devuelve el Markdown para insertarla.
+   */
+  async guardarImagenWeb(asig: string, doc: string, r: ResultadoImagen, seccion?: string, pie?: string) {
+    if (!r?.imagen || !/^https?:\/\//.test(r.imagen)) throw new ErrorUsuario('Imagen no válida');
+    const base = `${slug(r.titulo).slice(0, 40) || 'imagen'}-${hashTexto(r.id).slice(0, 5)}`;
+    let nombre: string;
+    try {
+      nombre = await descargarImagen(r.imagen, path.join(this.almacen.dirDocumento(asig, doc), 'recursos'), base);
+    } catch (e) {
+      // Si la imagen grande falla, se intenta con la miniatura (peor resolución, pero sirve)
+      if (!r.miniatura || r.miniatura === r.imagen) throw new ErrorUsuario((e as Error).message);
+      nombre = await descargarImagen(r.miniatura, path.join(this.almacen.dirDocumento(asig, doc), 'recursos'), base).catch(() => {
+        throw new ErrorUsuario((e as Error).message);
+      });
+    }
+    const rel = `recursos/${nombre}`;
+    const markdown = `![${(pie || r.titulo).replace(/[[\]]/g, '')}](${rel})\n\n*Fuente: ${creditoObra(r)} ([origen](${r.pagina}))*`;
+    if (seccion) {
+      await this.conCandado(`${asig}/${doc}/sec/${seccion}`, async () => {
+        const texto = await this.almacen.leerSeccion(asig, doc, seccion);
+        await this.almacen.guardarSeccion(asig, doc, seccion, `${texto.trimEnd()}\n\n${markdown}\n`);
+      });
+    }
+    return { archivo: rel, markdown };
+  }
+
   /**
    * Imágenes que han fallado: enlaces del texto cuyo archivo no existe (descargas perdidas, capturas
    * que debe hacer el docente…) e imágenes propuestas que no se pudieron descargar o generar.
@@ -1420,7 +1469,7 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
     const id = String(datos.id);
     const archivoBase = String(datos.archivoBase);
     const p = await this.propuesta(asig, doc, id);
-    const r = await this.leerSalida<{ url?: string; pagina?: string; autor?: string; licencia?: string }>(asig, doc, salida);
+    const r = await this.leerSalida<{ url?: string; pagina?: string; titulo?: string; autor?: string; fecha?: string; institucion?: string; licencia?: string }>(asig, doc, salida);
     const otra = (motivo: string) =>
       new PedirAlAgente(
         motivo,
@@ -1435,7 +1484,10 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
       throw otra(`${(e as Error).message.replace(/\.$/, '')}: ${r.url}.`);
     }
     const rel = `recursos/${descargado}`;
-    const credito = [r.autor, r.licencia].filter(Boolean).join(' · ');
+    // Crédito al estilo de los museos si se conoce la institución; si no, autor y licencia
+    const credito = r.institucion && r.licencia
+      ? creditoObra({ titulo: r.titulo ?? '', autor: r.autor, fecha: r.fecha, institucion: r.institucion, licencia: r.licencia })
+      : [r.autor, r.licencia].filter(Boolean).join(' · ');
     const pie = credito ? `\n\n*Fuente: ${credito}${r.pagina ? ` ([origen](${r.pagina}))` : ''}*` : '';
     const encontrado = await this.insertarEnSeccion(asig, doc, p, `![${p.titulo}](${rel})${pie}`);
     await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada', archivo: rel, credito, url: r.url, reemplaza: rel, error: undefined });
@@ -1485,57 +1537,3 @@ function respuestaEnDossier(dossier: string, pregunta: string): string | undefin
   return undefined;
 }
 
-/** Descarga una imagen de internet a la carpeta de recursos y devuelve el nombre del archivo. */
-async function descargarImagen(url: string, dir: string, base: string): Promise<string> {
-  // Una página de Wikimedia Commons («…/wiki/File:X.jpg») se convierte en el enlace al archivo
-  const commons = url.match(/^https?:\/\/commons\.(?:m\.)?wikimedia\.org\/wiki\/(?:File|Archivo):(.+)$/i);
-  if (commons) url = `https://commons.wikimedia.org/wiki/Special:FilePath/${commons[1]}`;
-  let ultimo: Error | undefined;
-  for (let intento = 1; intento <= 3; intento++) {
-    try {
-      return await descargarUnaVez(url, dir, base);
-    } catch (e) {
-      ultimo = e as Error;
-      const espera = (e as { espera?: number }).espera;
-      if (espera === undefined) break; // error definitivo (404, no es una imagen…): no se reintenta
-      if (intento < 3) await new Promise((r) => setTimeout(r, espera || intento * 3000));
-    }
-  }
-  throw ultimo!;
-}
-
-async function descargarUnaVez(url: string, dir: string, base: string): Promise<string> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 45000);
-  // Error que merece otro intento (red, tiempo agotado, servidor saturado), con la espera sugerida
-  const temporal = (msg: string, espera = 0) => Object.assign(new Error(msg), { espera });
-  try {
-    let r: Response;
-    try {
-      r = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'ApuntesIA/1.0 (aplicacion educativa)' } });
-    } catch (e) {
-      throw temporal(`No se pudo conectar para descargar la imagen (${(e as Error).name === 'AbortError' ? 'tiempo agotado' : (e as Error).message}).`);
-    }
-    if (r.status === 429 || r.status >= 500) {
-      const s = Number(r.headers.get('retry-after'));
-      throw temporal(`No se pudo descargar la imagen (${r.status}).`, s > 0 ? Math.min(s, 20) * 1000 : 0);
-    }
-    if (!r.ok) throw new Error(`No se pudo descargar la imagen (${r.status}).`);
-    const tipo = r.headers.get('content-type') ?? '';
-    const ext = /png/.test(tipo) ? 'png' : /jpe?g/.test(tipo) ? 'jpg' : /svg/.test(tipo) ? 'svg' : /webp/.test(tipo) ? 'webp' : /gif/.test(tipo) ? 'gif' : '';
-    if (!ext) throw new Error(`La URL no es una imagen (${tipo || 'tipo desconocido'}).`);
-    const datos = Buffer.from(await r.arrayBuffer());
-    if (datos.length > 20 * 1024 * 1024) throw new Error('La imagen es demasiado grande (más de 20 MB).');
-    await fs.mkdir(dir, { recursive: true });
-    const nombre = `${base}.${ext}`;
-    const ruta = path.join(dir, nombre);
-    await fs.writeFile(ruta, datos);
-    if (!dimensiones(ruta)) {
-      await fs.rm(ruta, { force: true });
-      throw temporal('La imagen descargada está incompleta o dañada.');
-    }
-    return nombre;
-  } finally {
-    clearTimeout(t);
-  }
-}

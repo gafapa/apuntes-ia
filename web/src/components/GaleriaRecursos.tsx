@@ -5,6 +5,7 @@ import { api, urlDatos } from '../lib/api';
 import { useEstado } from '../lib/estado';
 import { BotonIcono, Insignia, Vacio, confirmar } from './ui';
 import { Visor } from './Visor';
+import { BuscadorImagenes } from './BuscadorImagenes';
 
 /** Imágenes de los apuntes: las que crean o descargan los agentes y aparecen en el documento. */
 export function GaleriaRecursos({ a, d }: { a: string; d: string }) {
@@ -41,14 +42,15 @@ export function GaleriaRecursos({ a, d }: { a: string; d: string }) {
           <div className="flex-1">
             <h2 className="font-semibold">Imágenes de los apuntes</h2>
             <p className="text-[13px] text-texto-2">
-              Las imágenes que aparecen en tus apuntes, creadas o buscadas por los agentes en la fase de visuales. El material que quieras que los
-              agentes consulten se sube en la pestaña Fuentes.
+              Las imágenes que aparecen en tus apuntes, creadas o buscadas por los agentes en la fase de visuales, o las que busques aquí en
+              museos y bibliotecas. El material que quieras que los agentes consulten se sube en la pestaña Fuentes.
             </p>
           </div>
           <BotonIcono titulo="Abrir carpeta" onClick={() => api.abrirCarpeta(a, d, 'recursos')}>
             <FolderOpen className="size-4" />
           </BotonIcono>
         </div>
+        <BuscadorImagenes a={a} d={d} onGuardada={cargar} />
         {recursos.length === 0 ? (
           <Vacio
             icono={<ImageOff className="size-6" />}

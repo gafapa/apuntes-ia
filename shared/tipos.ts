@@ -123,6 +123,8 @@ export interface Ajustes {
   asistenteCompletado: boolean;
   /** Personalización por agente: motor, instrucciones, esfuerzo y modelo propios. */
   agentes: Record<string, { motor?: Motor; instrucciones?: string; esfuerzo?: Esfuerzo; modelo?: string }>;
+  /** Claves gratuitas de las colecciones de imágenes que las piden (Europeana, Smithsonian). */
+  claves?: { europeana?: string; smithsonian?: string };
 }
 
 /** Cuánto razona el modelo: más esfuerzo, mejor resultado y más tokens de salida. */
@@ -297,3 +299,26 @@ export type MensajeWS =
   | { tipo: 'archivos'; asignatura: string; documento?: string; ruta: string }
   | { tipo: 'actualizacion'; estado: 'disponible' | 'descargada'; version: string }
   | { tipo: 'tokens'; contador: ContadorTokens };
+
+// Imágenes con licencia libre de museos, bibliotecas y archivos (server/imagenesWeb.ts)
+export type FuenteImagen = 'commons' | 'openverse' | 'met' | 'aic' | 'cleveland' | 'wellcome' | 'europeana' | 'smithsonian';
+
+export interface ResultadoImagen {
+  id: string; // «fuente:identificador»
+  fuente: FuenteImagen;
+  titulo: string;
+  autor?: string;
+  fecha?: string;
+  institucion: string;
+  licencia: string; // «Dominio público», «CC0», «CC BY 4.0», «CC BY-SA 4.0»…
+  pagina: string; // ficha de la obra
+  miniatura: string;
+  imagen: string; // archivo grande para descargar
+  ancho?: number;
+  alto?: number;
+}
+
+export interface BusquedaImagenes {
+  resultados: ResultadoImagen[];
+  fuentes: { fuente: FuenteImagen; nombre: string; n: number; error?: string }[];
+}
