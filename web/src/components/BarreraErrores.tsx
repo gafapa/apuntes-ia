@@ -8,6 +8,11 @@ export class BarreraErrores extends Component<{ children: ReactNode }, { error?:
     return { error };
   }
 
+  // En modo en vivo, un fallo a mitad de un cambio se recupera solo con la siguiente actualización
+  componentDidMount() {
+    import.meta.hot?.on('vite:afterUpdate', () => this.state.error && this.setState({ error: undefined }));
+  }
+
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('Error en la interfaz:', error, info.componentStack);
   }

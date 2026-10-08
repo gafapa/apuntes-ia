@@ -61,6 +61,13 @@ export interface ContadorTokens {
   desde: string; // fecha desde la que se cuenta (o desde que se puso a cero)
   total: Record<Motor, Tokens>;
   hoy: { fecha: string; porMotor: Record<Motor, Tokens> };
+  /** Gasto por asignatura y, dentro, por documento (lo que no es de un documento va a la asignatura). */
+  porAsignatura?: Record<string, GastoAsignatura>;
+}
+
+export interface GastoAsignatura {
+  total: Record<Motor, Tokens>;
+  documentos: Record<string, Record<Motor, Tokens>>;
 }
 
 export type EstadoTrabajo = 'en-cola' | 'ejecutando' | 'ok' | 'error' | 'cancelado';

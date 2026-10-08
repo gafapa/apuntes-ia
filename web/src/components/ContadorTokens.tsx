@@ -25,9 +25,30 @@ export function ParTokens({ t, className }: { t: Tokens; className?: string }) {
   );
 }
 
+const totalDe = (porMotor?: Partial<Record<Motor, Tokens>>) => suma(Object.values(porMotor ?? {}) as Tokens[]);
+
+/** Gasto de tokens de una asignatura (o de uno de sus documentos), con desglose por motor al pasar el ratón. */
+export function GastoTokens({ asignatura, documento, className, etiqueta }: { asignatura: string; documento?: string; className?: string; etiqueta?: string }) {
+  const gasto = useEstado((s) => s.tokens?.porAsignatura?.[asignatura]);
+  const porMotor = documento ? gasto?.documentos[documento] : gasto?.total;
+  const t = totalDe(porMotor);
+  if (!t.entrada && !t.salida) return null;
+  const detalle = (['claude', 'codex'] as Motor[])
+    .filter((m) => porMotor?.[m]?.entrada || porMotor?.[m]?.salida)
+    .map((m) => `${m === 'claude' ? 'Claude' : 'Codex'}: ${porMotor![m].entrada.toLocaleString('es')} de entrada (${porMotor![m].cache.toLocaleString('es')} de caché) · ${porMotor![m].salida.toLocaleString('es')} de salida`)
+    .join('\n');
+  return (
+    <span className={cx('inline-flex items-center gap-1.5 text-texto-3', className)} title={`Tokens gastados en ${documento ? 'este documento' : 'esta asignatura'}\n${detalle}`}>
+      {etiqueta && <span>{etiqueta}</span>}
+      <ParTokens t={t} className="pointer-events-none" />
+    </span>
+  );
+}
+
 /** Contador de la barra lateral: tokens de hoy, con desglose al pulsarlo. */
 export function ContadorTokensPie() {
   const contador = useEstado((s) => s.tokens);
+  const asignaturas = useEstado((s) => s.asignaturas);
   const [abierto, setAbierto] = useState(false);
   const caja = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -90,6 +111,27 @@ export function ContadorTokensPie() {
             datos={contador.total}
             totalFila={total}
           />
+          {asignaturas.some((a) => contador.porAsignatura?.[a.id]) && (
+            <div>
+              <div className="mb-1 text-[11px] font-semibold tracking-wider text-texto-3 uppercase">Por asignatura</div>
+              <table className="w-full text-[12px] text-texto-2">
+                <tbody>
+                  {asignaturas
+                    .filter((a) => contador.porAsignatura?.[a.id])
+                    .map((a) => ({ a, t: totalDe(contador.porAsignatura![a.id].total) }))
+                    .sort((x, y) => y.t.entrada + y.t.salida - (x.t.entrada + x.t.salida))
+                    .map(({ a, t }) => (
+                      <tr key={a.id}>
+                        <td className="max-w-40 truncate py-0.5 pr-3">{a.nombre}</td>
+                        <td className="py-0.5 text-right">
+                          <ParTokens t={t} />
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           <p className="text-[11px] leading-snug text-texto-3">
             La entrada incluye los tokens leídos de caché, que cuentan menos para el límite de la suscripción.
           </p>

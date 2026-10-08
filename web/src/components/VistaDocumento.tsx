@@ -19,6 +19,7 @@ import type { Documento, Seccion } from '../../../shared/tipos';
 import { api, urlDatos } from '../lib/api';
 import { useEstado } from '../lib/estado';
 import { AreaTexto, Boton, BotonIcono, Campo, Entrada, Insignia, Vacio, confirmar, cx } from './ui';
+import { GastoTokens } from './ContadorTokens';
 import { Editor } from './Editor';
 import { VistaPrevia } from './VistaPrevia';
 import { GestorFuentes } from './GestorFuentes';
@@ -83,11 +84,14 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
             </Insignia>
           )}
         </div>
-        {vista !== 'exportar' && (
-          <Boton tam="sm" className="ml-auto" icono={<Download className="size-3.5" />} onClick={() => elegir('exportar')}>
-            Exportar
-          </Boton>
-        )}
+        <div className="ml-auto flex shrink-0 items-center gap-4">
+          <GastoTokens asignatura={asignatura} documento={documento} etiqueta="Tokens" className="text-[12px]" />
+          {vista !== 'exportar' && (
+            <Boton tam="sm" icono={<Download className="size-3.5" />} onClick={() => elegir('exportar')}>
+              Exportar
+            </Boton>
+          )}
+        </div>
       </header>
 
       {paso && <VistaPaso id={paso.id} a={asignatura} d={documento} estado={flujo.estado} trabajos={flujo.trabajos} recargar={flujo.recargar} onIr={elegir} />}

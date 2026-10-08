@@ -53,6 +53,7 @@ export async function crearServidor(op: OpcionesServidor) {
 
   const flujo = new Flujo({ almacen: () => almacen, cola, ajustes: () => ajustes, motoresListos, dirBin, mcpFuentes: op.mcpFuentes });
   await cola.cargar(); // retoma los trabajos que seguían en marcha
+  contador.sembrar(cola.listar());
 
   const app = Fastify({ logger: false, bodyLimit: 80 * 1024 * 1024 });
   await app.register(fastifyWebsocket);
@@ -87,8 +88,8 @@ export async function crearServidor(op: OpcionesServidor) {
   cola.on('trabajo', (trabajo) => difundir({ tipo: 'trabajo', trabajo: { ...trabajo, eventos: [] } }));
   cola.on('evento', (id, evento) => difundir({ tipo: 'evento', id, evento }));
   cola.on('uso', (uso) => difundir({ tipo: 'uso', uso }));
-  cola.on('tokens', (motor, tokens) => {
-    contador.sumar(motor, tokens);
+  cola.on('tokens', (motor, tokens, t) => {
+    contador.sumar(motor, tokens, t?.asignatura, t?.documento);
     difundir({ tipo: 'tokens', contador: contador.leer() });
   });
 

@@ -520,7 +520,7 @@ ${prompt}` : prompt;
     if (r?.tokens && (r.tokens.entrada || r.tokens.salida)) {
       const previo = t.tokens ?? { entrada: 0, salida: 0, cache: 0 };
       t.tokens = { entrada: previo.entrada + r.tokens.entrada, salida: previo.salida + r.tokens.salida, cache: previo.cache + r.tokens.cache };
-      this.emit('tokens', motor, r.tokens);
+      this.emit('tokens', motor, r.tokens, t);
       this.emitir(t);
     }
     if (r?.error) {

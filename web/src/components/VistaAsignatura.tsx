@@ -4,6 +4,7 @@ import type { AsignaturaDetalle } from '../../../shared/tipos';
 import { api } from '../lib/api';
 import { useEstado } from '../lib/estado';
 import { AreaTexto, Boton, Campo, Vacio, confirmar, cx } from './ui';
+import { GastoTokens } from './ContadorTokens';
 import { GestorFuentes } from './GestorFuentes';
 import { ModalNuevoDocumento } from './Modales';
 import { PestanaGlosario, PestanaPlantillas } from './PestanasAsignatura';
@@ -54,6 +55,7 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
               {a.destinatarios && <span className="text-texto-3"> · Para: {a.destinatarios}</span>}
             </p>
           </div>
+          <GastoTokens asignatura={a.id} etiqueta="Tokens" className="mt-2 shrink-0 text-[12.5px]" />
         </div>
 
         <div className="mt-8 flex gap-1 border-b border-borde">
@@ -103,8 +105,9 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
                     <FileText className="mb-3 size-5 text-acento" />
                     <div className="font-medium leading-snug">{d.titulo}</div>
                     {d.objetivo && <p className="mt-1 line-clamp-2 text-[13px] text-texto-2">{d.objetivo}</p>}
-                    <div className="mt-3 text-xs text-texto-3">
-                      Actualizado {new Date(d.actualizado).toLocaleDateString('es', { day: 'numeric', month: 'short' })}
+                    <div className="mt-3 flex items-center justify-between gap-2 text-xs text-texto-3">
+                      <span>Actualizado {new Date(d.actualizado).toLocaleDateString('es', { day: 'numeric', month: 'short' })}</span>
+                      <GastoTokens asignatura={a.id} documento={d.id} />
                     </div>
                   </button>
                 ))}
