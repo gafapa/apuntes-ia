@@ -11,11 +11,12 @@ import {
   ImagePlus,
   Loader2,
   Network,
+  RefreshCw,
   Sparkles,
   Wand2,
   X,
 } from 'lucide-react';
-import type { EstadoFlujo, OpcionesExportacion, PropuestaVisual, TipoVisual, Trabajo } from '../../../../shared/tipos';
+import type { EstadoFlujo, ImagenFallida, OpcionesExportacion, PropuestaVisual, TipoVisual, Trabajo } from '../../../../shared/tipos';
 import { api } from '../../lib/api';
 import { useEstado } from '../../lib/estado';
 import { exportarDocumento } from '../../lib/exportacion';
@@ -115,6 +116,7 @@ export function PasoVisuales({ a, d, estado, trabajos, recargar }: Props) {
             </button>
           </div>
         )}
+        <AvisoImagenes a={a} d={d} estado={estado} soloFaltan />
         {!propuestas.length && !insertadas.length && !director.length && (
           <p className="text-[13px] text-texto-3">Las imágenes insertadas se pueden ver y gestionar en la pestaña Imágenes.</p>
         )}
@@ -276,6 +278,61 @@ const FORMATOS: { id: OpcionesExportacion['formato']; nombre: string; detalle: s
   { id: 'pdf', nombre: 'PDF', detalle: 'listo para imprimir' },
 ];
 
+/**
+ * Imágenes que han fallado (enlaces rotos o descargas fallidas), con un botón que reintenta la
+ * descarga y, si no se puede, busca una alternativa. `soloFaltan` omite los visuales con error,
+ * que el paso de visuales ya muestra en sus tarjetas.
+ */
+function AvisoImagenes({ a, d, estado, soloFaltan }: { a: string; d: string; estado?: EstadoFlujo; soloFaltan?: boolean }) {
+  const { avisar } = useEstado();
+  const [lista, setLista] = useState<ImagenFallida[]>([]);
+  const [reparando, setReparando] = useState(false);
+  const firma = estado ? `${estado.secciones.map((s) => `${s.archivo}:${s.palabras}`).join('|')}#${estado.visuales.map((v) => v.id + v.estado).join('|')}` : '';
+  useEffect(() => {
+    api.imagenesQueFaltan(a, d).then(setLista).catch(() => {});
+  }, [a, d, firma]);
+  const fallidas = soloFaltan ? lista.filter((f) => f.motivo === 'falta') : lista;
+  if (!fallidas.length) return null;
+  const enCurso = fallidas.filter((f) => f.reparando).length;
+  const reparar = async () => {
+    setReparando(true);
+    try {
+      const r = await api.repararImagenes(a, d);
+      avisar(r.mensaje, 'ok');
+      setLista(await api.imagenesQueFaltan(a, d));
+    } catch (e) {
+      avisar((e as Error).message, 'error');
+    } finally {
+      setReparando(false);
+    }
+  };
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-aviso/40 bg-aviso/10 px-3 py-2 text-[12.5px]">
+      <AlertCircle className="mt-0.5 size-4 shrink-0 text-aviso" />
+      <div className="min-w-0 flex-1">
+        {fallidas.length === 1 ? 'Una imagen ha fallado' : `${fallidas.length} imágenes han fallado`}
+        {fallidas.some((f) => f.motivo === 'falta') && '; las que faltan se exportarán como «Imagen pendiente»'}:
+        <ul className="mt-1 list-disc pl-4 text-texto-2">
+          {fallidas.map((f) => (
+            <li key={(f.visual ?? '') + f.seccion + (f.ruta ?? '')}>
+              {f.alt || f.ruta}{' '}
+              <span className="text-texto-3">
+                ({f.reparando ? 'buscando alternativa…' : f.motivo === 'falta' ? `falta ${f.ruta}` : f.error || 'no se pudo obtener'}, en{' '}
+                {f.seccion.replace(/\.md$/, '')})
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {enCurso < fallidas.length && (
+        <Boton tam="sm" icono={<RefreshCw className="size-3.5" />} cargando={reparando} onClick={reparar}>
+          Reintentar o buscar otra
+        </Boton>
+      )}
+    </div>
+  );
+}
+
 export function PanelExportar({ a, d, estado, recargar }: { a: string; d: string; estado?: EstadoFlujo; recargar: () => void }) {
   const { avisar } = useEstado();
   const [op, setOp] = useState<OpcionesExportacion>(() => {
@@ -295,10 +352,6 @@ export function PanelExportar({ a, d, estado, recargar }: { a: string; d: string
   useEffect(() => {
     api.sinPie(a, d).then(setSinPie).catch(() => {});
   }, [a, d, firmaSecciones, anadiendoPies]);
-  const [faltan, setFaltan] = useState<{ seccion: string; ruta: string; alt: string }[]>([]);
-  useEffect(() => {
-    api.imagenesQueFaltan(a, d).then(setFaltan).catch(() => {});
-  }, [a, d, firmaSecciones, estado?.visuales]);
   const cambiar = (c: Partial<OpcionesExportacion>) => {
     const n = { ...op, ...c };
     setOp(n);
@@ -380,22 +433,7 @@ export function PanelExportar({ a, d, estado, recargar }: { a: string; d: string
           </Boton>
         </div>
       )}
-      {faltan.length > 0 && (
-        <div className="flex items-start gap-3 rounded-lg border border-aviso/40 bg-aviso/10 px-3 py-2 text-[12.5px]">
-          <AlertCircle className="mt-0.5 size-4 shrink-0 text-aviso" />
-          <div className="flex-1">
-            {faltan.length === 1 ? 'Falta el archivo de una imagen' : `Faltan los archivos de ${faltan.length} imágenes`}; se exportarán como
-            «Imagen pendiente»:
-            <ul className="mt-1 list-disc pl-4 text-texto-2">
-              {faltan.map((f) => (
-                <li key={f.seccion + f.ruta}>
-                  {f.alt || f.ruta} <span className="text-texto-3">({f.ruta}, en {f.seccion.replace(/\.md$/, '')})</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
+      <AvisoImagenes a={a} d={d} estado={estado} />
       {op.formato !== 'pdf' && (
         <p className="text-[12px] text-texto-3">Para usar tus propios estilos de {op.formato === 'docx' ? 'Word' : 'LibreOffice'}, sube una plantilla en la ficha de la asignatura.</p>
       )}

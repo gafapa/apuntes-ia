@@ -22,6 +22,7 @@ import type {
   ResultadoBusqueda,
   TipoBusqueda,
   PropuestaVisual,
+  ImagenFallida,
   Sugerencia,
   TipoRevision,
   TipoVisual,
@@ -30,6 +31,8 @@ import type {
 import { ARCHIVO_AUTOEVALUACION } from '../shared/tipos';
 import { Almacen, ErrorUsuario, slug } from './store';
 import type { Cola, Postproceso } from './agents/cola';
+import { PedirAlAgente } from './agents/cola';
+import { dimensiones } from './imagenes';
 import { AGENTES, construirPrompt } from './agents/agentes';
 import { extraerJson, insertarTrasAncla, sustituirFragmento, buscarFragmento, contarPalabras } from './texto';
 import { asegurarTextos } from './conversion';
@@ -787,7 +790,7 @@ Como máximo 2 o 3 por sección, y solo donde aporten. Si el usuario te responde
   private async insertarEnSeccion(asig: string, doc: string, p: PropuestaVisual, bloque: string) {
     return this.conCandado(`${asig}/${doc}/sec/${p.seccion}`, async () => {
       const texto = await this.almacen.leerSeccion(asig, doc, p.seccion);
-      const r = insertarTrasAncla(texto, p.ancla, bloque);
+      const r = (p.reemplaza && sustituirImagen(texto, p.reemplaza, bloque)) || insertarTrasAncla(texto, p.ancla, bloque);
       await this.almacen.guardarSeccion(asig, doc, p.seccion, r.texto);
       return r.encontrado;
     });
@@ -1003,14 +1006,108 @@ No descargues nada ni modifiques otros archivos. Escribe los resultados en \`${s
   }
 
   /** Imágenes enlazadas en las secciones cuyo archivo no existe (p. ej. capturas que debe hacer el docente). */
-  async imagenesQueFaltan(asig: string, doc: string) {
+  /**
+   * Imágenes que han fallado: enlaces del texto cuyo archivo no existe (descargas perdidas, capturas
+   * que debe hacer el docente…) e imágenes propuestas que no se pudieron descargar o generar.
+   */
+  async imagenesQueFaltan(asig: string, doc: string): Promise<ImagenFallida[]> {
     const dir = this.almacen.dirDocumento(asig, doc);
     const textos = await this.almacen.textoCompleto(asig, doc);
-    return textos.flatMap((t) =>
+    const visuales = await this.almacen.leerJsonDoc<PropuestaVisual[]>(asig, doc, 'visuales.json', []);
+    const res: ImagenFallida[] = textos.flatMap((t) =>
       [...t.texto.matchAll(/!\[([^\]]*)\]\(([^)\s]+)\)/g)]
         .filter(([, , ruta]) => !/^https?:/.test(ruta) && !existsSync(path.join(dir, decodeURIComponent(ruta))))
-        .map(([, alt, ruta]) => ({ seccion: t.archivo, ruta, alt })),
+        .map(([, alt, ruta]) => {
+          const v = visuales.find((x) => x.reemplaza === ruta || x.archivo === ruta);
+          return { seccion: t.archivo, ruta, alt, motivo: 'falta' as const, visual: v?.id, reparando: v?.estado === 'generando' };
+        }),
     );
+    for (const v of visuales) {
+      if (v.tipo === 'diagrama' || v.estado !== 'error' || res.some((x) => x.visual === v.id)) continue;
+      res.push({ seccion: v.seccion, alt: v.titulo, motivo: 'error', error: v.error, visual: v.id, reparando: false });
+    }
+    for (const v of visuales) {
+      if (v.estado !== 'generando' || v.tipo === 'diagrama' || res.some((x) => x.visual === v.id)) continue;
+      if (v.reemplaza || v.error) res.push({ seccion: v.seccion, alt: v.titulo, motivo: 'error', visual: v.id, reparando: true });
+    }
+    return res;
+  }
+
+  /**
+   * Repara las imágenes que han fallado: primero vuelve a intentar la descarga desde la URL que
+   * ya se conocía y, si no es posible, pide al ilustrador una imagen alternativa que sustituya a la rota.
+   */
+  async repararImagenes(asig: string, doc: string) {
+    const fallidas = (await this.imagenesQueFaltan(asig, doc)).filter((f) => !f.reparando);
+    if (!fallidas.length) throw new ErrorUsuario('No hay imágenes que reparar');
+    const dirRecursos = path.join(this.almacen.dirDocumento(asig, doc), 'recursos');
+    let redescargadas = 0;
+    let buscando = 0;
+    const errores: string[] = [];
+    for (const f of fallidas) {
+      try {
+        let v = f.visual ? await this.propuesta(asig, doc, f.visual) : undefined;
+        // 1. Reintentar la descarga original
+        if (v?.tipo === 'imagen-web' && v.url) {
+          const base = f.ruta
+            ? path.basename(f.ruta).replace(/\.[^.]+$/, '')
+            : `${slug(v.titulo).slice(0, 40)}-${v.id.slice(0, 4)}`;
+          const nombre = await descargarImagen(v.url, dirRecursos, base).catch(() => undefined);
+          if (nombre) {
+            const rel = `recursos/${nombre}`;
+            if (f.ruta && f.ruta !== rel) {
+              await this.conCandado(`${asig}/${doc}/sec/${f.seccion}`, async () => {
+                const texto = await this.almacen.leerSeccion(asig, doc, f.seccion);
+                await this.almacen.guardarSeccion(asig, doc, f.seccion, texto.split(`](${f.ruta})`).join(`](${rel})`));
+              });
+            } else if (!f.ruta) {
+              const pie = v.credito ? `\n\n*Fuente: ${v.credito}*` : '';
+              await this.insertarEnSeccion(asig, doc, v, `![${v.titulo}](${rel})${pie}`);
+            }
+            await this.cambiarPropuesta(asig, doc, v.id, { estado: 'insertada', archivo: rel, error: undefined });
+            redescargadas++;
+            continue;
+          }
+        }
+        // 2. Buscar una alternativa
+        if (!v) {
+          const nueva: PropuestaVisual = {
+            id: randomUUID().slice(0, 10),
+            seccion: f.seccion,
+            ancla: '',
+            tipo: 'imagen-web',
+            titulo: f.alt || 'Imagen',
+            descripcion: f.alt || `La imagen que había en ${f.ruta}`,
+            reemplaza: f.ruta,
+            estado: 'propuesta',
+            creado: new Date().toISOString(),
+          };
+          await this.conCandado(`${asig}/${doc}/visuales`, async () => {
+            const lista = await this.almacen.leerJsonDoc<PropuestaVisual[]>(asig, doc, 'visuales.json', []);
+            await this.almacen.escribirJsonDoc(asig, doc, 'visuales.json', [...lista, nueva]);
+          });
+          v = nueva;
+        } else if (f.ruta && v.reemplaza !== f.ruta) {
+          v = await this.cambiarPropuesta(asig, doc, v.id, { reemplaza: f.ruta });
+        }
+        const antes = v.url ? ` La anterior (${v.url}) no se pudo descargar: busca otra distinta.` : v.error ? ` El intento anterior falló: ${v.error}` : '';
+        await this.generarVisual(
+          asig,
+          doc,
+          v.id,
+          `Esta imagen sustituye a otra que falló o que falta en el texto.${antes}${f.ruta ? ` En el texto aparecía como «${f.alt}» (${f.ruta}).` : ''}`,
+        );
+        buscando++;
+      } catch (e) {
+        errores.push(`${f.alt || f.ruta}: ${(e as Error).message}`);
+      }
+    }
+    const partes = [
+      redescargadas && `${redescargadas} descargada${redescargadas === 1 ? '' : 's'} de nuevo`,
+      buscando && `buscando alternativa para ${buscando}`,
+      errores.length && `${errores.length} con error (${errores.join('; ')})`,
+    ].filter(Boolean);
+    return { redescargadas, buscando, errores, mensaje: partes.join(', ') || 'Nada que reparar' };
   }
 
   async anadirPies(asig: string, doc: string) {
@@ -1253,9 +1350,11 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
     const id = String(datos.id);
     const p = await this.propuesta(asig, doc, id);
     const ruta = path.join(this.almacen.dirDocumento(asig, doc), rel);
-    if (!existsSync(ruta)) throw new Error(`No se ha guardado la imagen en ${rel}. Respóndele para que lo haga.`);
+    if (!existsSync(ruta) || !dimensiones(ruta)) {
+      throw new PedirAlAgente(`No se ha guardado la imagen en ${rel}.`, `La imagen no está guardada (o está dañada) en \`${rel}\`. Genérala de nuevo y guárdala ahí como PNG.`);
+    }
     const encontrado = await this.insertarEnSeccion(asig, doc, p, `![${p.titulo}](${rel})`);
-    await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada', archivo: rel });
+    await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada', archivo: rel, reemplaza: rel });
     return encontrado ? 'Imagen generada e insertada' : 'Imagen añadida al final de la sección';
 
   }
@@ -1268,15 +1367,42 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
     const archivoBase = String(datos.archivoBase);
     const p = await this.propuesta(asig, doc, id);
     const r = await this.leerSalida<{ url?: string; pagina?: string; autor?: string; licencia?: string }>(asig, doc, salida);
-    if (!r.url || !/^https?:\/\//.test(r.url)) throw new Error('No ha indicado una URL de imagen válida. Respóndele para que busque otra.');
-    const descargado = await descargarImagen(r.url, path.join(this.almacen.dirDocumento(asig, doc), 'recursos'), archivoBase);
+    const otra = (motivo: string) =>
+      new PedirAlAgente(
+        motivo,
+        `${motivo} Busca OTRA imagen alternativa (distinta de las anteriores) que muestre lo mismo, con licencia libre y preferiblemente en upload.wikimedia.org. Comprueba que la URL es el archivo de imagen directo y vuelve a escribir \`${salida}\` con el mismo formato.`,
+      );
+    if (!r.url || !/^https?:\/\//.test(r.url)) throw otra('No ha indicado una URL de imagen válida.');
+    let descargado: string;
+    try {
+      descargado = await descargarImagen(r.url, path.join(this.almacen.dirDocumento(asig, doc), 'recursos'), archivoBase);
+    } catch (e) {
+      await this.cambiarPropuesta(asig, doc, id, { url: r.url });
+      throw otra(`${(e as Error).message.replace(/\.$/, '')}: ${r.url}.`);
+    }
     const rel = `recursos/${descargado}`;
     const credito = [r.autor, r.licencia].filter(Boolean).join(' · ');
     const pie = credito ? `\n\n*Fuente: ${credito}${r.pagina ? ` ([origen](${r.pagina}))` : ''}*` : '';
     const encontrado = await this.insertarEnSeccion(asig, doc, p, `![${p.titulo}](${rel})${pie}`);
-    await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada', archivo: rel, credito });
+    await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada', archivo: rel, credito, url: r.url, reemplaza: rel, error: undefined });
     return encontrado ? 'Imagen descargada e insertada' : 'Imagen añadida al final de la sección';
   }
+}
+
+/**
+ * Sustituye en el texto la imagen enlazada a `ruta` (y su línea «*Fuente: …*» o la nota en cursiva
+ * entre paréntesis que la acompañe) por `bloque`. Undefined si la imagen no está en el texto.
+ */
+function sustituirImagen(texto: string, ruta: string, bloque: string): { texto: string; encontrado: boolean } | undefined {
+  const lineas = texto.split('\n');
+  const i = lineas.findIndex((l) => /^\s*!\[[^\]]*\]\(([^)\s]+)\)/.test(l) && l.includes(`](${ruta})`));
+  if (i < 0) return undefined;
+  let fin = i + 1;
+  let j = i + 1;
+  while (j < lineas.length && !lineas[j].trim()) j++;
+  if (/^\s*\*(Fuente:[^*]+|\([^*]+\))\*\s*$/.test(lineas[j] ?? '')) fin = j + 1;
+  lineas.splice(i, fin - i, bloque);
+  return { texto: lineas.join('\n'), encontrado: true };
 }
 
 function aplanarApartados(l: Apartado[]): string[] {
@@ -1307,19 +1433,53 @@ function respuestaEnDossier(dossier: string, pregunta: string): string | undefin
 
 /** Descarga una imagen de internet a la carpeta de recursos y devuelve el nombre del archivo. */
 async function descargarImagen(url: string, dir: string, base: string): Promise<string> {
+  // Una página de Wikimedia Commons («…/wiki/File:X.jpg») se convierte en el enlace al archivo
+  const commons = url.match(/^https?:\/\/commons\.(?:m\.)?wikimedia\.org\/wiki\/(?:File|Archivo):(.+)$/i);
+  if (commons) url = `https://commons.wikimedia.org/wiki/Special:FilePath/${commons[1]}`;
+  let ultimo: Error | undefined;
+  for (let intento = 1; intento <= 3; intento++) {
+    try {
+      return await descargarUnaVez(url, dir, base);
+    } catch (e) {
+      ultimo = e as Error;
+      const espera = (e as { espera?: number }).espera;
+      if (espera === undefined) break; // error definitivo (404, no es una imagen…): no se reintenta
+      if (intento < 3) await new Promise((r) => setTimeout(r, espera || intento * 3000));
+    }
+  }
+  throw ultimo!;
+}
+
+async function descargarUnaVez(url: string, dir: string, base: string): Promise<string> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 45000);
+  // Error que merece otro intento (red, tiempo agotado, servidor saturado), con la espera sugerida
+  const temporal = (msg: string, espera = 0) => Object.assign(new Error(msg), { espera });
   try {
-    const r = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'ApuntesIA/1.0 (aplicacion educativa)' } });
-    if (!r.ok) throw new Error(`No se pudo descargar la imagen (${r.status}). Respóndele para que busque otra.`);
+    let r: Response;
+    try {
+      r = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'ApuntesIA/1.0 (aplicacion educativa)' } });
+    } catch (e) {
+      throw temporal(`No se pudo conectar para descargar la imagen (${(e as Error).name === 'AbortError' ? 'tiempo agotado' : (e as Error).message}).`);
+    }
+    if (r.status === 429 || r.status >= 500) {
+      const s = Number(r.headers.get('retry-after'));
+      throw temporal(`No se pudo descargar la imagen (${r.status}).`, s > 0 ? Math.min(s, 20) * 1000 : 0);
+    }
+    if (!r.ok) throw new Error(`No se pudo descargar la imagen (${r.status}).`);
     const tipo = r.headers.get('content-type') ?? '';
     const ext = /png/.test(tipo) ? 'png' : /jpe?g/.test(tipo) ? 'jpg' : /svg/.test(tipo) ? 'svg' : /webp/.test(tipo) ? 'webp' : /gif/.test(tipo) ? 'gif' : '';
-    if (!ext) throw new Error(`La URL no es una imagen (${tipo || 'tipo desconocido'}). Respóndele para que indique la URL directa del archivo.`);
+    if (!ext) throw new Error(`La URL no es una imagen (${tipo || 'tipo desconocido'}).`);
     const datos = Buffer.from(await r.arrayBuffer());
     if (datos.length > 20 * 1024 * 1024) throw new Error('La imagen es demasiado grande (más de 20 MB).');
     await fs.mkdir(dir, { recursive: true });
     const nombre = `${base}.${ext}`;
-    await fs.writeFile(path.join(dir, nombre), datos);
+    const ruta = path.join(dir, nombre);
+    await fs.writeFile(ruta, datos);
+    if (!dimensiones(ruta)) {
+      await fs.rm(ruta, { force: true });
+      throw temporal('La imagen descargada está incompleta o dañada.');
+    }
     return nombre;
   } finally {
     clearTimeout(t);

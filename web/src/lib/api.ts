@@ -1,4 +1,5 @@
 import type {
+  ImagenFallida,
   Ajustes,
   ContadorTokens,
   EstadoFlujo,
@@ -150,7 +151,8 @@ export const api = {
     ),
 
   sinPie: (a: string, d: string) => pedir<{ seccion: string; tipo: string; muestra: string }[]>('GET', `${doc(a, d)}/pies`),
-  imagenesQueFaltan: (a: string, d: string) => pedir<{ seccion: string; ruta: string; alt: string }[]>('GET', `${doc(a, d)}/imagenes-faltan`),
+  imagenesQueFaltan: (a: string, d: string) => pedir<ImagenFallida[]>('GET', `${doc(a, d)}/imagenes-faltan`),
+  repararImagenes: (a: string, d: string) => pedir<{ mensaje: string }>('POST', `${doc(a, d)}/imagenes-faltan`),
   anadirPies: (a: string, d: string) => pedir<Trabajo>('POST', `${doc(a, d)}/pies`),
 
   trabajos: () => pedir<Trabajo[]>('GET', '/api/trabajos'),

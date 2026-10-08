@@ -221,8 +221,21 @@ export interface PropuestaVisual {
   estado: 'propuesta' | 'generando' | 'insertada' | 'descartada' | 'error';
   archivo?: string; // recurso generado
   credito?: string; // autoría/licencia de imágenes de internet
+  url?: string; // origen de una imagen de internet (para reintentar la descarga)
+  reemplaza?: string; // ruta de una imagen rota del texto que este visual sustituye
   error?: string;
   creado: string;
+}
+
+/** Imagen que ha fallado: enlace roto en el texto o visual que no se pudo descargar/generar. */
+export interface ImagenFallida {
+  seccion: string;
+  ruta?: string; // enlace roto del texto (si lo hay)
+  alt: string;
+  motivo: 'falta' | 'error';
+  error?: string;
+  visual?: string; // propuesta de visual relacionada
+  reparando: boolean;
 }
 
 export interface Exportado {

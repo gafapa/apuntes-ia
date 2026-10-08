@@ -70,12 +70,29 @@ export interface Manejadores {
   alFallar(t: Trabajo, post: Postproceso): Promise<void> | void;
 }
 
+/**
+ * Error de un postproceso que el propio agente puede arreglar (p. ej. una imagen que no se pudo
+ * descargar): en vez de dar el trabajo por fallido, se le responde automáticamente con `paraAgente`.
+ */
+export class PedirAlAgente extends Error {
+  constructor(
+    mensaje: string,
+    public paraAgente: string,
+  ) {
+    super(mensaje);
+  }
+}
+
+/** Respuestas automáticas como máximo por trabajo antes de dejarlo en manos del usuario. */
+const MAX_RESPUESTAS_AUTOMATICAS = 2;
+
 /** Lo que se guarda en disco de cada trabajo. */
 interface Registro {
   trabajo: Trabajo;
   peticion: Omit<PeticionTrabajo, 'prompt'>; // para poder responder después
   pid?: number;
   ejecucion: number; // nº de ejecución (cada respuesta del usuario es una nueva)
+  automaticas?: number; // respuestas automáticas ya enviadas (PedirAlAgente)
 }
 
 const MAX_EVENTOS = 400;
@@ -227,10 +244,17 @@ export class Cola extends EventEmitter {
     const t = r.trabajo;
     if (t.estado === 'en-cola' || t.estado === 'ejecutando') throw new Error('El agente todavía está trabajando');
     if (!t.sesion) throw new Error('Este trabajo no se puede continuar');
+    r.automaticas = 0;
+    this.reanudar(r, texto);
+    return t;
+  }
+
+  private reanudar(r: Registro, texto: string) {
+    const t = r.trabajo;
     r.peticion = { ...r.peticion, reanudar: t.sesion };
     r.pid = undefined;
-    this.prompts.set(id, texto);
-    fs.writeFileSync(this.ruta(id, 'prompt.txt'), texto, 'utf8');
+    this.prompts.set(t.id, texto);
+    fs.writeFileSync(this.ruta(t.id, 'prompt.txt'), texto, 'utf8');
     t.estado = 'en-cola';
     t.fin = undefined;
     t.inicio = undefined;
@@ -239,7 +263,6 @@ export class Cola extends EventEmitter {
     this.evento(t, 'usuario', texto);
     this.emitir(t);
     this.siguiente();
-    return t;
   }
 
   cancelar(id: string) {
@@ -544,7 +567,18 @@ ${prompt}` : prompt;
     this.manejadores
       .alTerminar(t, post)
       .then((msg) => this.terminar(t, 'ok', msg || 'Terminado'))
-      .catch((e) => this.terminar(t, 'error', String(e?.message ?? e)));
+      .catch((e) => {
+        const r = this.registros.get(t.id);
+        if (e instanceof PedirAlAgente && r && t.sesion && (r.automaticas ?? 0) < MAX_RESPUESTAS_AUTOMATICAS) {
+          r.automaticas = (r.automaticas ?? 0) + 1;
+          const s = this.seguimientos.get(t.id);
+          if (s) clearInterval(s.sondeo);
+          this.seguimientos.delete(t.id);
+          this.evento(t, 'estado', `${e.message} Se lo pido de nuevo al agente (intento ${r.automaticas} de ${MAX_RESPUESTAS_AUTOMATICAS}).`);
+          return this.reanudar(r, e.paraAgente);
+        }
+        this.terminar(t, 'error', String(e?.message ?? e));
+      });
   }
 
   // ---------------------------------------------------------------------------
