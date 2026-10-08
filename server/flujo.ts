@@ -1024,7 +1024,7 @@ Formato del pie:
 - Diagrama: una línea \`*Figura: pie*\` justo después del bloque \`\`\`mermaid (separada por una línea en blanco).
 - Tabla: una línea \`Tabla: pie\` justo después de la tabla (separada por una línea en blanco).
 
-Edita solo esos elementos; no cambies nada más del texto.`,
+Edita solo esos elementos; no cambies nada más del texto. Si alguno ya tiene un pie en otro formato (en cursiva, en negrita, encima de la tabla…), no añadas otro: convierte el que hay al formato indicado. Nunca dejes dos pies para el mismo elemento.`,
     });
   }
 

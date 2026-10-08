@@ -122,6 +122,9 @@ export async function exportar(
     ];
     const comunes = [
       '-f', 'markdown+tex_math_dollars+raw_attribute',
+      // Pies siempre debajo (Pandoc pone los de tabla encima por defecto en Word y ODT)
+      '--table-caption-position=below',
+      '--figure-caption-position=below',
       '--resource-path', dirDoc,
       ...meta,
       // En Word y ODT el índice lo genera prepararEncabezados(); en PDF, Typst

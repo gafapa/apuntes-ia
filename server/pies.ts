@@ -12,7 +12,8 @@ export interface ElementoSinPie {
 }
 
 const IMAGEN_SOLA = /^!\[([^\]]*)\]\(([^)\s]+)\)(\{[^}]*\})?\s*$/;
-const PIE_TABLA = /^\s*(?:Tabla|Table)\s*\d*\s*[:.]\s*(.+?)\s*$|^\s*:\s+(.+?)\s*$/;
+// Admite «Tabla: …», «Tabla 3. …», «*Tabla: …*», «**Tabla 3:** …» y la sintaxis de Pandoc «: …»
+const PIE_TABLA = /^\s*\*{0,2}(?:Tabla|Table)\s*\d*\s*[:.]\*{0,2}\s*(.+?)\*{0,2}\s*$|^\s*:\s+(.+?)\s*$/;
 const esFilaTabla = (l: string) => /^\s*\|.*\|\s*$/.test(l);
 const esSeparadorTabla = (l: string) => /^\s*\|?\s*:?-{3,}/.test(l);
 
@@ -109,6 +110,12 @@ export function prepararPies(md: string, formato: 'docx' | 'odt' | 'pdf', textos
       const p = pieDeTabla(lineas, i, fin);
       if (p) {
         quitar.add(p.linea);
+        // Pies repetidos tras el primero (p. ej. añadidos dos veces por un agente): se descartan
+        for (let k = p.linea + 1; k < lineas.length; k++) {
+          if (!lineas[k].trim()) continue;
+          if (PIE_TABLA.test(lineas[k]) && !esFilaTabla(lineas[k + 1] ?? '') && !esFilaTabla(lineas[k + 2] ?? '')) quitar.add(k);
+          else break;
+        }
         // Si el pie estaba antes de la tabla, ya se copió: se retira de la salida
         if (p.linea < i) {
           const k = res.lastIndexOf(lineas[p.linea]);
