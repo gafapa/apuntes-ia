@@ -8,6 +8,7 @@ import type { Exportado, OpcionesExportacion } from '../shared/tipos';
 import { ARCHIVO_AUTOEVALUACION } from '../shared/tipos';
 import { ESCALA_DIAGRAMAS, PATRON_MERMAID, hashTexto } from '../shared/hash';
 import { anchoExportacion, dimensiones } from './imagenes';
+import { bloqueIndice, prepararEncabezados, retocar, saltoPagina } from './indiceDocumento';
 import { Almacen, ErrorUsuario, slug } from './store';
 import { ejecutarBinario, rutaPandoc } from './conversion';
 
@@ -38,10 +39,11 @@ const TEXTOS: Record<string, { indice: string; figura: string; tabla: string }> 
   en: { indice: 'Contents', figura: 'Figure', tabla: 'Table' },
 };
 
+// Salto entre secciones (en PDF lo hace la plantilla de Typst)
 const SALTO = {
-  docx: '\n```{=openxml}\n<w:p><w:r><w:br w:type="page"/></w:r></w:p>\n```\n',
-  pdf: '', // en Typst lo hace la plantilla
-  odt: '',
+  docx: `\n${saltoPagina('docx')}\n`,
+  odt: `\n${saltoPagina('odt')}\n`,
+  pdf: '',
 };
 
 export async function exportar(
@@ -94,7 +96,14 @@ export async function exportar(
     );
     const salto = op.saltoSeccion ? SALTO[op.formato] : '';
     let md = partes.map((p) => p.trim()).join(`\n\n${salto}\n\n`);
-    if (op.portada && op.formato === 'docx') md = `${SALTO.docx}\n\n${md}`;
+    if (op.formato === 'docx' || op.formato === 'odt') {
+      // Índice ya relleno y numerado (el de Pandoc es un campo vacío hasta actualizarlo a mano)
+      const r = prepararEncabezados(md, op.numerar);
+      md = r.md;
+      if (op.indice && r.entradas.length) {
+        md = `${bloqueIndice(r.entradas, op.formato, textos.indice)}\n\n${saltoPagina(op.formato)}\n\n${md}`;
+      }
+    }
     const entrada = path.join(dirTmp, 'documento.md');
     await fs.writeFile(entrada, md, 'utf8');
 
@@ -113,7 +122,8 @@ export async function exportar(
       '-f', 'markdown+tex_math_dollars+raw_attribute',
       '--resource-path', dirDoc,
       ...meta,
-      ...(op.indice ? ['--toc', '--toc-depth=2'] : []),
+      // En Word y ODT el índice lo genera prepararEncabezados(); en PDF, Typst
+      ...(op.indice && op.formato === 'pdf' ? ['--toc', '--toc-depth=2'] : []),
       ...(op.numerar ? ['--number-sections'] : []),
     ];
 
@@ -130,6 +140,7 @@ export async function exportar(
         [entrada, '-o', salidaTmp, ...comunes, ...(existsSync(plantilla) ? ['--reference-doc', plantilla] : [])],
         dirDoc,
       );
+      await retocar(salidaTmp, op.formato, { portada: op.portada, indice: op.indice, color: asignatura.color, plantillaPropia: existsSync(plantilla) });
     } else {
       const typst = path.join(dirBin, process.platform === 'win32' ? 'typst.exe' : 'typst');
       if (!existsSync(typst)) throw new ErrorUsuario('No se encuentra Typst. Reinstala la aplicación.');
