@@ -1,12 +1,12 @@
 // Prepara la exportación: convierte los diagramas Mermaid del documento a PNG
 // (Pandoc no sabe dibujarlos) y los envía al servidor junto con las opciones.
-import { PATRON_MERMAID, hashTexto } from '../../../shared/hash';
+import { ESCALA_DIAGRAMAS, PATRON_MERMAID, hashTexto } from '../../../shared/hash';
 import type { OpcionesExportacion } from '../../../shared/tipos';
 import { api } from './api';
 
 let contador = 0;
 
-async function svgAPng(svg: string, escala = 2.5): Promise<string> {
+async function svgAPng(svg: string, escala = ESCALA_DIAGRAMAS): Promise<string> {
   const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
   const raiz = doc.documentElement;
   const vb = raiz.getAttribute('viewBox')?.split(/[\s,]+/).map(Number);
@@ -38,6 +38,12 @@ async function svgAPng(svg: string, escala = 2.5): Promise<string> {
   }
 }
 
+/** Ancho/alto de un SVG según su viewBox. */
+function proporcion(svg: string): number {
+  const vb = svg.match(/viewBox="[-\d.]+\s+[-\d.]+\s+([\d.]+)\s+([\d.]+)"/);
+  return vb ? Number(vb[1]) / Math.max(1, Number(vb[2])) : 1;
+}
+
 /** Dibuja cada diagrama con tema claro y etiquetas SVG puras (sin HTML), que se pueden rasterizar. */
 export async function diagramasAPng(textos: string[]): Promise<Record<string, string>> {
   const codigos = new Map<string, string>();
@@ -58,7 +64,18 @@ export async function diagramasAPng(textos: string[]): Promise<Record<string, st
   try {
     for (const [hash, codigo] of codigos) {
       try {
-        const { svg } = await mermaid.render(`exp-${++contador}`, codigo);
+        let { svg } = await mermaid.render(`exp-${++contador}`, codigo);
+        // Un diagrama muy apaisado queda como una tira con letra diminuta en una página vertical:
+        // si es un flujo horizontal, se prueba de arriba abajo y se elige el que mejor encaja
+        const apaisado = proporcion(svg) > 3;
+        const horizontal = /^\s*(flowchart|graph)\s+(LR|RL)\b/m;
+        if (apaisado && horizontal.test(codigo)) {
+          try {
+            const alternativo = (await mermaid.render(`exp-${++contador}`, codigo.replace(horizontal, (_m, tipo) => `${tipo} TB`))).svg;
+            const ideal = 1.4; // ancho/alto que mejor ocupa media página
+            if (Math.abs(Math.log(proporcion(alternativo) / ideal)) < Math.abs(Math.log(proporcion(svg) / ideal))) svg = alternativo;
+          } catch {}
+        }
         res[hash] = await svgAPng(svg);
       } catch (e) {
         console.warn('Diagrama no exportable', e);

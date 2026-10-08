@@ -5,5 +5,8 @@ export function hashTexto(s: string): string {
   return (h >>> 0).toString(36);
 }
 
+/** Escala con la que la interfaz rasteriza los diagramas para exportarlos (nitidez al imprimir). */
+export const ESCALA_DIAGRAMAS = 2.5;
+
 /** Bloques ```mermaid de un Markdown, con su código y el pie de figura que los sigue (si lo hay). */
 export const PATRON_MERMAID = /```mermaid[^\n]*\n([\s\S]*?)```(?:[ \t]*\n\s*\n?[ \t]*\*Figura:\s*([^*\n]+)\*)?/g;

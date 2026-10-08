@@ -6,7 +6,8 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { Exportado, OpcionesExportacion } from '../shared/tipos';
 import { ARCHIVO_AUTOEVALUACION } from '../shared/tipos';
-import { PATRON_MERMAID, hashTexto } from '../shared/hash';
+import { ESCALA_DIAGRAMAS, PATRON_MERMAID, hashTexto } from '../shared/hash';
+import { anchoExportacion, dimensiones } from './imagenes';
 import { Almacen, ErrorUsuario, slug } from './store';
 import { ejecutarBinario, rutaPandoc } from './conversion';
 
@@ -79,8 +80,17 @@ export async function exportar(
       s.texto.replace(PATRON_MERMAID, (_m, codigo: string, pie?: string) => {
         const archivo = `.exportacion/diagrama-${hashTexto(codigo.trim())}.png`;
         if (!existsSync(path.join(dirDoc, archivo))) return '\n*[Diagrama no disponible]*\n';
-        return `\n![${(pie ?? '').trim()}](${archivo})\n`;
-      }),
+        const d = dimensiones(path.join(dirDoc, archivo));
+        const ancho = d ? `{width=${anchoExportacion(d, 96 * ESCALA_DIAGRAMAS)}cm}` : '';
+        return `\n![${(pie ?? '').trim()}](${archivo})${ancho}\n`;
+      })
+        // Resto de imágenes (fotos, imágenes generadas): tamaño acotado, salvo que el texto ya lo indique
+        .replace(/(!\[[^\]]*\]\(([^)\s]+)\))(?!\{)/g, (todo, img: string, ruta: string) => {
+          if (/^https?:/.test(ruta) || ruta.startsWith('.exportacion/')) return todo;
+          const d = dimensiones(path.join(dirDoc, decodeURIComponent(ruta)));
+          // Fotos e ilustraciones: se supone una resolución de 150 ppp
+          return d ? `${img}{width=${anchoExportacion(d, 150)}cm}` : todo;
+        }),
     );
     const salto = op.saltoSeccion ? SALTO[op.formato] : '';
     let md = partes.map((p) => p.trim()).join(`\n\n${salto}\n\n`);
