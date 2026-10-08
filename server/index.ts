@@ -360,24 +360,6 @@ export async function crearServidor(op: OpcionesServidor) {
 
   // Recursos (imágenes)
   app.get(`${D}/recursos`, async (req) => almacen.listarRecursos(params(req).a, params(req).d));
-  app.post(`${D}/recursos`, async (req) => {
-    const { a, d } = params(req);
-    const dir = path.join(almacen.dirDocumento(a, d), 'recursos');
-    await fsp.mkdir(dir, { recursive: true });
-    const guardados: string[] = [];
-    for await (const parte of req.files()) {
-      if (!/\.(png|jpe?g|gif|webp|svg)$/i.test(parte.filename)) {
-        parte.file.resume();
-        continue;
-      }
-      const limpio = path.basename(parte.filename).replace(/[^\w.-]+/g, '-');
-      let nombre = limpio;
-      for (let i = 2; fs.existsSync(path.join(dir, nombre)); i++) nombre = limpio.replace(/(\.\w+)$/, `-${i}$1`);
-      await pipeline(parte.file, fs.createWriteStream(path.join(dir, nombre)));
-      guardados.push(nombre);
-    }
-    return { guardados };
-  });
   app.delete(`${D}/recursos/:nombre`, async (req) => {
     await almacen.eliminarRecurso(params(req).a, params(req).d, (req.params as { nombre: string }).nombre);
     return { ok: true };

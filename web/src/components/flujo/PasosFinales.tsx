@@ -116,7 +116,7 @@ export function PasoVisuales({ a, d, estado, trabajos, recargar }: Props) {
           </div>
         )}
         {!propuestas.length && !insertadas.length && !director.length && (
-          <p className="text-[13px] text-texto-3">También puedes insertar tus propias imágenes desde la pestaña Recursos.</p>
+          <p className="text-[13px] text-texto-3">Las imágenes insertadas se pueden ver y gestionar en la pestaña Imágenes.</p>
         )}
       </div>
     </Paso>

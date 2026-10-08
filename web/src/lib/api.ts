@@ -105,13 +105,6 @@ export const api = {
   guardarArchivo: (a: string, d: string, nombre: string, contenido: string) => pedir('PUT', `${doc(a, d)}/archivo/${e(nombre)}`, { contenido }),
 
   recursos: (a: string, d: string) => pedir<Recurso[]>('GET', `${doc(a, d)}/recursos`),
-  subirRecursos: async (a: string, d: string, archivos: File[]) => {
-    const fd = new FormData();
-    for (const f of archivos) fd.append('archivo', f, f.name);
-    const r = await fetch(`${doc(a, d)}/recursos`, { method: 'POST', body: fd });
-    if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? 'Error al subir');
-    return (await r.json()) as { guardados: string[] };
-  },
   eliminarRecurso: (a: string, d: string, nombre: string) => pedir('DELETE', `${doc(a, d)}/recursos/${e(nombre)}`),
 
   exportar: (a: string, d: string, opciones: OpcionesExportacion, diagramas: Record<string, string>) =>

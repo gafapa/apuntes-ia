@@ -61,7 +61,7 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
             [
               ['documentos', `Documentos (${a.documentos.length})`],
               ['contexto', 'Contexto y destinatarios'],
-              ['material', 'Material'],
+              ['material', 'Fuentes'],
               ['glosario', 'Glosario'],
               ['plantillas', 'Plantillas'],
             ] as [Pestana, string][]
@@ -133,7 +133,7 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
           {pestana === 'material' && (
             <GestorFuentes
               asignatura={a.id}
-              descripcion="Material común a toda la asignatura (opcional): programación, libro, apuntes del profesor… Los agentes lo consultan en todos los documentos. Si no aportas nada, investigarán por su cuenta."
+              descripcion="Fuentes de consulta comunes a toda la asignatura (opcional): programación, libro, apuntes del profesor… Los agentes las leen en todos los documentos, pero no aparecen en los apuntes. Si no aportas nada, investigarán por su cuenta."
             />
           )}
         </div>

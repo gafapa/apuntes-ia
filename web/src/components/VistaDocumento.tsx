@@ -100,9 +100,9 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
             [
               ['flujo', 'Flujo'],
               ['apuntes', 'Apuntes'],
-              ['recursos', 'Recursos'],
+              ['recursos', 'Imágenes'],
               ['ficha', 'Ficha'],
-              ['material', 'Material'],
+              ['material', 'Fuentes'],
             ] as [Pestana, string][]
           ).map(([id, txt]) => (
             <button
@@ -146,7 +146,7 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
             <GestorFuentes
               asignatura={asignatura}
               documento={documento}
-              descripcion="Material específico de este documento (opcional): apuntes del profesor, diapositivas, artículos, imágenes… Los agentes lo usarán como fuente principal."
+              descripcion="Fuentes de consulta de este documento (opcional): apuntes del profesor, diapositivas, artículos, imágenes… Los agentes las leen para investigar y redactar, pero no aparecen en los apuntes. Si no aportas nada, investigarán por su cuenta."
             />
           </div>
         </div>
