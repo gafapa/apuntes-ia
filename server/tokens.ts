@@ -7,7 +7,7 @@ const hoy = () => new Date().toLocaleDateString('sv'); // AAAA-MM-DD en hora loc
 const sumar = (a: Tokens, b: Tokens): Tokens => ({ entrada: a.entrada + b.entrada, salida: a.salida + b.salida, cache: a.cache + b.cache });
 
 function vacio(): ContadorTokens {
-  return { desde: new Date().toISOString(), total: { claude: cero(), codex: cero() }, hoy: { fecha: hoy(), porMotor: { claude: cero(), codex: cero() } }, porAsignatura: {} };
+  return { desde: new Date().toISOString(), total: { claude: cero(), codex: cero() }, hoy: { fecha: hoy(), porMotor: { claude: cero(), codex: cero() } }, porAsignatura: {}, porAgente: {} };
 }
 
 export class Contador {
@@ -18,7 +18,9 @@ export class Contador {
     try {
       const leido = JSON.parse(fs.readFileSync(archivo, 'utf8'));
       this.datos = { ...vacio(), ...leido };
-      if (!leido.porAsignatura) delete this.datos.porAsignatura; // contador antiguo: se siembra con los trabajos
+      // Contador antiguo, sin desglose: se siembra con los trabajos que se conservan
+      if (!leido.porAsignatura) delete this.datos.porAsignatura;
+      if (!leido.porAgente) delete this.datos.porAgente;
     } catch {
       this.datos = vacio();
     }
@@ -30,11 +32,22 @@ export class Contador {
     return this.datos;
   }
 
-  sumar(motor: Motor, t: Tokens, asignatura?: string, documento?: string) {
+  sumar(motor: Motor, t: Tokens, asignatura?: string, documento?: string, agente?: string) {
     const d = this.leer();
     d.total[motor] = sumar(d.total[motor] ?? cero(), t);
     d.hoy.porMotor[motor] = sumar(d.hoy.porMotor[motor] ?? cero(), t);
     if (asignatura) this.sumarA(motor, t, asignatura, documento);
+    if (agente) {
+      const a = ((d.porAgente ??= {})[agente] ??= { llamadas: 0, ...cero() });
+      Object.assign(a, sumar(a, t));
+    }
+    this.guardar();
+  }
+
+  /** Una llamada más a un agente (cada vez que termina un trabajo o una respuesta). */
+  llamada(agente: string) {
+    const a = ((this.datos.porAgente ??= {})[agente] ??= { llamadas: 0, ...cero() });
+    a.llamadas++;
     this.guardar();
   }
 
@@ -53,9 +66,18 @@ export class Contador {
    * lo que consta en los trabajos que todavía se conservan.
    */
   sembrar(trabajos: Trabajo[]) {
-    if (this.datos.porAsignatura) return;
-    this.datos.porAsignatura = {};
-    for (const t of trabajos) if (t.tokens && t.asignatura) this.sumarA(t.motor, t.tokens, t.asignatura, t.documento);
+    if (!this.datos.porAsignatura) {
+      this.datos.porAsignatura = {};
+      for (const t of trabajos) if (t.tokens && t.asignatura) this.sumarA(t.motor, t.tokens, t.asignatura, t.documento);
+    }
+    if (!this.datos.porAgente) {
+      this.datos.porAgente = {};
+      for (const t of trabajos) {
+        const a = (this.datos.porAgente[t.agente] ??= { llamadas: 0, ...cero() });
+        a.llamadas++;
+        if (t.tokens) Object.assign(a, sumar(a, t.tokens));
+      }
+    }
     this.guardar();
   }
 

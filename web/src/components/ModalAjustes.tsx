@@ -15,7 +15,6 @@ export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar
   const [guardando, setGuardando] = useState(false);
   const [comprobando, setComprobando] = useState(false);
   const [pestana, setPestana] = useState<'general' | 'agentes'>('general');
-  const [agentes, setAgentes] = useState<Ajustes['agentes']>({});
   const [claves, setClaves] = useState<NonNullable<Ajustes['claves']>>({});
   const [version, setVersion] = useState('');
   useEffect(() => {
@@ -27,7 +26,6 @@ export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar
     setMax(ajustes.maxSimultaneos);
     setMotor(ajustes.motorPorDefecto);
     setCarpeta(ajustes.carpetaDatos);
-    setAgentes(ajustes.agentes ?? {});
     setClaves(ajustes.claves ?? {});
     cargarMotores().catch(() => {});
   }, [abierto, ajustes, cargarMotores]);
@@ -36,7 +34,7 @@ export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar
     setGuardando(true);
     try {
       const cambiaCarpeta = carpeta.trim() !== ajustes?.carpetaDatos;
-      await api.guardarAjustes({ maxSimultaneos: max, motorPorDefecto: motor, carpetaDatos: carpeta, agentes, claves });
+      await api.guardarAjustes({ maxSimultaneos: max, motorPorDefecto: motor, carpetaDatos: carpeta, claves });
       await cargarAjustes();
       if (cambiaCarpeta) {
         await cargarAsignaturas();
@@ -52,7 +50,7 @@ export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar
   };
 
   return (
-    <Modal abierto={abierto} onCerrar={onCerrar} titulo="Ajustes" descripcion={version && `Apuntes IA ${version}`} ancho="max-w-2xl">
+    <Modal abierto={abierto} onCerrar={onCerrar} titulo="Ajustes" descripcion={version && `Apuntes IA ${version}`} ancho={pestana === 'agentes' ? 'max-w-4xl' : 'max-w-2xl'}>
       <div className="space-y-6">
         <div className="-mt-1 flex gap-1 border-b border-borde">
           {(
@@ -73,7 +71,7 @@ export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar
             </button>
           ))}
         </div>
-        {pestana === 'agentes' && <EditorAgentes valor={agentes} onCambio={setAgentes} />}
+        {pestana === 'agentes' && <EditorAgentes />}
         {pestana === 'general' && (
         <>
         <section className="space-y-3">
@@ -161,12 +159,19 @@ export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar
           >
             Repetir asistente inicial
           </Boton>
-          <div className="flex gap-2">
-            <Boton onClick={onCerrar}>Cancelar</Boton>
-            <Boton variante="primario" cargando={guardando} onClick={guardar}>
-              Guardar
+          {pestana === 'agentes' ? (
+            // Los agentes se guardan solos al cambiarlos
+            <Boton variante="primario" onClick={onCerrar}>
+              Cerrar
             </Boton>
-          </div>
+          ) : (
+            <div className="flex gap-2">
+              <Boton onClick={onCerrar}>Cancelar</Boton>
+              <Boton variante="primario" cargando={guardando} onClick={guardar}>
+                Guardar
+              </Boton>
+            </div>
+          )}
         </div>
       </div>
     </Modal>

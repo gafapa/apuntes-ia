@@ -12,7 +12,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import type { ChildProcess } from 'node:child_process';
 import treeKill from 'tree-kill';
-import type { EventoTrabajo, Motor, PasoFlujo, Tokens, Trabajo, UsoSuscripcion } from '../../shared/tipos';
+import type { Esfuerzo, EventoTrabajo, Motor, PasoFlujo, Tokens, Trabajo, UsoSuscripcion } from '../../shared/tipos';
 
 type Traduccion = { mensaje?: string; resultado?: string; error?: string; final?: 'ok' | 'error'; tokens?: Tokens };
 import { lanzar, rutaMotor } from './motores';
@@ -45,7 +45,7 @@ export interface PeticionTrabajo {
   sistema?: string;
   /** Si el agente necesita buscar en la web (si no, no se le cargan esas herramientas). */
   web?: boolean;
-  esfuerzo?: 'low' | 'medium' | 'high';
+  esfuerzo?: Esfuerzo;
   modelo?: string;
   /** Servidor MCP de búsqueda en las fuentes (si hay fuentes indexadas). */
   mcp?: { comando: string; args: string[]; env?: Record<string, string> };
@@ -405,7 +405,8 @@ export class Cola extends EventEmitter {
             '--disable-slash-commands',
             '--no-chrome',
             ...(p.sistema ? ['--system-prompt-file', archivoSistema] : []),
-            ...(p.esfuerzo ? ['--effort', p.esfuerzo] : []),
+            // Haiku no admite nivel de esfuerzo
+            ...(p.esfuerzo && !/haiku/i.test(p.modelo ?? '') ? ['--effort', p.esfuerzo] : []),
             ...(p.modelo ? ['--model', p.modelo] : []),
             ...(p.dirsExtra ?? []).flatMap((d) => ['--add-dir', d]),
             ...(p.reanudar ? ['--resume', p.reanudar] : []),

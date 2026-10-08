@@ -100,6 +100,8 @@ export interface ContadorTokens {
   hoy: { fecha: string; porMotor: Record<Motor, Tokens> };
   /** Gasto por asignatura y, dentro, por documento (lo que no es de un documento va a la asignatura). */
   porAsignatura?: Record<string, GastoAsignatura>;
+  /** Consumo de cada agente: llamadas y tokens (para decidir dónde ahorrar). */
+  porAgente?: Record<string, { llamadas: number } & Tokens>;
 }
 
 export interface GastoAsignatura {
@@ -160,12 +162,35 @@ export interface Ajustes {
   asistenteCompletado: boolean;
   /** Personalización por agente: motor, instrucciones, esfuerzo y modelo propios. */
   agentes: Record<string, { motor?: Motor; instrucciones?: string; esfuerzo?: Esfuerzo; modelo?: string }>;
+  /** Motor de los agentes: uno para todos o «ambos» (cada agente con el suyo, en agentes[id].motor). */
+  modoMotor?: Motor | 'ambos';
+  /** Último perfil de gasto aplicado (lo que no esté en `modelos` sale de él). */
+  perfil?: PerfilGasto;
+  /** Modelo y esfuerzo de cada agente en cada motor. */
+  modelos?: Partial<Record<Motor, Record<string, { modelo: string; esfuerzo?: Esfuerzo }>>>;
   /** Claves gratuitas de las colecciones de imágenes que las piden (Europeana, Smithsonian). */
   claves?: { europeana?: string; smithsonian?: string };
 }
 
 /** Cuánto razona el modelo: más esfuerzo, mejor resultado y más tokens de salida. */
-export type Esfuerzo = 'low' | 'medium' | 'high';
+export type Esfuerzo = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+/** Perfil de gasto: rellena modelo y esfuerzo de todos los agentes. */
+export type PerfilGasto = 'ahorro' | 'equilibrado' | 'calidad';
+
+export interface ModeloDisponible {
+  id: string;
+  nombre: string;
+  descripcion?: string;
+  esfuerzos: Esfuerzo[]; // vacío: el modelo no admite nivel de esfuerzo
+}
+
+export interface ModelosDisponibles {
+  claude: ModeloDisponible[];
+  codex: ModeloDisponible[];
+  esfuerzos: Esfuerzo[];
+  perfiles: Record<PerfilGasto, string>;
+}
 
 export interface InfoAgente {
   id: string;

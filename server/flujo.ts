@@ -40,6 +40,7 @@ import type { Moleculas } from './moleculas';
 import { descargarImagen, referenciaApa, sitioWeb, type ResultadoImagen } from './imagenesWeb';
 import { hashTexto } from '../shared/hash';
 import { AGENTES, construirPrompt } from './agents/agentes';
+import { ESFUERZOS, modeloDe, motorElegido } from './agents/modelos';
 import { extraerJson, insertarTrasAncla, sustituirFragmento, buscarFragmento, contarPalabras } from './texto';
 import { asegurarTextos } from './conversion';
 import { DESCRIPCION_TIPO, descargarFuente, guardarResultados, incorporarResultados, leerResultados } from './buscador';
@@ -130,7 +131,7 @@ export class Flujo {
       return forzado;
     }
     if (info.soloMotor) return info.soloMotor;
-    const preferido = this.dep.ajustes().agentes[agente]?.motor ?? info.motor;
+    const preferido = motorElegido(this.dep.ajustes(), agente);
     if (listos.has(preferido) || listos.size === 0) return preferido;
     return [...listos][0];
   }
@@ -184,7 +185,8 @@ export class Flujo {
       l.tarea + avisoFuentes + textoRestricciones(permisos) + referencia,
       l.indicaciones,
     );
-    const personal = this.dep.ajustes().agentes[l.agente] ?? {};
+    // Modelo y esfuerzo del agente en el motor con el que va a trabajar (Ajustes › Agentes)
+    const elegido = modeloDe(this.dep.ajustes(), l.agente, motor);
     return this.dep.cola.encolar({
       agente: l.agente,
       nombreAgente: AGENTES[l.agente].nombre,
@@ -198,9 +200,9 @@ export class Flujo {
       prompt,
       sistema,
       web: (l.web ?? AGENTES[l.agente].web) && permisos.busquedaWeb,
-      esfuerzo: l.esfuerzo ?? personal.esfuerzo ?? AGENTES[l.agente].esfuerzo,
-      // El modelo elegido es del motor configurado; si se usa el otro motor, su modelo por defecto
-      modelo: motor === (personal.motor ?? AGENTES[l.agente].motor) ? personal.modelo : undefined,
+      // Algunas tareas sencillas piden menos esfuerzo que el del agente (p. ej. añadir pies)
+      esfuerzo: l.esfuerzo && elegido.esfuerzo ? menorEsfuerzo(l.esfuerzo, elegido.esfuerzo) : elegido.esfuerzo,
+      modelo: elegido.modelo,
       mcp:
         this.dep.mcpFuentes && (conIndice || imagenes)
           ? {
@@ -1652,4 +1654,9 @@ export function tiposVisualesPermitidos(p: Required<Permisos>, conCodex: boolean
     p.imagenesWeb && 'imagen-web',
     p.imagenesIA && conCodex && 'imagen-ia',
   ].filter((t): t is TipoVisual => !!t);
+}
+
+/** El menor de dos niveles de esfuerzo. */
+function menorEsfuerzo(a: Esfuerzo, b: Esfuerzo): Esfuerzo {
+  return ESFUERZOS.indexOf(a) <= ESFUERZOS.indexOf(b) ? a : b;
 }

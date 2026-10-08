@@ -8,7 +8,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { WebSocket } from 'ws';
-import type { Ajustes, EstadoMotor, HerramientasChat, SeleccionTexto, Indice, MensajeWS, MezclaVisuales, Motor, OpcionesExportacion, PropuestaVisual, TipoBusqueda, TipoRevision } from '../shared/tipos';
+import type { Ajustes, EstadoMotor, HerramientasChat, PerfilGasto, SeleccionTexto, Trabajo, Indice, MensajeWS, MezclaVisuales, Motor, OpcionesExportacion, PropuestaVisual, TipoBusqueda, TipoRevision } from '../shared/tipos';
 import { Almacen, ErrorUsuario } from './store';
 import { Cola } from './agents/cola';
 import { AGENTES } from './agents/agentes';
@@ -19,6 +19,7 @@ import { exportar } from './exportar';
 import { Contador } from './tokens';
 import { plantillaBase } from './plantillaBase';
 import { Moleculas } from './moleculas';
+import { ESFUERZOS, PERFILES, modelosDisponibles, preset } from './agents/modelos';
 import { buscarImagenes, miniatura, type ResultadoImagen } from './imagenesWeb';
 import { buscar as buscarRag, indexar } from './rag';
 
@@ -58,6 +59,7 @@ export async function crearServidor(op: OpcionesServidor) {
   const flujo = new Flujo({ almacen: () => almacen, cola, ajustes: () => ajustes, motoresListos, dirBin, mcpFuentes: op.mcpFuentes, moleculas });
   await cola.cargar(); // retoma los trabajos que seguían en marcha
   contador.sembrar(cola.listar());
+  cola.on('terminado', (t: Trabajo) => contador.llamada(t.agente));
 
   const app = Fastify({ logger: false, bodyLimit: 80 * 1024 * 1024 });
   await app.register(fastifyWebsocket);
@@ -93,7 +95,7 @@ export async function crearServidor(op: OpcionesServidor) {
   cola.on('evento', (id, evento) => difundir({ tipo: 'evento', id, evento }));
   cola.on('uso', (uso) => difundir({ tipo: 'uso', uso }));
   cola.on('tokens', (motor, tokens, t) => {
-    contador.sumar(motor, tokens, t?.asignatura, t?.documento);
+    contador.sumar(motor, tokens, t?.asignatura, t?.documento, t?.agente);
     difundir({ tipo: 'tokens', contador: contador.leer() });
   });
 
@@ -147,6 +149,21 @@ export async function crearServidor(op: OpcionesServidor) {
         const modelo = typeof c.modelo === 'string' && /^[\w.-]{1,60}$/.test(c.modelo.trim()) ? c.modelo.trim() : undefined;
         if (motor || instrucciones || esfuerzo || modelo) nuevo.agentes[id] = { motor, instrucciones, esfuerzo, modelo };
       }
+    }
+    if (b.modoMotor === 'claude' || b.modoMotor === 'codex' || b.modoMotor === 'ambos') nuevo.modoMotor = b.modoMotor;
+    if (typeof b.perfil === 'string' && b.perfil in PERFILES) nuevo.perfil = b.perfil;
+    if (b.modelos && typeof b.modelos === 'object') {
+      const modelos: NonNullable<Ajustes['modelos']> = {};
+      for (const m of ['claude', 'codex'] as const) {
+        const tabla = b.modelos[m];
+        if (!tabla || typeof tabla !== 'object') continue;
+        modelos[m] = {};
+        for (const [agente, c] of Object.entries(tabla)) {
+          if (!AGENTES[agente] || !c || typeof c.modelo !== 'string' || !/^[\w.:-]{1,80}$/.test(c.modelo)) continue;
+          modelos[m]![agente] = { modelo: c.modelo, esfuerzo: c.esfuerzo && ESFUERZOS.includes(c.esfuerzo) ? c.esfuerzo : undefined };
+        }
+      }
+      nuevo.modelos = modelos;
     }
     if (b.claves && typeof b.claves === 'object') {
       const clave = (v: unknown) => (typeof v === 'string' && /^[\w-]{3,100}$/.test(v.trim()) ? v.trim() : undefined);
@@ -284,6 +301,19 @@ export async function crearServidor(op: OpcionesServidor) {
 
   // ---------- Agentes ----------
   app.get('/api/agentes', async () => Object.values(AGENTES));
+  // Modelos de cada motor y, para cada agente, el modelo y esfuerzo que le da el perfil vigente
+  app.get('/api/modelos', async () => ({
+    ...modelosDisponibles(),
+    predeterminados: { claude: preset('claude', ajustes.perfil), codex: preset('codex', ajustes.perfil) },
+  }));
+  // Un perfil de gasto rellena modelo y esfuerzo de todos los agentes en los dos motores
+  app.post('/api/ajustes/perfil/:perfil', async (req) => {
+    const perfil = (req.params as { perfil: string }).perfil as PerfilGasto;
+    if (!(perfil in PERFILES)) throw new ErrorUsuario('Perfil no válido');
+    ajustes = { ...ajustes, perfil, modelos: { claude: preset('claude', perfil), codex: preset('codex', perfil) } };
+    await guardarAjustes(op.archivoAjustes, ajustes);
+    return ajustes;
+  });
   app.get('/api/trabajos', async () => cola.listar());
   app.get('/api/trabajos/:id', async (req) => {
     const t = cola.obtener((req.params as { id: string }).id);
