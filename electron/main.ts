@@ -22,9 +22,15 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
+/**
+ * Modo «app en vivo» (npm run app): la ventana carga la interfaz desde Vite y usa un servidor
+ * aparte que se recarga solo, así los cambios en el código se ven al momento sin reinstalar.
+ */
+const URL_EN_VIVO = process.env.APUNTES_EN_VIVO;
+
 async function iniciar() {
   Menu.setApplicationMenu(null);
-  servidor = await crearServidor({
+  if (!URL_EN_VIVO) servidor = await crearServidor({
     archivoAjustes: path.join(app.getPath('userData'), 'ajustes.json'),
     carpetaDatosPorDefecto: path.join(app.getPath('documents'), 'Apuntes IA'),
     dirEstatico: path.join(__dirname, '..', 'dist-web'),
@@ -40,7 +46,7 @@ async function iniciar() {
     height: 900,
     minWidth: 960,
     minHeight: 600,
-    title: 'Apuntes IA',
+    title: URL_EN_VIVO ? 'Apuntes IA · en vivo' : 'Apuntes IA',
     backgroundColor: '#0f1117',
     show: false,
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
@@ -49,13 +55,13 @@ async function iniciar() {
   ventana.once('ready-to-show', () => ventana?.show());
 
   // Los enlaces externos se abren en el navegador del sistema
-  const urlApp = servidor.url;
+  const urlApp = URL_EN_VIVO ?? servidor!.url;
   ventana.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url) && !url.startsWith(urlApp)) shell.openExternal(url);
     return { action: 'deny' };
   });
   ventana.webContents.on('will-navigate', (e, url) => {
-    if (!url.startsWith(urlApp)) {
+    if (!new URL(url).host.startsWith(new URL(urlApp).host)) {
       e.preventDefault();
       if (/^https?:/.test(url)) shell.openExternal(url);
     }

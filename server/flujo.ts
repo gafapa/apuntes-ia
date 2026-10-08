@@ -23,7 +23,7 @@ import type {
 } from '../shared/tipos';
 import { ARCHIVO_AUTOEVALUACION } from '../shared/tipos';
 import { Almacen, ErrorUsuario, slug } from './store';
-import type { Cola } from './agents/cola';
+import type { Cola, Postproceso } from './agents/cola';
 import { AGENTES, construirPrompt } from './agents/agentes';
 import { extraerJson, insertarTrasAncla, sustituirFragmento, buscarFragmento, contarPalabras } from './texto';
 import { asegurarTextos } from './conversion';
@@ -48,8 +48,7 @@ interface Lanzamiento {
   ref?: string;
   motor?: Motor; // forzar motor
   seccionActiva?: string;
-  alTerminar?: (t: Trabajo) => Promise<string | void>;
-  alFallar?: (t: Trabajo) => Promise<void> | void;
+  post?: Postproceso;
 }
 
 const INDICE_VACIO: Indice = { entradas: [], notas: '', aprobado: false, actualizado: '' };
@@ -57,7 +56,12 @@ const INDICE_VACIO: Indice = { entradas: [], notas: '', aprobado: false, actuali
 export class Flujo {
   private candados = new Map<string, Promise<unknown>>();
 
-  constructor(private dep: Dependencias) {}
+  constructor(private dep: Dependencias) {
+    dep.cola.manejadores = {
+      alTerminar: (t, post) => this.postprocesar(t, post),
+      alFallar: (t, post) => this.alFallarPost(t, post),
+    };
+  }
 
   private get almacen() {
     return this.dep.almacen();
@@ -128,8 +132,7 @@ export class Flujo {
       ),
       cwd,
       dirsExtra: documento ? [dirAsig] : [],
-      alTerminar: l.alTerminar,
-      alFallar: l.alFallar,
+      post: l.post,
     });
   }
 
@@ -236,11 +239,7 @@ export class Flujo {
    - \`## Ideas para apoyos visuales\`.
    - \`## Fuentes\`: lista numerada [n] con autor u organización, título, URL o nombre del archivo y fecha de consulta.
 Marca con «(material aportado)» las ideas que procedan del material del profesor. No inventes datos ni referencias.`,
-      alTerminar: async () => {
-        const info = await this.almacen.infoArchivoDoc(asig, doc, 'investigacion.md');
-        if (!info) throw new Error('El agente no ha creado investigacion.md. Respóndele para que lo haga.');
-        return 'Dossier de investigación listo';
-      },
+      post: { tipo: 'investigacion' },
     });
   }
 
@@ -278,32 +277,7 @@ NO crees ni modifiques secciones. Escribe tu propuesta en el archivo \`${salida}
 
 Entre 3 y 12 secciones, según la extensión pedida. La primera puede ser una introducción breve y la última un resumen o síntesis; no incluyas una sección de autoevaluación (hay un agente para eso).
 Si el usuario te pide cambios después, vuelve a escribir el archivo completo con la versión corregida.`,
-      alTerminar: async () => {
-        const r = await this.leerSalida<{ notas?: string; entradas?: Partial<EntradaIndice>[] }>(asig, doc, salida);
-        const entradas = (r.entradas ?? []).filter((e) => e?.titulo?.trim());
-        if (!entradas.length) throw new Error('El índice propuesto está vacío. Respóndele para que lo complete.');
-        const previas = actual?.entradas ?? [];
-        const indice: Indice = {
-          notas: String(r.notas ?? ''),
-          aprobado: false,
-          actualizado: new Date().toISOString(),
-          entradas: entradas.map((e) => {
-            // Conservar la sección ya creada si el título coincide
-            const previa = previas.find((p) => p.titulo.trim().toLowerCase() === e.titulo!.trim().toLowerCase());
-            return {
-              id: randomUUID().slice(0, 8),
-              titulo: e.titulo!.trim(),
-              objetivo: String(e.objetivo ?? ''),
-              contenidos: Array.isArray(e.contenidos) ? e.contenidos.map(String) : [],
-              extension: String(e.extension ?? ''),
-              visuales: String(e.visuales ?? ''),
-              archivo: previa?.archivo,
-            };
-          }),
-        };
-        await this.almacen.escribirJsonDoc(asig, doc, 'indice.json', indice);
-        return `Índice propuesto: ${indice.entradas.length} secciones. Revísalo y apruébalo.`;
-      },
+      post: { tipo: 'indice', datos: { salida } },
     });
   }
 
@@ -460,40 +434,7 @@ NO modifiques las secciones: el usuario decidirá qué cambios aceptar. Escribe 
 
 Como máximo 25 sugerencias; prioriza las importantes. Copia el original carácter a carácter, incluida la sintaxis Markdown. Si no hay nada que mejorar, deja la lista vacía.
 Si el usuario te responde pidiendo cambios, vuelve a escribir el archivo completo.`,
-          alTerminar: async (t) => {
-            const r = await this.leerSalida<{ sugerencias?: Partial<Sugerencia>[] }>(asig, doc, salida);
-            return this.conCandado(`${asig}/${doc}/sugerencias`, async () => {
-              const actuales = await this.almacen.leerJsonDoc<Sugerencia[]>(asig, doc, 'sugerencias.json', []);
-              const textos = new Map((await this.almacen.textoCompleto(asig, doc)).map((x) => [x.archivo, x.texto]));
-              let validas = 0;
-              let descartadas = 0;
-              for (const s of r.sugerencias ?? []) {
-                const seccion = String(s.seccion ?? '').replace(/^secciones\//, '');
-                const texto = textos.get(seccion);
-                if (!texto || !s.original || !s.propuesta || s.original === s.propuesta || !buscarFragmento(texto, String(s.original))) {
-                  descartadas++;
-                  continue;
-                }
-                const dup = actuales.some((x) => x.estado === 'pendiente' && x.seccion === seccion && x.original === s.original && x.propuesta === s.propuesta);
-                if (dup) continue;
-                actuales.push({
-                  id: randomUUID().slice(0, 10),
-                  tipo,
-                  seccion,
-                  original: String(s.original),
-                  propuesta: String(s.propuesta),
-                  motivo: String(s.motivo ?? ''),
-                  gravedad: s.gravedad === 'alta' || s.gravedad === 'baja' ? s.gravedad : 'media',
-                  estado: 'pendiente',
-                  trabajo: t.id,
-                  creado: new Date().toISOString(),
-                });
-                validas++;
-              }
-              await this.almacen.escribirJsonDoc(asig, doc, 'sugerencias.json', actuales);
-              return `${validas} sugerencia${validas === 1 ? '' : 's'}${descartadas ? ` (${descartadas} descartada${descartadas === 1 ? '' : 's'}: no se encontró el texto citado)` : ''}`;
-            });
-          },
+          post: { tipo: 'revision', datos: { salida, tipo } },
         }),
       );
     }
@@ -576,32 +517,7 @@ NO modifiques las secciones. Escribe tus propuestas en \`${salida}\` con este JS
 }
 
 Como máximo 2 o 3 por sección, y solo donde aporten. Si el usuario te responde pidiendo cambios, vuelve a escribir el archivo completo.`,
-      alTerminar: async () => {
-        const r = await this.leerSalida<{ propuestas?: Partial<PropuestaVisual>[] }>(asig, doc, salida);
-        const tipos: TipoVisual[] = conCodex ? ['diagrama', 'imagen-web', 'imagen-ia'] : ['diagrama', 'imagen-web'];
-        return this.conCandado(`${asig}/${doc}/visuales`, async () => {
-          const actuales = await this.almacen.leerJsonDoc<PropuestaVisual[]>(asig, doc, 'visuales.json', []);
-          const nombres = new Set(secciones.map((s) => s.archivo));
-          let n = 0;
-          for (const p of r.propuestas ?? []) {
-            const seccion = String(p.seccion ?? '').replace(/^secciones\//, '');
-            if (!nombres.has(seccion) || !p.descripcion) continue;
-            actuales.push({
-              id: randomUUID().slice(0, 10),
-              seccion,
-              ancla: String(p.ancla ?? ''),
-              tipo: tipos.includes(p.tipo as TipoVisual) ? (p.tipo as TipoVisual) : 'diagrama',
-              titulo: String(p.titulo ?? '').trim() || 'Figura',
-              descripcion: String(p.descripcion),
-              estado: 'propuesta',
-              creado: new Date().toISOString(),
-            });
-            n++;
-          }
-          await this.almacen.escribirJsonDoc(asig, doc, 'visuales.json', actuales);
-          return n ? `${n} propuesta${n === 1 ? '' : 's'} de visuales. Revísalas y genera las que quieras.` : 'No ha propuesto visuales';
-        });
-      },
+      post: { tipo: 'visuales', datos: { salida, conCodex, archivos: secciones.map((s) => s.archivo) } },
     });
   }
 
@@ -656,10 +572,6 @@ Como máximo 2 o 3 por sección, y solo donde aporten. Si el usuario te responde
       seccion: p.seccion,
       ref: p.id,
       indicaciones,
-      alFallar: async (t: Trabajo) => {
-        const ultimoError = t.eventos.filter((e) => e.tipo === 'error').at(-1)?.texto;
-        await this.cambiarPropuesta(asig, doc, id, { estado: 'error', error: t.estado === 'cancelado' ? 'Cancelado' : ultimoError ?? 'No se pudo generar' });
-      },
     };
     const contexto = `Visual para la sección \`secciones/${p.seccion}\`, que irá tras el párrafo que contiene: «${p.ancla.slice(0, 300)}».
 - Pie de figura: ${p.titulo}
@@ -676,14 +588,7 @@ Lee la sección para que el visual sea coherente con su contenido y su terminolo
 
 Dibuja el diagrama con Mermaid y escribe en \`${salida}\` SOLO el bloque \`\`\`mermaid (nada más).
 Usa un tipo de diagrama adecuado (flowchart, mindmap, timeline, sequenceDiagram, classDiagram, pie…), etiquetas cortas en el idioma de los apuntes y, para que sea legible en papel, no más de 12-15 nodos. Entrecomilla las etiquetas con caracteres especiales. NO modifiques la sección.`,
-          alTerminar: async () => {
-            const texto = await fs.readFile(path.join(this.almacen.dirDocumento(asig, doc), salida), 'utf8').catch(() => '');
-            const m = texto.match(/```mermaid\s*\n[\s\S]*?```/);
-            if (!m) throw new Error('El agente no ha escrito un bloque mermaid válido. Respóndele para que lo corrija.');
-            const encontrado = await this.insertarEnSeccion(asig, doc, p, `${m[0]}\n\n*Figura: ${p.titulo}*`);
-            await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada' });
-            return encontrado ? 'Diagrama insertado' : 'Diagrama añadido al final de la sección (no se encontró el párrafo indicado)';
-          },
+          post: { tipo: 'diagrama', datos: { salida, id } },
         });
       }
 
@@ -699,13 +604,7 @@ Usa un tipo de diagrama adecuado (flowchart, mindmap, timeline, sequenceDiagram,
 
 Genera la imagen con tu herramienta de generación de imágenes y guárdala como \`${rel}\` (PNG).
 Estilo de ilustración didáctica, limpia, fondo claro, sin marcas de agua. Si lleva texto, que sea mínimo, en el idioma de los apuntes y sin faltas. NO modifiques la sección.`,
-          alTerminar: async () => {
-            const ruta = path.join(this.almacen.dirDocumento(asig, doc), rel);
-            if (!existsSync(ruta)) throw new Error(`No se ha guardado la imagen en ${rel}. Respóndele para que lo haga.`);
-            const encontrado = await this.insertarEnSeccion(asig, doc, p, `![${p.titulo}](${rel})`);
-            await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada', archivo: rel });
-            return encontrado ? 'Imagen generada e insertada' : 'Imagen añadida al final de la sección';
-          },
+          post: { tipo: 'imagen-ia', datos: { rel, id } },
         });
       }
 
@@ -727,17 +626,7 @@ No descargues nada. Escribe en \`${salida}\` este JSON:
 }
 
 Solo licencias que permitan reutilizarla (CC0, dominio público, CC BY, CC BY-SA). NO modifiques la sección.`,
-        alTerminar: async () => {
-          const r = await this.leerSalida<{ url?: string; pagina?: string; autor?: string; licencia?: string }>(asig, doc, salida);
-          if (!r.url || !/^https?:\/\//.test(r.url)) throw new Error('No ha indicado una URL de imagen válida. Respóndele para que busque otra.');
-          const descargado = await descargarImagen(r.url, path.join(this.almacen.dirDocumento(asig, doc), 'recursos'), archivoBase);
-          const rel = `recursos/${descargado}`;
-          const credito = [r.autor, r.licencia].filter(Boolean).join(' · ');
-          const pie = credito ? `\n\n*Fuente: ${credito}${r.pagina ? ` ([origen](${r.pagina}))` : ''}*` : '';
-          const encontrado = await this.insertarEnSeccion(asig, doc, p, `![${p.titulo}](${rel})${pie}`);
-          await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada', archivo: rel, credito });
-          return encontrado ? 'Imagen descargada e insertada' : 'Imagen añadida al final de la sección';
-        },
+        post: { tipo: 'imagen-web', datos: { salida, id, archivoBase } },
       });
     } catch (e) {
       await this.cambiarPropuesta(asig, doc, id, { estado: 'error', error: (e as Error).message });
@@ -795,6 +684,206 @@ Ajusta el número y la dificultad a los destinatarios si las indicaciones del us
 - Si detectas el mismo concepto con nombres o notaciones distintas entre documentos, indícalo al final en \`## Incoherencias detectadas\` señalando dónde aparece cada variante.
 Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
     });
+  }
+  // ---------------------------------------------------------------------------
+  // Procesamiento de resultados (se puede retomar tras un reinicio del servidor)
+
+  private async propuesta(asig: string, doc: string, id: string) {
+    const p = (await this.almacen.leerJsonDoc<PropuestaVisual[]>(asig, doc, 'visuales.json', [])).find((x) => x.id === id);
+    if (!p) throw new Error('La propuesta ya no existe');
+    return p;
+  }
+
+  private postprocesar(t: Trabajo, post: Postproceso): Promise<string | void> {
+    const datos = post.datos ?? {};
+    switch (post.tipo) {
+      case 'investigacion':
+        return this.postInvestigacion(t, datos);
+      case 'indice':
+        return this.postIndice(t, datos);
+      case 'revision':
+        return this.postRevision(t, datos);
+      case 'visuales':
+        return this.postVisuales(t, datos);
+      case 'diagrama':
+        return this.postDiagrama(t, datos);
+      case 'imagen-ia':
+        return this.postImagenIa(t, datos);
+      case 'imagen-web':
+        return this.postImagenWeb(t, datos);
+      default:
+        return Promise.resolve();
+    }
+  }
+
+  private async alFallarPost(t: Trabajo, post: Postproceso) {
+    if (!['diagrama', 'imagen-ia', 'imagen-web'].includes(post.tipo) || !t.documento) return;
+    const ultimoError = t.eventos.filter((e) => e.tipo === 'error').at(-1)?.texto;
+    await this.cambiarPropuesta(t.asignatura, t.documento, String(post.datos?.id), {
+      estado: 'error',
+      error: t.estado === 'cancelado' ? 'Cancelado' : ultimoError ?? 'No se pudo generar',
+    }).catch(() => {});
+  }
+
+  private async postInvestigacion(t: Trabajo, datos: Record<string, unknown>): Promise<string | void> {
+    const asig = t.asignatura;
+    const doc = t.documento!;
+    const info = await this.almacen.infoArchivoDoc(asig, doc, 'investigacion.md');
+    if (!info) throw new Error('El agente no ha creado investigacion.md. Respóndele para que lo haga.');
+    return 'Dossier de investigación listo';
+
+  }
+
+  private async postIndice(t: Trabajo, datos: Record<string, unknown>): Promise<string | void> {
+    const asig = t.asignatura;
+    const doc = t.documento!;
+    const salida = String(datos.salida);
+    const actual = await this.almacen.leerJsonDoc<Indice | null>(asig, doc, 'indice.json', null);
+    const r = await this.leerSalida<{ notas?: string; entradas?: Partial<EntradaIndice>[] }>(asig, doc, salida);
+    const entradas = (r.entradas ?? []).filter((e) => e?.titulo?.trim());
+    if (!entradas.length) throw new Error('El índice propuesto está vacío. Respóndele para que lo complete.');
+    const previas = actual?.entradas ?? [];
+    const indice: Indice = {
+      notas: String(r.notas ?? ''),
+      aprobado: false,
+      actualizado: new Date().toISOString(),
+      entradas: entradas.map((e) => {
+        // Conservar la sección ya creada si el título coincide
+        const previa = previas.find((p) => p.titulo.trim().toLowerCase() === e.titulo!.trim().toLowerCase());
+        return {
+          id: randomUUID().slice(0, 8),
+          titulo: e.titulo!.trim(),
+          objetivo: String(e.objetivo ?? ''),
+          contenidos: Array.isArray(e.contenidos) ? e.contenidos.map(String) : [],
+          extension: String(e.extension ?? ''),
+          visuales: String(e.visuales ?? ''),
+          archivo: previa?.archivo,
+        };
+      }),
+    };
+    await this.almacen.escribirJsonDoc(asig, doc, 'indice.json', indice);
+    return `Índice propuesto: ${indice.entradas.length} secciones. Revísalo y apruébalo.`;
+
+  }
+
+  private async postRevision(t: Trabajo, datos: Record<string, unknown>): Promise<string | void> {
+    const asig = t.asignatura;
+    const doc = t.documento!;
+    const salida = String(datos.salida);
+    const tipo = datos.tipo as TipoRevision;
+    const r = await this.leerSalida<{ sugerencias?: Partial<Sugerencia>[] }>(asig, doc, salida);
+    return this.conCandado(`${asig}/${doc}/sugerencias`, async () => {
+      const actuales = await this.almacen.leerJsonDoc<Sugerencia[]>(asig, doc, 'sugerencias.json', []);
+      const textos = new Map((await this.almacen.textoCompleto(asig, doc)).map((x) => [x.archivo, x.texto]));
+      let validas = 0;
+      let descartadas = 0;
+      for (const s of r.sugerencias ?? []) {
+        const seccion = String(s.seccion ?? '').replace(/^secciones\//, '');
+        const texto = textos.get(seccion);
+        if (!texto || !s.original || !s.propuesta || s.original === s.propuesta || !buscarFragmento(texto, String(s.original))) {
+          descartadas++;
+          continue;
+        }
+        const dup = actuales.some((x) => x.estado === 'pendiente' && x.seccion === seccion && x.original === s.original && x.propuesta === s.propuesta);
+        if (dup) continue;
+        actuales.push({
+          id: randomUUID().slice(0, 10),
+          tipo,
+          seccion,
+          original: String(s.original),
+          propuesta: String(s.propuesta),
+          motivo: String(s.motivo ?? ''),
+          gravedad: s.gravedad === 'alta' || s.gravedad === 'baja' ? s.gravedad : 'media',
+          estado: 'pendiente',
+          trabajo: t.id,
+          creado: new Date().toISOString(),
+        });
+        validas++;
+      }
+      await this.almacen.escribirJsonDoc(asig, doc, 'sugerencias.json', actuales);
+      return `${validas} sugerencia${validas === 1 ? '' : 's'}${descartadas ? ` (${descartadas} descartada${descartadas === 1 ? '' : 's'}: no se encontró el texto citado)` : ''}`;
+    });
+
+  }
+
+  private async postVisuales(t: Trabajo, datos: Record<string, unknown>): Promise<string | void> {
+    const asig = t.asignatura;
+    const doc = t.documento!;
+    const salida = String(datos.salida);
+    const conCodex = !!datos.conCodex;
+    const secciones = (datos.archivos as string[]).map((archivo) => ({ archivo }));
+    const r = await this.leerSalida<{ propuestas?: Partial<PropuestaVisual>[] }>(asig, doc, salida);
+    const tipos: TipoVisual[] = conCodex ? ['diagrama', 'imagen-web', 'imagen-ia'] : ['diagrama', 'imagen-web'];
+    return this.conCandado(`${asig}/${doc}/visuales`, async () => {
+      const actuales = await this.almacen.leerJsonDoc<PropuestaVisual[]>(asig, doc, 'visuales.json', []);
+      const nombres = new Set(secciones.map((s) => s.archivo));
+      let n = 0;
+      for (const p of r.propuestas ?? []) {
+        const seccion = String(p.seccion ?? '').replace(/^secciones\//, '');
+        if (!nombres.has(seccion) || !p.descripcion) continue;
+        actuales.push({
+          id: randomUUID().slice(0, 10),
+          seccion,
+          ancla: String(p.ancla ?? ''),
+          tipo: tipos.includes(p.tipo as TipoVisual) ? (p.tipo as TipoVisual) : 'diagrama',
+          titulo: String(p.titulo ?? '').trim() || 'Figura',
+          descripcion: String(p.descripcion),
+          estado: 'propuesta',
+          creado: new Date().toISOString(),
+        });
+        n++;
+      }
+      await this.almacen.escribirJsonDoc(asig, doc, 'visuales.json', actuales);
+      return n ? `${n} propuesta${n === 1 ? '' : 's'} de visuales. Revísalas y genera las que quieras.` : 'No ha propuesto visuales';
+    });
+
+  }
+
+  private async postDiagrama(t: Trabajo, datos: Record<string, unknown>): Promise<string | void> {
+    const asig = t.asignatura;
+    const doc = t.documento!;
+    const salida = String(datos.salida);
+    const id = String(datos.id);
+    const p = await this.propuesta(asig, doc, id);
+    const texto = await fs.readFile(path.join(this.almacen.dirDocumento(asig, doc), salida), 'utf8').catch(() => '');
+    const m = texto.match(/```mermaid\s*\n[\s\S]*?```/);
+    if (!m) throw new Error('El agente no ha escrito un bloque mermaid válido. Respóndele para que lo corrija.');
+    const encontrado = await this.insertarEnSeccion(asig, doc, p, `${m[0]}\n\n*Figura: ${p.titulo}*`);
+    await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada' });
+    return encontrado ? 'Diagrama insertado' : 'Diagrama añadido al final de la sección (no se encontró el párrafo indicado)';
+
+  }
+
+  private async postImagenIa(t: Trabajo, datos: Record<string, unknown>): Promise<string | void> {
+    const asig = t.asignatura;
+    const doc = t.documento!;
+    const rel = String(datos.rel);
+    const id = String(datos.id);
+    const p = await this.propuesta(asig, doc, id);
+    const ruta = path.join(this.almacen.dirDocumento(asig, doc), rel);
+    if (!existsSync(ruta)) throw new Error(`No se ha guardado la imagen en ${rel}. Respóndele para que lo haga.`);
+    const encontrado = await this.insertarEnSeccion(asig, doc, p, `![${p.titulo}](${rel})`);
+    await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada', archivo: rel });
+    return encontrado ? 'Imagen generada e insertada' : 'Imagen añadida al final de la sección';
+
+  }
+
+  private async postImagenWeb(t: Trabajo, datos: Record<string, unknown>): Promise<string | void> {
+    const asig = t.asignatura;
+    const doc = t.documento!;
+    const salida = String(datos.salida);
+    const id = String(datos.id);
+    const archivoBase = String(datos.archivoBase);
+    const p = await this.propuesta(asig, doc, id);
+    const r = await this.leerSalida<{ url?: string; pagina?: string; autor?: string; licencia?: string }>(asig, doc, salida);
+    if (!r.url || !/^https?:\/\//.test(r.url)) throw new Error('No ha indicado una URL de imagen válida. Respóndele para que busque otra.');
+    const descargado = await descargarImagen(r.url, path.join(this.almacen.dirDocumento(asig, doc), 'recursos'), archivoBase);
+    const rel = `recursos/${descargado}`;
+    const credito = [r.autor, r.licencia].filter(Boolean).join(' · ');
+    const pie = credito ? `\n\n*Fuente: ${credito}${r.pagina ? ` ([origen](${r.pagina}))` : ''}*` : '';
+    const encontrado = await this.insertarEnSeccion(asig, doc, p, `![${p.titulo}](${rel})${pie}`);
+    await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada', archivo: rel, credito });
+    return encontrado ? 'Imagen descargada e insertada' : 'Imagen añadida al final de la sección';
   }
 }
 

@@ -4,6 +4,28 @@ Aplicación de escritorio para crear apuntes con varios agentes de IA trabajando
 paralelo. Usa **Claude Code** y/o **Codex CLI** instalados en el equipo, con la
 suscripción del usuario (sin claves de API). Ver el plan completo en [PLAN.md](PLAN.md).
 
+## Modo «app en vivo»: cambiar la app mientras la usas
+
+```bash
+npm run app
+```
+
+Abre la app de escritorio con tus datos y ajustes reales (los mismos que la versión
+instalada), pero conectada al código del proyecto:
+
+- **Interfaz** (`web/`): al guardar, el cambio aparece en la ventana al instante, sin recargar.
+- **Funcionalidad** (`server/`, `shared/`): al guardar, el servidor se reinicia solo (1-2 s).
+  Los agentes en marcha se cierran y se relanzan enseguida: si ya habían empezado, continúan su
+  propia conversación donde la dejaron.
+- **Proceso principal** (`electron/`): cierra la ventana y vuelve a ejecutar `npm run app`.
+
+La insignia verde «EN VIVO» junto al nombre indica este modo. No se puede tener abierta a la
+vez la versión instalada (comparten la cola de agentes). Cuando estés contento con los
+cambios, genera un instalador nuevo con `npm run dist`.
+
+Lo mismo vale para la app instalada: al cerrarla, sus agentes se cierran (no queda nada en
+segundo plano) y al volver a abrirla se relanzan los trabajos que quedaron a medias.
+
 ## Desarrollo
 
 ```bash

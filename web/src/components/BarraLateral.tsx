@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronRight, FileText, FolderOpen, Moon, Plus, Settings, Sun } from 'lucide-react';
 import { useEstado } from '../lib/estado';
 import { api } from '../lib/api';
@@ -12,6 +12,10 @@ export function BarraLateral() {
   const [nuevaAsig, setNuevaAsig] = useState(false);
   const [nuevoDocEn, setNuevoDocEn] = useState<string>();
   const [ajustes, setAjustes] = useState(false);
+  const [enVivo, setEnVivo] = useState(false);
+  useEffect(() => {
+    api.version().then((v) => setEnVivo(v.version === 'en vivo')).catch(() => {});
+  }, []);
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-borde bg-panel">
@@ -22,7 +26,17 @@ export function BarraLateral() {
       >
         <img src="./icono.png" alt="" className="size-8" />
         <div>
-          <div className="font-semibold tracking-tight leading-tight">Apuntes IA</div>
+          <div className="flex items-center gap-1.5 font-semibold tracking-tight leading-tight">
+            Apuntes IA
+            {enVivo && (
+              <span
+                title="Modo en vivo: los cambios en el código se aplican al guardar."
+                className="rounded bg-ok/15 px-1.5 py-px text-[10px] font-semibold tracking-wide text-ok uppercase"
+              >
+                en vivo
+              </span>
+            )}
+          </div>
           <div className="text-[11.5px] text-texto-3 leading-tight">Apuntes con agentes de IA</div>
         </div>
       </button>

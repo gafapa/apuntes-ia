@@ -24,6 +24,7 @@ export interface OpcionesServidor {
   dirEstatico?: string; // interfaz compilada (en desarrollo la sirve Vite)
   dirBin?: string; // Pandoc y Typst
   version?: string;
+  dirTrabajos?: string; // dónde se guardan los trabajos de los agentes (por defecto, junto a los ajustes)
   /** Reinicia la app instalando la actualización descargada (solo en la app empaquetada). */
   instalarActualizacion?: () => void;
   puerto?: number;
@@ -34,7 +35,10 @@ export async function crearServidor(op: OpcionesServidor) {
   let ajustes = await cargarAjustes(op.archivoAjustes, op.carpetaDatosPorDefecto);
   let almacen = new Almacen(ajustes.carpetaDatos);
   await almacen.iniciar();
-  const cola = new Cola(ajustes.maxSimultaneos);
+  // Los trabajos se guardan junto a los ajustes, para sobrevivir a reinicios del servidor
+  const dirTrabajos = op.dirTrabajos ?? path.join(path.dirname(op.archivoAjustes), 'trabajos');
+  bloquear(dirTrabajos);
+  const cola = new Cola(ajustes.maxSimultaneos, dirTrabajos);
   const dirBin = op.dirBin ?? '';
 
   // Estado de los motores (se refresca al consultarlo desde la interfaz)
@@ -44,6 +48,7 @@ export async function crearServidor(op: OpcionesServidor) {
   const motoresListos = () => new Set(motores.filter((m) => m.instalado && m.sesion).map((m) => m.motor));
 
   const flujo = new Flujo({ almacen: () => almacen, cola, ajustes: () => ajustes, motoresListos, dirBin });
+  await cola.cargar(); // retoma los trabajos que seguían en marcha
 
   const app = Fastify({ logger: false, bodyLimit: 80 * 1024 * 1024 });
   await app.register(fastifyWebsocket);
@@ -443,12 +448,33 @@ export async function crearServidor(op: OpcionesServidor) {
       actualizacion = { estado, version };
       difundir({ tipo: 'actualizacion', estado, version });
     },
+    /** Cierra los agentes en marcha; se relanzarán al volver a abrir la app. */
     async cerrar() {
-      for (const t of cola.listar()) if (t.estado === 'ejecutando' || t.estado === 'en-cola') cola.cancelar(t.id);
+      cola.pausarTodo();
       vigilante?.close();
       await app.close();
     },
   };
+}
+
+/**
+ * Solo un servidor a la vez puede gestionar la cola de agentes (p. ej. la app instalada
+ * y el modo «en vivo» comparten datos). Un servidor que se reinicia no choca consigo mismo
+ * porque el proceso anterior ya ha terminado.
+ */
+function bloquear(dir: string) {
+  fs.mkdirSync(dir, { recursive: true });
+  const candado = path.join(dir, 'servidor.pid');
+  try {
+    const pid = Number(fs.readFileSync(candado, 'utf8'));
+    if (pid && pid !== process.pid) {
+      process.kill(pid, 0); // lanza si el proceso ya no existe
+      throw new Error('Apuntes IA ya está abierta (la versión instalada o el modo en vivo). Ciérrala antes de abrir otra.');
+    }
+  } catch (e) {
+    if ((e as Error).message.startsWith('Apuntes IA')) throw e;
+  }
+  fs.writeFileSync(candado, String(process.pid));
 }
 
 function tipoMime(archivo: string): string {

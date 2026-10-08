@@ -1,13 +1,34 @@
-// Arranque del servidor en desarrollo (sin Electron). La interfaz la sirve Vite en :5173.
+// Arranque del servidor sin Electron (lo recarga `tsx watch` al cambiar el código).
+//
+// - `npm run dev`: datos de prueba en «Documentos/Apuntes IA (desarrollo)».
+// - `npm run app`: modo «app en vivo» con los datos y ajustes reales de la app instalada.
 import os from 'node:os';
 import path from 'node:path';
 import { crearServidor } from './index';
 
-const datos = process.env.APUNTES_DATOS ?? path.join(os.homedir(), 'Documents', 'Apuntes IA (desarrollo)');
+/** Carpeta de ajustes de Electron (app.getPath('userData')) para «Apuntes IA». */
+function carpetaUsuarioElectron() {
+  const nombre = 'Apuntes IA';
+  if (process.platform === 'win32') return path.join(process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'), nombre);
+  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Application Support', nombre);
+  return path.join(process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), '.config'), nombre);
+}
+
+const real = process.env.APUNTES_REAL === '1';
+const datos = process.env.APUNTES_DATOS ?? path.join(os.homedir(), 'Documents', real ? 'Apuntes IA' : 'Apuntes IA (desarrollo)');
+const archivoAjustes = real ? path.join(carpetaUsuarioElectron(), 'ajustes.json') : path.join(datos, '.ajustes-dev.json');
 
 crearServidor({
-  archivoAjustes: path.join(datos, '.ajustes-dev.json'),
+  archivoAjustes,
   carpetaDatosPorDefecto: datos,
   puerto: 4317,
   dirBin: path.resolve('resources-bin', { win32: 'win', darwin: 'mac' }[process.platform as string] ?? 'linux'),
-}).then(({ url }) => console.log(`Servidor en ${url} · datos en ${datos}`));
+  version: real ? 'en vivo' : 'desarrollo',
+  dirTrabajos: real ? undefined : path.join(datos, '.trabajos'),
+}).then((servidor) => {
+  console.log(`Servidor en ${servidor.url} · ajustes en ${archivoAjustes}`);
+  // Al reiniciarse (tsx watch) o cerrarse, se cierran los agentes; se relanzan al arrancar de nuevo
+  const salir = () => servidor.cerrar().finally(() => process.exit(0));
+  process.once('SIGTERM', salir);
+  process.once('SIGINT', salir);
+});

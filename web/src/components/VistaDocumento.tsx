@@ -246,13 +246,23 @@ function Apuntes({ asignatura, documento }: { asignatura: string; documento: str
   const guardar = useCallback(
     async (contenido: string, archivo: string) => {
       setEstadoGuardado('guardando');
-      try {
-        await api.guardarSeccion(asignatura, documento, archivo, contenido);
-        guardadoRef.current = contenido;
-        setEstadoGuardado('guardado');
-      } catch (e) {
-        setEstadoGuardado('pendiente');
-        avisar(`No se pudo guardar: ${(e as Error).message}`, 'error');
+      // Reintentos: el servidor puede estar reiniciándose (p. ej. en el modo «app en vivo»)
+      for (let intento = 0; ; intento++) {
+        try {
+          await api.guardarSeccion(asignatura, documento, archivo, contenido);
+          guardadoRef.current = contenido;
+          setEstadoGuardado('guardado');
+          return;
+        } catch (e) {
+          const status = (e as { status?: number }).status;
+          if (intento < 10 && (status === undefined || status >= 500)) {
+            await new Promise((r) => setTimeout(r, 1000));
+            continue;
+          }
+          setEstadoGuardado('pendiente');
+          avisar(`No se pudo guardar: ${(e as Error).message}`, 'error');
+          return;
+        }
       }
     },
     [asignatura, documento, avisar],

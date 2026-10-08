@@ -1,6 +1,6 @@
 // Detección de Claude Code y Codex CLI, y lanzamiento de sus procesos.
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { EstadoMotor, Motor } from '../../shared/tipos';
@@ -47,9 +47,41 @@ const rutasCache = new Map<Motor, string | undefined>();
 
 export function rutaMotor(motor: Motor): string | undefined {
   if (!rutasCache.has(motor)) {
-    rutasCache.set(motor, enPath(motor) ?? candidatas(motor).find((p) => existsSync(p)));
+    const ruta = enPath(motor) ?? candidatas(motor).find((p) => existsSync(p));
+    rutasCache.set(motor, ruta && motor === 'codex' ? (binarioNativoCodex(ruta) ?? ruta) : ruta);
   }
   return rutasCache.get(motor);
+}
+
+/**
+ * Codex instalado con npm es un lanzador (codex.cmd → node codex.js → codex.exe). Si se lanza
+ * el lanzador, al cerrar la app solo se cierra el intermediario y el codex.exe real queda vivo.
+ * Por eso se busca y se usa directamente el binario nativo.
+ */
+function binarioNativoCodex(ruta: string): string | undefined {
+  let raiz: string | undefined;
+  try {
+    const real = realpathSync(ruta);
+    if (/\.cmd$/i.test(real)) raiz = path.join(path.dirname(real), 'node_modules', '@openai', 'codex');
+    else if (/\.js$/.test(real)) raiz = path.resolve(path.dirname(real), '..');
+  } catch {
+    return undefined;
+  }
+  if (!raiz || !existsSync(raiz)) return undefined;
+  const exe = WIN ? 'codex.exe' : 'codex';
+  const buscar = (dir: string, nivel: number): string | undefined => {
+    if (nivel > 6 || !existsSync(dir)) return undefined;
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isFile() && e.name === exe && path.basename(dir) === 'bin' && p.includes('vendor')) return p;
+      if (e.isDirectory() && (nivel < 2 || /vendor|codex|openai|bin|node_modules|-/.test(e.name))) {
+        const r = buscar(p, nivel + 1);
+        if (r) return r;
+      }
+    }
+    return undefined;
+  };
+  return buscar(raiz, 0);
 }
 
 /** Entrecomilla un argumento para cmd.exe (solo se usa con .cmd/.bat en Windows). */
