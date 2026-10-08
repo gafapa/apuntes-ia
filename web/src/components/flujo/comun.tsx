@@ -63,8 +63,9 @@ export function Paso({
   if (solo) {
     return (
       <section>
-        <div className="mb-5 flex items-start gap-4">
-          <div className="min-w-0 flex-1">
+        <div className="mb-5 flex flex-wrap items-start gap-x-4 gap-y-3">
+          {/* El título conserva un ancho mínimo; si las acciones no caben a su lado, pasan debajo */}
+          <div className="min-w-72 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-[12px] font-medium text-texto-3">Fase {numero}</span>
               {opcional && <Insignia>Opcional</Insignia>}

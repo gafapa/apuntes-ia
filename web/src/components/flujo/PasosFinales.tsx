@@ -78,20 +78,33 @@ export function PasoVisuales({ a, d, estado, trabajos, recargar }: Props) {
       trabajando={director.length > 0 || propuestas.some((p) => p.estado === 'generando')}
       descripcion="El director visual detecta dónde ayuda un apoyo visual y decide de qué tipo. Tú apruebas y el ilustrador lo crea."
       acciones={
-        <div className="flex items-center gap-2">
-          <div className="flex gap-0.5 rounded-lg bg-panel-2 p-0.5" title="Qué tipo de visuales debe proponer el director visual">
+        <BotonAgente
+          texto="Buscar dónde hacen falta"
+          variante={propuestas.length ? 'secundario' : 'primario'}
+          icono={<ImagePlus className="size-4" />}
+          disabled={director.length > 0 || !estado.secciones.length}
+          onLanzar={(ind) => api.proponerVisuales(a, d, undefined, ind, mezcla)}
+          ayudaIndicaciones="Por ejemplo: nada de imágenes IA, fotos de los equipos reales, como mucho 5 visuales…"
+        />
+      }
+    >
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-texto-2">
+          <span>Qué debe proponer el director visual:</span>
+          <div className="flex gap-0.5 rounded-lg bg-panel-2 p-0.5">
             {(
               [
-                ['imagenes', 'Más imágenes'],
-                ['equilibrado', 'Equilibrado'],
-                ['esquemas', 'Más esquemas'],
-              ] as [MezclaVisuales, string][]
-            ).map(([id, texto]) => (
+                ['imagenes', 'Más imágenes', 'Sobre todo imágenes reales; diagramas solo para procesos'],
+                ['equilibrado', 'Equilibrado', 'Imágenes para lo que se puede ver, diagramas para lo abstracto'],
+                ['esquemas', 'Más esquemas', 'Sobre todo diagramas; imágenes solo cuando haya que ver algo real'],
+              ] as [MezclaVisuales, string, string][]
+            ).map(([id, texto, ayuda]) => (
               <button
                 key={id}
+                title={ayuda}
                 onClick={() => elegirMezcla(id)}
                 className={cx(
-                  'rounded-md px-2 py-1 text-[11.5px] transition-colors cursor-pointer',
+                  'whitespace-nowrap rounded-md px-2.5 py-1 text-[12px] transition-colors cursor-pointer',
                   mezcla === id ? 'bg-panel text-texto shadow-sm' : 'text-texto-3 hover:text-texto',
                 )}
               >
@@ -99,18 +112,7 @@ export function PasoVisuales({ a, d, estado, trabajos, recargar }: Props) {
               </button>
             ))}
           </div>
-          <BotonAgente
-            texto="Buscar dónde hacen falta"
-            variante={propuestas.length ? 'secundario' : 'primario'}
-            icono={<ImagePlus className="size-4" />}
-            disabled={director.length > 0 || !estado.secciones.length}
-            onLanzar={(ind) => api.proponerVisuales(a, d, undefined, ind, mezcla)}
-            ayudaIndicaciones="Por ejemplo: nada de imágenes IA, fotos de los equipos reales, como mucho 5 visuales…"
-          />
         </div>
-      }
-    >
-      <div className="space-y-3">
         {director.map((t) => (
           <ActividadAgente key={t.id} t={t} />
         ))}
@@ -202,11 +204,11 @@ function TarjetaPropuesta({
 
   return (
     <div className={cx('aparecer rounded-lg border bg-fondo/40 p-3', generando ? 'border-acento/40' : 'border-borde')}>
-      <div className="mb-2 flex items-center gap-2">
-        <button onClick={() => irASeccion(p.seccion)} className="truncate text-[12px] text-texto-3 hover:text-acento cursor-pointer">
+      <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+        <button onClick={() => irASeccion(p.seccion)} className="min-w-0 flex-1 basis-40 truncate text-left text-[12px] text-texto-3 hover:text-acento cursor-pointer">
           {seccion}
         </button>
-        <div className="ml-auto flex gap-0.5 rounded-lg bg-panel-2 p-0.5">
+        <div className="ml-auto flex shrink-0 gap-0.5 rounded-lg bg-panel-2 p-0.5">
           {TIPOS.map((t) => {
             const deshabilitado = generando || (t.id === 'imagen-ia' && !conCodex);
             return (
@@ -216,7 +218,7 @@ function TarjetaPropuesta({
                 title={t.id === 'imagen-ia' && !conCodex ? 'Necesita Codex' : t.ayuda}
                 onClick={() => guardar({ tipo: t.id })}
                 className={cx(
-                  'flex items-center gap-1 rounded-md px-2 py-0.5 text-[11.5px] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40',
+                  'flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-0.5 text-[11.5px] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40',
                   p.tipo === t.id ? 'bg-panel text-texto shadow-sm' : 'text-texto-3 hover:text-texto',
                 )}
               >
