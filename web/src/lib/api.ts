@@ -149,6 +149,9 @@ export const api = {
       { consulta },
     ),
 
+  sinPie: (a: string, d: string) => pedir<{ seccion: string; tipo: string; muestra: string }[]>('GET', `${doc(a, d)}/pies`),
+  anadirPies: (a: string, d: string) => pedir<Trabajo>('POST', `${doc(a, d)}/pies`),
+
   trabajos: () => pedir<Trabajo[]>('GET', '/api/trabajos'),
   trabajo: (id: string) => pedir<Trabajo>('GET', `/api/trabajos/${e(id)}`),
   lanzar: (datos: { motor?: Motor; tarea: string; asignatura: string; documento?: string; seccion?: string }) =>

@@ -121,7 +121,20 @@ export async function retocar(
         );
       }
     }
+    // Tablas centradas
+    doc = doc.replace(/<w:tblPr>/g, '<w:tblPr><w:jc w:val="center"/>');
     zip.file('word/document.xml', doc);
+    // Figuras y pies centrados (estilos de Pandoc)
+    let estilos = await zip.file('word/styles.xml')!.async('string');
+    for (const id of ['CaptionedFigure', 'Figure', 'ImageCaption', 'TableCaption']) {
+      estilos = estilos.replace(new RegExp(`(<w:style [^>]*w:styleId="${id}"[^>]*>[\\s\\S]*?)(</w:style>)`), (_m, cuerpo: string, cierre: string) => {
+        if (/<w:jc /.test(cuerpo)) cuerpo = cuerpo.replace(/<w:jc w:val="[^"]*"\s*\/>/, '<w:jc w:val="center"/>');
+        else if (/<w:pPr>/.test(cuerpo)) cuerpo = cuerpo.replace('<w:pPr>', '<w:pPr><w:jc w:val="center"/>');
+        else cuerpo += '<w:pPr><w:jc w:val="center"/></w:pPr>';
+        return cuerpo + cierre;
+      });
+    }
+    zip.file('word/styles.xml', estilos);
     if (op.indice) {
       // Que Word actualice el índice (números de página) al abrir el documento
       let ajustes = await zip.file('word/settings.xml')!.async('string');
@@ -137,8 +150,20 @@ export async function retocar(
         '<style:style style:name="Apuntes_20_salto" style:display-name="Apuntes salto" style:family="paragraph"><style:paragraph-properties fo:break-before="page" fo:margin-top="0cm" fo:margin-bottom="0cm"/><style:text-properties fo:font-size="2pt"/></style:style></office:styles>',
       );
     }
+    // Figuras y pies centrados
+    for (const nombre of ['Figure', 'FigureCaption', 'TableCaption', 'Table_20_Caption']) {
+      estilos = estilos.replace(new RegExp(`(<style:style style:name="${nombre}"[^>]*?)(/?)>`), (_m, ini: string, vacio: string) =>
+        vacio
+          ? `${ini}><style:paragraph-properties fo:text-align="center"/></style:style>`
+          : `${ini}><style:paragraph-properties fo:text-align="center"/>`,
+      );
+    }
     zip.file('styles.xml', estilos);
     let cont = await zip.file('content.xml')!.async('string');
+    // Tablas centradas
+    cont = cont.replace(/<style:table-properties ([^>]*?)(\/?)>/g, (_m, attrs: string, vacio: string) =>
+      `<style:table-properties ${attrs.replace(/\s*table:align="[^"]*"/, '')} table:align="center"${vacio}>`,
+    );
     // Pandoc deja los nombres con espacios; LibreOffice llama a sus estilos de índice «Contents_20_N»
     cont = cont.replace(/text:style-name="Contents (\d|Heading)"/g, (_m, n: string) => `text:style-name="Contents_20_${n}"`);
     zip.file('content.xml', cont);

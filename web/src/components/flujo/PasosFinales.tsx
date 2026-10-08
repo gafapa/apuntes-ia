@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   Check,
@@ -286,6 +286,15 @@ export function PanelExportar({ a, d, estado, recargar }: { a: string; d: string
     }
   });
   const [exportando, setExportando] = useState(false);
+  const trabajos = useEstado((s) => s.trabajos);
+  const anadiendoPies = Object.values(trabajos).some(
+    (t) => t.asignatura === a && t.documento === d && t.ref === 'pies' && (t.estado === 'ejecutando' || t.estado === 'en-cola'),
+  );
+  const [sinPie, setSinPie] = useState<{ seccion: string; tipo: string; muestra: string }[]>([]);
+  const firmaSecciones = estado?.secciones.map((s) => `${s.archivo}:${s.palabras}`).join('|');
+  useEffect(() => {
+    api.sinPie(a, d).then(setSinPie).catch(() => {});
+  }, [a, d, firmaSecciones, anadiendoPies]);
   const cambiar = (c: Partial<OpcionesExportacion>) => {
     const n = { ...op, ...c };
     setOp(n);
@@ -350,6 +359,22 @@ export function PanelExportar({ a, d, estado, recargar }: { a: string; d: string
           Carpeta
         </Boton>
       </div>
+      {sinPie.length > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-aviso/40 bg-aviso/10 px-3 py-2 text-[12.5px]">
+          <AlertCircle className="size-4 shrink-0 text-aviso" />
+          <span className="flex-1">
+            {sinPie.length === 1 ? 'Un elemento no tiene' : `${sinPie.length} elementos no tienen`} pie (
+            {[...new Set(sinPie.map((x) => x.tipo))].join(', ')}). Se exportarán con un pie genérico numerado.
+          </span>
+          <Boton
+            tam="sm"
+            cargando={anadiendoPies}
+            onClick={() => api.anadirPies(a, d).catch((e) => avisar(e.message, 'error'))}
+          >
+            {anadiendoPies ? 'Añadiendo…' : 'Añadir pies con IA'}
+          </Boton>
+        </div>
+      )}
       {op.formato !== 'pdf' && (
         <p className="text-[12px] text-texto-3">Para usar tus propios estilos de {op.formato === 'docx' ? 'Word' : 'LibreOffice'}, sube una plantilla en la ficha de la asignatura.</p>
       )}

@@ -38,7 +38,15 @@ md.renderer.rules.link_open = (tokens, idx, opts, _env, self) => {
 };
 
 export function renderizar(texto: string, base?: string): string {
-  return md.render(texto, { base });
+  return (
+    md
+      .render(texto, { base })
+      // Imagen sola en su párrafo → figura con su pie (el texto alternativo)
+      .replace(/<p>(<img [^>]*alt="([^"]+)"[^>]*>)<\/p>/g, '<figure>$1<figcaption>$2</figcaption></figure>')
+      // Pies de diagramas («*Figura: …*») y de tablas («Tabla: …»)
+      .replace(/<p>(<em>(?:Figura|Esquema|Diagrama)[^<]*<\/em>)<\/p>/g, '<p class="pie">$1</p>')
+      .replace(/<p>((?:Tabla|Table)\s*\d*\s*[:.][^<]*)<\/p>/g, '<p class="pie">$1</p>')
+  );
 }
 
 let mermaidListo: Promise<typeof import('mermaid').default> | undefined;

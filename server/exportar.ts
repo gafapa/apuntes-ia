@@ -9,6 +9,7 @@ import { ARCHIVO_AUTOEVALUACION } from '../shared/tipos';
 import { ESCALA_DIAGRAMAS, PATRON_MERMAID, hashTexto } from '../shared/hash';
 import { anchoExportacion, dimensiones } from './imagenes';
 import { bloqueIndice, prepararEncabezados, retocar, saltoPagina } from './indiceDocumento';
+import { prepararPies } from './pies';
 import { Almacen, ErrorUsuario, slug } from './store';
 import { ejecutarBinario, rutaPandoc } from './conversion';
 
@@ -95,7 +96,8 @@ export async function exportar(
         }),
     );
     const salto = op.saltoSeccion ? SALTO[op.formato] : '';
-    let md = partes.map((p) => p.trim()).join(`\n\n${salto}\n\n`);
+    // Todas las imágenes, esquemas y tablas con pie (numerado en Word/ODT)
+    let md = prepararPies(partes.map((p) => p.trim()).join(`\n\n${salto}\n\n`), op.formato, textos);
     if (op.formato === 'docx' || op.formato === 'odt') {
       // Índice ya relleno y numerado (el de Pandoc es un campo vacío hasta actualizarlo a mano)
       const r = prepararEncabezados(md, op.numerar);
@@ -249,6 +251,10 @@ function plantillaTypst(color: string, op: OpcionesExportacion): string {
     fill: acento.lighten(92%), stroke: (left: 3pt + acento), inset: (x: 12pt, y: 9pt), radius: (right: 4pt), width: 100%, it.body,
   )
   set table(stroke: 0.5pt + luma(200), inset: 6pt)
+  // Figuras, tablas y sus pies, centrados
+  show figure: set align(center)
+  show table: it => align(center, it)
+  show figure.where(kind: table): set figure.caption(position: bottom)
   show table.cell.where(y: 0): set text(weight: "bold")
   show outline: it => { it; pagebreak(weak: true) }
   show outline.entry.where(level: 1): set text(weight: "bold")

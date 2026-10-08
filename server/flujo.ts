@@ -35,6 +35,7 @@ import { extraerJson, insertarTrasAncla, sustituirFragmento, buscarFragmento, co
 import { asegurarTextos } from './conversion';
 import { DESCRIPCION_TIPO, descargarFuente, guardarResultados, incorporarResultados, leerResultados } from './buscador';
 import { buscar as buscarRag, buscarEnTexto, formatear, hayIndice, indexar } from './rag';
+import { elementosSinPie } from './pies';
 
 interface Dependencias {
   almacen: () => Almacen;
@@ -990,6 +991,40 @@ No descargues nada ni modifiques otros archivos. Escribe los resultados en \`${s
     const dir = this.dirBusqueda(asig, doc);
     return this.conCandado(`${dir}/busqueda`, async () => {
       await guardarResultados(dir, (await leerResultados(dir)).filter((r) => r.estado === 'anadida'));
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pies de figura y de tabla
+
+  async sinPie(asig: string, doc: string) {
+    const textos = await this.almacen.textoCompleto(asig, doc);
+    return textos.flatMap((t) => elementosSinPie(t.texto).map((e) => ({ ...e, seccion: t.archivo })));
+  }
+
+  async anadirPies(asig: string, doc: string) {
+    if (this.ocupado('revision', asig, doc, undefined, 'pies')) throw new ErrorUsuario('Ya se están añadiendo los pies');
+    const pendientes = await this.sinPie(asig, doc);
+    if (!pendientes.length) throw new ErrorUsuario('Todas las imágenes, esquemas y tablas tienen pie');
+    const secciones = [...new Set(pendientes.map((p) => p.seccion))];
+    return this.lanzar({
+      agente: 'estilo',
+      asignatura: asig,
+      documento: doc,
+      titulo: `Añadir pies a ${pendientes.length} elemento${pendientes.length === 1 ? '' : 's'}`,
+      paso: 'revision',
+      ref: 'pies',
+      esfuerzo: 'low',
+      incluir: { secciones },
+      tarea: `Añade un pie breve y descriptivo (una frase que diga qué muestra) a estos elementos, que no lo tienen:
+${pendientes.map((p) => `- secciones/${p.seccion}: ${p.tipo} «${p.muestra}»`).join('\n')}
+
+Formato del pie:
+- Imagen: el pie va como texto alternativo, \`![Pie](recursos/archivo.png)\`.
+- Diagrama: una línea \`*Figura: pie*\` justo después del bloque \`\`\`mermaid (separada por una línea en blanco).
+- Tabla: una línea \`Tabla: pie\` justo después de la tabla (separada por una línea en blanco).
+
+Edita solo esos elementos; no cambies nada más del texto.`,
     });
   }
 

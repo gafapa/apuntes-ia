@@ -367,6 +367,8 @@ export async function crearServidor(op: OpcionesServidor) {
     await flujo.limpiarVisuales(params(req).a, params(req).d);
     return { ok: true };
   });
+  app.get(`${D}/pies`, async (req) => flujo.sinPie(params(req).a, params(req).d));
+  app.post(`${D}/pies`, async (req) => flujo.anadirPies(params(req).a, params(req).d));
   app.post(`${D}/flujo/autoevaluacion`, async (req) => flujo.autoevaluacion(params(req).a, params(req).d, cuerpo(req).indicaciones));
 
 

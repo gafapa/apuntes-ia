@@ -215,6 +215,7 @@ export function construirPrompt(instrucciones: string, ctx: ContextoPrompt, tare
     '- Usa las herramientas para leer y escribir archivos y, si las tienes, para buscar en la web. No toques archivos fuera de la carpeta del documento y de la asignatura, salvo que la tarea lo pida.',
     '- Ahorra pasos: si el mensaje ya incluye el contenido de un archivo, no vuelvas a leerlo, y no explores carpetas sin necesidad.',
     '- Escribe siempre en el idioma de los apuntes. No inventes datos ni referencias.',
+    '- Toda imagen, esquema, diagrama y tabla lleva un pie breve y descriptivo: imagen → `![Pie](recursos/archivo.png)` en su propio párrafo; diagrama → bloque ```mermaid seguido de la línea `*Figura: pie*`; tabla → línea `Tabla: pie` justo después de la tabla, separada por una línea en blanco.',
     '- Termina con un resumen breve (2-4 líneas) de lo que has hecho.',
   ].join('\n');
   const prompt = [
