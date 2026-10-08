@@ -8,7 +8,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { WebSocket } from 'ws';
-import type { Ajustes, EstadoMotor, Indice, MensajeWS, Motor, OpcionesExportacion, PropuestaVisual, TipoRevision } from '../shared/tipos';
+import type { Ajustes, EstadoMotor, Indice, MensajeWS, Motor, OpcionesExportacion, PropuestaVisual, TipoBusqueda, TipoRevision } from '../shared/tipos';
 import { Almacen, ErrorUsuario } from './store';
 import { Cola } from './agents/cola';
 import { AGENTES } from './agents/agentes';
@@ -136,7 +136,9 @@ export async function crearServidor(op: OpcionesServidor) {
         if (!AGENTES[id] || !c) continue;
         const motor = c.motor === 'claude' || c.motor === 'codex' ? c.motor : undefined;
         const instrucciones = typeof c.instrucciones === 'string' && c.instrucciones.trim() ? c.instrucciones : undefined;
-        if (motor || instrucciones) nuevo.agentes[id] = { motor, instrucciones };
+        const esfuerzo = c.esfuerzo === 'low' || c.esfuerzo === 'medium' || c.esfuerzo === 'high' ? c.esfuerzo : undefined;
+        const modelo = typeof c.modelo === 'string' && /^[\w.-]{1,60}$/.test(c.modelo.trim()) ? c.modelo.trim() : undefined;
+        if (motor || instrucciones || esfuerzo || modelo) nuevo.agentes[id] = { motor, instrucciones, esfuerzo, modelo };
       }
     }
     if (typeof b.carpetaDatos === 'string' && b.carpetaDatos.trim() && b.carpetaDatos !== ajustes.carpetaDatos) {
@@ -363,6 +365,23 @@ export async function crearServidor(op: OpcionesServidor) {
     return { ok: true };
   });
   app.post(`${D}/flujo/autoevaluacion`, async (req) => flujo.autoevaluacion(params(req).a, params(req).d, cuerpo(req).indicaciones));
+
+
+  // Buscador de fuentes (asignatura o documento)
+  for (const base of ['/api/asignaturas/:a/busqueda-fuentes', '/api/asignaturas/:a/documentos/:d/busqueda-fuentes']) {
+    type P = { a: string; d?: string; id?: string };
+    app.get(base, async (req) => flujo.resultadosBusqueda((req.params as P).a, (req.params as P).d));
+    app.post(base, async (req) => {
+      const b = (req.body ?? {}) as { consulta?: string; tipo?: TipoBusqueda };
+      return flujo.buscarFuentes((req.params as P).a, (req.params as P).d, String(b.consulta ?? ''), b.tipo);
+    });
+    app.delete(base, async (req) => {
+      await flujo.limpiarBusqueda((req.params as P).a, (req.params as P).d);
+      return { ok: true };
+    });
+    app.post(`${base}/:id/anadir`, async (req) => flujo.anadirFuente((req.params as P).a, (req.params as P).d, (req.params as P).id!));
+    app.post(`${base}/:id/descartar`, async (req) => flujo.descartarResultado((req.params as P).a, (req.params as P).d, (req.params as P).id!));
+  }
 
   // Glosario de la asignatura
   app.post('/api/asignaturas/:a/glosario/actualizar', async (req) => flujo.glosario((req.params as PA).a, cuerpo(req).indicaciones));

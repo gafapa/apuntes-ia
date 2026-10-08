@@ -1,6 +1,19 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown, RotateCcw } from 'lucide-react';
-import type { Ajustes, InfoAgente, Motor } from '../../../shared/tipos';
+import type { Ajustes, Esfuerzo, InfoAgente, Motor } from '../../../shared/tipos';
+
+const ESFUERZOS: { id: Esfuerzo; nombre: string }[] = [
+  { id: 'low', nombre: 'Bajo' },
+  { id: 'medium', nombre: 'Medio' },
+  { id: 'high', nombre: 'Alto' },
+];
+
+const MODELOS_CLAUDE = [
+  { id: '', nombre: 'Predeterminado' },
+  { id: 'opus', nombre: 'Opus (el mejor)' },
+  { id: 'sonnet', nombre: 'Sonnet (equilibrado)' },
+  { id: 'haiku', nombre: 'Haiku (el más ligero)' },
+];
 import { api } from '../lib/api';
 import { AreaTexto, Insignia, cx } from './ui';
 
@@ -14,10 +27,10 @@ export function EditorAgentes({ valor, onCambio }: { valor: Personalizacion; onC
     api.agentes().then(setAgentes).catch(() => {});
   }, []);
 
-  const cambiar = (id: string, c: { motor?: Motor; instrucciones?: string }) => {
+  const cambiar = (id: string, c: Partial<Ajustes['agentes'][string]>) => {
     const actual = { ...valor[id], ...c };
     const nuevo = { ...valor };
-    if (!actual.motor && !actual.instrucciones?.trim()) delete nuevo[id];
+    if (!actual.motor && !actual.instrucciones?.trim() && !actual.esfuerzo && !actual.modelo) delete nuevo[id];
     else nuevo[id] = actual;
     onCambio(nuevo);
   };
@@ -31,7 +44,8 @@ export function EditorAgentes({ valor, onCambio }: { valor: Personalizacion; onC
       {agentes.map((ag) => {
         const p = valor[ag.id] ?? {};
         const motor = ag.soloMotor ?? p.motor ?? ag.motor;
-        const personalizado = !!p.instrucciones?.trim() || (!!p.motor && p.motor !== ag.motor);
+        const personalizado = !!p.instrucciones?.trim() || (!!p.motor && p.motor !== ag.motor) || !!p.esfuerzo || !!p.modelo;
+        const esfuerzo = p.esfuerzo ?? ag.esfuerzo;
         const esteAbierto = abierto === ag.id;
         return (
           <div key={ag.id} className={cx('rounded-lg border', esteAbierto ? 'border-acento/40' : 'border-borde')}>
@@ -61,7 +75,41 @@ export function EditorAgentes({ valor, onCambio }: { valor: Personalizacion; onC
               </div>
             </div>
             {esteAbierto && (
-              <div className="border-t border-borde px-3 py-3">
+              <div className="space-y-3 border-t border-borde px-3 py-3">
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px]">
+                  <label className="flex items-center gap-2">
+                    <span className="text-texto-3" title="Cuánto razona antes de responder: más esfuerzo, mejor resultado y más tokens">
+                      Esfuerzo
+                    </span>
+                    <span className="flex gap-0.5 rounded-lg bg-panel-2 p-0.5">
+                      {ESFUERZOS.map((e) => (
+                        <button
+                          key={e.id}
+                          onClick={() => cambiar(ag.id, { esfuerzo: e.id === ag.esfuerzo ? undefined : e.id })}
+                          className={cx('rounded-md px-2 py-0.5 cursor-pointer', esfuerzo === e.id ? 'bg-panel font-medium shadow-sm' : 'text-texto-3 hover:text-texto')}
+                        >
+                          {e.nombre}
+                        </button>
+                      ))}
+                    </span>
+                  </label>
+                  {motor === 'claude' && (
+                    <label className="flex items-center gap-2">
+                      <span className="text-texto-3">Modelo</span>
+                      <select
+                        value={p.modelo ?? ''}
+                        onChange={(e) => cambiar(ag.id, { modelo: e.target.value || undefined })}
+                        className="h-7 rounded-md border border-borde bg-panel px-2 text-[12.5px] outline-none focus:border-acento cursor-pointer"
+                      >
+                        {MODELOS_CLAUDE.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </div>
                 <AreaTexto
                   rows={8}
                   className="font-mono text-[12.5px]"
@@ -73,7 +121,7 @@ export function EditorAgentes({ valor, onCambio }: { valor: Personalizacion; onC
                 )}
                 {personalizado && (
                   <button
-                    onClick={() => cambiar(ag.id, { motor: undefined, instrucciones: undefined })}
+                    onClick={() => cambiar(ag.id, { motor: undefined, instrucciones: undefined, esfuerzo: undefined, modelo: undefined })}
                     className="mt-2 flex items-center gap-1.5 text-[12px] text-texto-3 hover:text-acento cursor-pointer"
                   >
                     <RotateCcw className="size-3" /> Restaurar valores por defecto

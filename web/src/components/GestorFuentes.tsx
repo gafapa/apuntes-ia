@@ -3,7 +3,8 @@ import { File, FileImage, FileText, FolderOpen, Trash2, Upload } from 'lucide-re
 import type { Fuente } from '../../../shared/tipos';
 import { api, urlDatos } from '../lib/api';
 import { useEstado } from '../lib/estado';
-import { Boton, BotonIcono, confirmar, cx } from './ui';
+import { Boton, BotonIcono, Entrada, confirmar, cx } from './ui';
+import { BuscadorFuentes } from './BuscadorFuentes';
 
 function tamano(b: number) {
   if (b < 1024) return `${b} B`;
@@ -23,6 +24,7 @@ export function GestorFuentes({ asignatura, documento, descripcion }: { asignatu
   const [fuentes, setFuentes] = useState<Fuente[]>([]);
   const [arrastrando, setArrastrando] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
+  const [filtro, setFiltro] = useState('');
   const input = useRef<HTMLInputElement>(null);
   const version = versiones[`${asignatura}/${documento ?? ''}`];
 
@@ -88,9 +90,14 @@ export function GestorFuentes({ asignatura, documento, descripcion }: { asignatu
         />
       </div>
 
+      <BuscadorFuentes asignatura={asignatura} documento={documento} onAnadida={cargar} />
+
+      {fuentes.length > 6 && (
+        <Entrada value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder={`Filtrar ${fuentes.length} fuentes…`} />
+      )}
       {fuentes.length > 0 && (
         <div className="divide-y divide-borde rounded-xl border border-borde bg-panel">
-          {fuentes.map((f) => (
+          {fuentes.filter((f) => f.nombre.toLowerCase().includes(filtro.trim().toLowerCase())).map((f) => (
             <div key={f.nombre} className="group flex items-center gap-3 px-4 py-2.5">
               <IconoArchivo nombre={f.nombre} />
               <a href={urlDatos(...base, f.nombre)} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-sm hover:text-acento">

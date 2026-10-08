@@ -114,15 +114,20 @@ export interface Ajustes {
   maxSimultaneos: number;
   motorPorDefecto: Motor;
   asistenteCompletado: boolean;
-  /** Personalización por agente: motor e instrucciones propias. */
-  agentes: Record<string, { motor?: Motor; instrucciones?: string }>;
+  /** Personalización por agente: motor, instrucciones, esfuerzo y modelo propios. */
+  agentes: Record<string, { motor?: Motor; instrucciones?: string; esfuerzo?: Esfuerzo; modelo?: string }>;
 }
+
+/** Cuánto razona el modelo: más esfuerzo, mejor resultado y más tokens de salida. */
+export type Esfuerzo = 'low' | 'medium' | 'high';
 
 export interface InfoAgente {
   id: string;
   nombre: string;
   descripcion: string;
   motor: Motor; // motor por defecto del agente
+  web?: boolean; // necesita buscar en la web
+  esfuerzo: Esfuerzo; // esfuerzo por defecto
   soloMotor?: Motor; // si solo puede funcionar con un motor
   instrucciones: string; // instrucciones por defecto
 }
@@ -137,7 +142,28 @@ export type PasoFlujo =
   | 'revision'
   | 'visuales'
   | 'autoevaluacion'
-  | 'glosario';
+  | 'glosario'
+  | 'fuentes';
+
+export type TipoBusqueda = 'cualquiera' | 'academico' | 'educativo' | 'video';
+
+/** Fuente propuesta por el buscador. */
+export interface ResultadoBusqueda {
+  id: string;
+  consulta: string;
+  titulo: string;
+  url: string;
+  autor: string;
+  tipo: 'pdf' | 'web' | 'video' | 'articulo' | 'libro';
+  descripcion: string;
+  fiabilidad: string; // por qué es una fuente fiable
+  idioma: string;
+  licencia: string;
+  estado: 'propuesta' | 'anadida' | 'descartada';
+  archivo?: string; // nombre en la carpeta de fuentes, si se añadió
+  error?: string;
+  creado: string;
+}
 
 /** Apartado o subapartado de una sección del índice. */
 export interface Apartado {

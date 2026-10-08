@@ -8,6 +8,8 @@ import type {
   OpcionesExportacion,
   PropuestaVisual,
   Recurso,
+  ResultadoBusqueda,
+  TipoBusqueda,
   TipoRevision,
   Asignatura,
   AsignaturaDetalle,
@@ -130,6 +132,13 @@ export const api = {
     return (await r.json()) as { docx: boolean; odt: boolean };
   },
   eliminarPlantilla: (a: string, formato: 'docx' | 'odt') => pedir<{ docx: boolean; odt: boolean }>('DELETE', `${asig(a)}/plantillas/${formato}`),
+
+  busqueda: (a: string, d?: string) => pedir<ResultadoBusqueda[]>('GET', `${d ? doc(a, d) : asig(a)}/busqueda-fuentes`),
+  buscarFuentes: (a: string, consulta: string, tipo: TipoBusqueda, d?: string) =>
+    pedir<Trabajo>('POST', `${d ? doc(a, d) : asig(a)}/busqueda-fuentes`, { consulta, tipo }),
+  anadirFuente: (a: string, id: string, d?: string) => pedir<ResultadoBusqueda>('POST', `${d ? doc(a, d) : asig(a)}/busqueda-fuentes/${e(id)}/anadir`),
+  descartarResultado: (a: string, id: string, d?: string) => pedir('POST', `${d ? doc(a, d) : asig(a)}/busqueda-fuentes/${e(id)}/descartar`),
+  limpiarBusqueda: (a: string, d?: string) => pedir('DELETE', `${d ? doc(a, d) : asig(a)}/busqueda-fuentes`),
 
   trabajos: () => pedir<Trabajo[]>('GET', '/api/trabajos'),
   trabajo: (id: string) => pedir<Trabajo>('GET', `/api/trabajos/${e(id)}`),

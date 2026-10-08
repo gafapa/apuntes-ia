@@ -41,7 +41,16 @@ export interface PeticionTrabajo {
   seccion?: string;
   ref?: string;
   post?: Postproceso;
+  /** Instrucciones de sistema (en Claude sustituyen al prompt de sistema por defecto, mucho más largo). */
+  sistema?: string;
+  /** Si el agente necesita buscar en la web (si no, no se le cargan esas herramientas). */
+  web?: boolean;
+  esfuerzo?: 'low' | 'medium' | 'high';
+  modelo?: string;
 }
+
+/** Funciones de Codex que los agentes de apuntes no usan y que añaden miles de tokens a cada petición. */
+const CODEX_SIN_USAR = ['apps', 'browser_use', 'computer_use', 'memories', 'plugins', 'multi_agent', 'goals', 'hooks'];
 
 export interface Manejadores {
   /**
@@ -164,7 +173,7 @@ export class Cola extends EventEmitter {
   }
 
   private borrarArchivos(id: string) {
-    for (const ext of ['json', 'prompt.txt', 'salida.jsonl', 'err.log']) fs.rm(this.ruta(id, ext), { force: true }, () => {});
+    for (const ext of ['json', 'prompt.txt', 'entrada.txt', 'sistema.txt', 'salida.jsonl', 'err.log']) fs.rm(this.ruta(id, ext), { force: true }, () => {});
   }
 
   // ---------------------------------------------------------------------------
@@ -344,6 +353,12 @@ export class Cola extends EventEmitter {
       return;
     }
 
+    // Ahorro de tokens: solo las herramientas necesarias, sin servidores MCP, sin los ajustes,
+    // hooks y skills globales del usuario y con un prompt de sistema propio y corto
+    // (medido: un «hola» pasa de ~21.000 a ~6.500 tokens de entrada con Claude).
+    const herramientas = ['Read', 'Write', 'Edit', 'Glob', 'Grep', ...(p.web ? ['WebSearch', 'WebFetch'] : [])].join(',');
+    const archivoSistema = this.ruta(t.id, 'sistema.txt');
+    if (p.motor === 'claude' && p.sistema) fs.writeFileSync(archivoSistema, p.sistema, 'utf8');
     const args =
       p.motor === 'claude'
         ? [
@@ -351,9 +366,15 @@ export class Cola extends EventEmitter {
             '--output-format', 'stream-json',
             '--verbose',
             '--permission-mode', 'acceptEdits',
-            '--allowedTools', 'Read,Write,Edit,MultiEdit,Glob,Grep,WebSearch,WebFetch,TodoWrite',
-            // Sin terminal: los agentes de apuntes no la necesitan y así no pierden tiempo intentándolo
-            '--disallowedTools', 'Bash,PowerShell,Task,Agent,NotebookEdit',
+            '--tools', herramientas,
+            '--allowedTools', herramientas,
+            '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
+            '--setting-sources', 'project,local',
+            '--disable-slash-commands',
+            '--no-chrome',
+            ...(p.sistema ? ['--system-prompt-file', archivoSistema] : []),
+            ...(p.esfuerzo ? ['--effort', p.esfuerzo] : []),
+            ...(p.modelo ? ['--model', p.modelo] : []),
             ...(p.dirsExtra ?? []).flatMap((d) => ['--add-dir', d]),
             ...(p.reanudar ? ['--resume', p.reanudar] : []),
           ]
@@ -363,16 +384,23 @@ export class Cola extends EventEmitter {
             '--skip-git-repo-check',
             '-s', 'workspace-write',
             '-C', p.cwd,
+            ...CODEX_SIN_USAR.flatMap((f) => ['--disable', f]),
+            ...(p.esfuerzo ? ['-c', `model_reasoning_effort=${p.esfuerzo}`] : []),
+            ...(p.modelo ? ['-m', p.modelo] : []),
             ...(p.dirsExtra ?? []).flatMap((d) => ['--add-dir', d]),
             ...(p.reanudar ? ['resume', p.reanudar] : []),
             '-',
           ];
 
-    // El prompt entra por un archivo y la salida va a otro: así el proceso no depende
-    // de este servidor y sigue trabajando aunque se reinicie.
-    const archivoPrompt = this.ruta(t.id, 'prompt.txt');
+    // Codex no permite sustituir su prompt de sistema: las instrucciones van al principio del prompt
+    const promptFinal = p.motor === 'codex' && p.sistema && !p.reanudar ? `${p.sistema}
+
+${prompt}` : prompt;
+
+    // El prompt entra por un archivo y la salida va a otro (prompt.txt guarda el original, para relanzar)
+    const archivoPrompt = this.ruta(t.id, 'entrada.txt');
     const archivoSalida = this.ruta(t.id, 'salida.jsonl');
-    fs.writeFileSync(archivoPrompt, prompt, 'utf8');
+    fs.writeFileSync(archivoPrompt, promptFinal, 'utf8');
     fs.writeFileSync(archivoSalida, '');
     let proc: ChildProcess;
     const fds: number[] = [];

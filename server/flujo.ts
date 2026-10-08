@@ -12,12 +12,15 @@ import type {
   Ajustes,
   Apartado,
   EntradaIndice,
+  Esfuerzo,
   EstadoFlujo,
   Indice,
   Motor,
   PasoFlujo,
   PreguntaInvestigacion,
   Profundidad,
+  ResultadoBusqueda,
+  TipoBusqueda,
   PropuestaVisual,
   Sugerencia,
   TipoRevision,
@@ -30,6 +33,7 @@ import type { Cola, Postproceso } from './agents/cola';
 import { AGENTES, construirPrompt } from './agents/agentes';
 import { extraerJson, insertarTrasAncla, sustituirFragmento, buscarFragmento, contarPalabras } from './texto';
 import { asegurarTextos } from './conversion';
+import { DESCRIPCION_TIPO, descargarFuente, guardarResultados, incorporarResultados, leerResultados } from './buscador';
 
 interface Dependencias {
   almacen: () => Almacen;
@@ -51,6 +55,10 @@ interface Lanzamiento {
   ref?: string;
   motor?: Motor; // forzar motor
   seccionActiva?: string;
+  web?: boolean; // sobrescribe si el agente puede buscar en la web
+  esfuerzo?: Esfuerzo; // sobrescribe el esfuerzo del agente para esta tarea
+  /** Contenido que se incluye en el mensaje para que el agente no tenga que leerlo (ahorra tokens). */
+  incluir?: { dossier?: boolean; secciones?: string[]; glosario?: boolean };
   post?: Postproceso;
 }
 
@@ -137,6 +145,14 @@ export class Flujo {
     const cwd = documento ? this.almacen.dirDocumento(asignatura.id, documento.id) : dirAsig;
     await fs.mkdir(path.join(cwd, '.agentes'), { recursive: true });
     const motor = this.motorPara(l.agente, l.motor);
+    const referencia = await this.contenidoReferencia(asignatura.id, documento?.id, l.incluir);
+    const { sistema, prompt } = construirPrompt(
+      this.instrucciones(l.agente),
+      { asignatura, documento, secciones, seccionActiva: l.seccionActiva },
+      l.tarea + referencia,
+      l.indicaciones,
+    );
+    const personal = this.dep.ajustes().agentes[l.agente] ?? {};
     return this.dep.cola.encolar({
       agente: l.agente,
       nombreAgente: AGENTES[l.agente].nombre,
@@ -147,16 +163,50 @@ export class Flujo {
       paso: l.paso,
       seccion: l.seccion,
       ref: l.ref,
-      prompt: construirPrompt(
-        this.instrucciones(l.agente),
-        { asignatura, documento, secciones, seccionActiva: l.seccionActiva },
-        l.tarea,
-        l.indicaciones,
-      ),
+      prompt,
+      sistema,
+      web: l.web ?? AGENTES[l.agente].web,
+      esfuerzo: l.esfuerzo ?? personal.esfuerzo ?? AGENTES[l.agente].esfuerzo,
+      // El modelo elegido es del motor configurado; si se usa el otro motor, su modelo por defecto
+      modelo: motor === (personal.motor ?? AGENTES[l.agente].motor) ? personal.modelo : undefined,
       cwd,
       dirsExtra: documento ? [dirAsig] : [],
       post: l.post,
     });
+  }
+
+  /**
+   * Incluye en el mensaje el texto de los archivos que el agente va a necesitar. Leerlos con
+   * herramientas cuesta una vuelta más por archivo, y en cada vuelta se reenvía todo el contexto.
+   */
+  private async contenidoReferencia(asig: string, doc: string | undefined, incluir?: Lanzamiento['incluir']): Promise<string> {
+    if (!incluir || !doc) return '';
+    const partes: string[] = [];
+    const MAX_DOSSIER = 40_000;
+    const MAX_SECCIONES = 90_000;
+    if (incluir.dossier) {
+      const d = await this.almacen.leerArchivoDoc(asig, doc, 'investigacion.md');
+      if (d.trim()) {
+        partes.push(
+          '===== investigacion.md =====',
+          d.length > MAX_DOSSIER ? `${d.slice(0, MAX_DOSSIER)}\n[… recortado: lee investigacion.md si necesitas el resto]` : d,
+          '===== fin de investigacion.md =====',
+        );
+      }
+    }
+    if (incluir.glosario) {
+      const g = await this.almacen.leerGlosario(asig);
+      if (g.replace(/^#\s*Glosario\s*/i, '').trim()) partes.push('===== ../../glosario.md =====', g.slice(0, 15_000), '===== fin del glosario =====');
+    }
+    if (incluir.secciones?.length) {
+      const textos = (await this.almacen.textoCompleto(asig, doc)).filter((x) => incluir.secciones!.includes(x.archivo));
+      const total = textos.reduce((n, x) => n + x.texto.length, 0);
+      if (total <= MAX_SECCIONES) {
+        for (const x of textos) partes.push(`===== secciones/${x.archivo} =====`, x.texto, `===== fin de secciones/${x.archivo} =====`);
+      }
+    }
+    if (!partes.length) return '';
+    return `\n\n## Contenido actual de los archivos (ya incluido: no hace falta que los leas)\n${partes.join('\n')}`;
   }
 
   /** Ruta (relativa a la carpeta del documento) para el resultado estructurado de un agente. */
@@ -332,6 +382,16 @@ Marca con «(material aportado)» las ideas que procedan del material del profes
     const salida = this.salida('indice');
     const actual = await this.almacen.leerJsonDoc<Indice | null>(asig, doc, 'indice.json', null);
     const profundidad = profundidadValida(profundidadPedida ?? actual?.profundidad);
+    // El índice actual va en el mensaje (sin campos internos) para que no tenga que leerlo
+    const indiceActual = actual?.entradas.length
+      ? `
+
+## Índice actual (indice.json; ya incluido, no hace falta leerlo)
+${JSON.stringify(
+          actual.entradas.map(({ titulo, objetivo, contenidos, extension, visuales, apartados }) => ({ titulo, objetivo, contenidos, extension, visuales, apartados })),
+          (k, v) => (k === 'id' ? undefined : v),
+        )}`
+      : '';
     if (soloApartados && !actual?.entradas.length) throw new ErrorUsuario('Primero hace falta un índice con secciones');
     const ejemploApartados =
       profundidad === 1
@@ -356,6 +416,7 @@ Marca con «(material aportado)» las ideas que procedan del material del profes
       documento: doc,
       titulo: soloApartados ? 'Desarrollar los apartados del índice' : actual ? 'Rehacer el índice' : 'Proponer el índice',
       paso: 'indice',
+      incluir: { dossier: true },
       indicaciones,
       tarea: soloApartados
         ? `Desarrolla los apartados del índice director (\`indice.json\`) hasta la profundidad pedida. Mantén EXACTAMENTE las mismas secciones, con sus títulos, su orden y el resto de sus campos; solo añade o mejora sus apartados. Usa el dossier (\`investigacion.md\`) y el material aportado si existen.
@@ -376,7 +437,7 @@ NO crees ni modifiques secciones. Escribe el índice completo en el archivo \`${
   ]
 }
 
-Si el usuario te pide cambios después, vuelve a escribir el archivo completo.`
+Si el usuario te pide cambios después, vuelve a escribir el archivo completo.${indiceActual}`
         : `Diseña el índice director del documento a partir del dossier (\`investigacion.md\`, si existe), del material aportado y del objetivo.
 ${actual ? 'Ya existe un índice en `indice.json`: tenlo en cuenta y mejóralo según las indicaciones.\n' : ''}
 NO crees ni modifiques secciones. Escribe tu propuesta en el archivo \`${salida}\` con este JSON exacto (sin comentarios):
@@ -396,7 +457,7 @@ NO crees ni modifiques secciones. Escribe tu propuesta en el archivo \`${salida}
 
 ${reglaProfundidad}
 Entre 3 y 12 secciones, según la extensión pedida. La primera puede ser una introducción breve y la última un resumen o síntesis; no incluyas una sección de autoevaluación (hay un agente para eso).
-Si el usuario te pide cambios después, vuelve a escribir el archivo completo con la versión corregida.`,
+Si el usuario te pide cambios después, vuelve a escribir el archivo completo con la versión corregida.${indiceActual}`,
       post: { tipo: 'indice', datos: { salida, profundidad } },
     });
   }
@@ -492,6 +553,7 @@ Si el usuario te pide cambios después, vuelve a escribir el archivo completo co
           titulo: `Redactar «${s.titulo}»`,
           paso: 'redaccion',
           seccion: archivo,
+          incluir: { dossier: true, glosario: true, secciones: [archivo] },
           indicaciones,
           tarea: `Redacta la sección \`secciones/${archivo}\`${s.palabras > 40 ? ' (ya tiene contenido: mejóralo y complétalo sin perder lo valioso)' : ''}.
 
@@ -539,6 +601,7 @@ ${mapa}
           titulo: `Revisión de ${tipo === 'fuentes' ? 'fuentes y datos' : tipo}`,
           paso: 'revision',
           ref: tipo,
+          incluir: { secciones: secciones.map((s) => s.archivo), dossier: tipo === 'fuentes', glosario: tipo === 'estilo' },
           indicaciones,
           tarea: `Revisa estas secciones fijándote en: ${foco[tipo]}.
 ${lista}
@@ -620,6 +683,7 @@ Si el usuario te responde pidiendo cambios, vuelve a escribir el archivo complet
       titulo: 'Buscar dónde hacen falta visuales',
       paso: 'visuales',
       ref: 'director',
+      incluir: { secciones: secciones.map((s) => s.archivo) },
       indicaciones,
       tarea: `Lee estas secciones y propone los apoyos visuales que de verdad ayuden a entender o recordar:
 ${secciones.map((s) => `- secciones/${s.archivo} (${s.titulo})`).join('\n')}
@@ -709,6 +773,7 @@ Lee la sección para que el visual sea coherente con su contenido y su terminolo
         return await this.lanzar({
           ...comun,
           titulo: `Diagrama: ${p.titulo}`,
+          incluir: { secciones: [p.seccion] },
           tarea: `${contexto}
 
 Dibuja el diagrama con Mermaid y escribe en \`${salida}\` SOLO el bloque \`\`\`mermaid (nada más).
@@ -725,6 +790,7 @@ Usa un tipo de diagrama adecuado (flowchart, mindmap, timeline, sequenceDiagram,
           ...comun,
           motor: 'codex',
           titulo: `Imagen IA: ${p.titulo}`,
+          incluir: { secciones: [p.seccion] },
           tarea: `${contexto}
 
 Genera la imagen con tu herramienta de generación de imágenes y guárdala como \`${rel}\` (PNG).
@@ -738,6 +804,8 @@ Estilo de ilustración didáctica, limpia, fondo claro, sin marcas de agua. Si l
       return await this.lanzar({
         ...comun,
         titulo: `Imagen de internet: ${p.titulo}`,
+        web: true,
+        incluir: { secciones: [p.seccion] },
         tarea: `${contexto}
 
 Busca en la web una imagen real con licencia libre (preferentemente en Wikimedia Commons) que muestre exactamente eso, con buena resolución y legible.
@@ -777,6 +845,7 @@ Solo licencias que permitan reutilizarla (CC0, dominio público, CC BY, CC BY-SA
       documento: doc,
       titulo: 'Preparar la autoevaluación',
       paso: 'autoevaluacion',
+      incluir: { secciones: secciones.map((s) => s.archivo) },
       seccion: archivo,
       indicaciones,
       tarea: `Prepara las actividades de autoevaluación del documento a partir de sus secciones:
@@ -789,6 +858,93 @@ Escríbelas en \`secciones/${archivo}\` (sustituye lo que haya), con esta estruc
 - \`## Ejercicios o preguntas de desarrollo\` (2-3, de aplicación o relación de conceptos)
 - \`## Soluciones\`: todas las respuestas explicadas brevemente, numeradas igual.
 Ajusta el número y la dificultad a los destinatarios si las indicaciones del usuario no dicen otra cosa. Solo escribe en ese archivo.`,
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Buscador de fuentes (para la asignatura o para un documento)
+
+  private dirBusqueda(asig: string, doc?: string) {
+    return doc ? this.almacen.dirDocumento(asig, doc) : this.almacen.dirAsignatura(asig);
+  }
+
+  async buscarFuentes(asig: string, doc: string | undefined, consulta: string, tipo: TipoBusqueda = 'cualquiera') {
+    if (!consulta.trim()) throw new ErrorUsuario('Escribe qué fuentes buscas');
+    if (this.ocupado('fuentes', asig, doc)) throw new ErrorUsuario('Ya hay una búsqueda en curso');
+    const salida = this.salida('fuentes');
+    const ya = (await leerResultados(this.dirBusqueda(asig, doc))).map((r) => r.url);
+    return this.lanzar({
+      agente: 'investigador',
+      asignatura: asig,
+      documento: doc,
+      titulo: `Buscar fuentes: ${consulta.trim().slice(0, 80)}`,
+      paso: 'fuentes',
+      esfuerzo: 'low', // basta con buscar y elegir; la app comprueba los enlaces
+      tarea: `Busca en la web fuentes para elaborar los apuntes${doc ? ' de este documento' : ' de esta asignatura'} sobre: «${consulta.trim()}».
+Tipo de fuentes: ${DESCRIPCION_TIPO[tipo] ?? DESCRIPCION_TIPO.cualquiera}.
+
+- Entre 5 y 10 resultados, los mejores, adecuados al nivel y a los destinatarios.
+- Solo fuentes fiables y verificables (instituciones, universidades, editoriales, revistas, organismos oficiales, divulgadores reconocidos). Nada de webs de trabajos copiados ni contenido generado sin autoría.
+- Usa la búsqueda web y elige a partir de los resultados. NO abras las páginas para comprobarlas: la aplicación verifica después cada enlace. Ábrelas solo si necesitas averiguar la URL directa de un PDF.
+- Copia las URL tal cual aparecen en los resultados. Prefiere contenidos de acceso libre.
+${ya.length ? `- No repitas estas URL, ya propuestas antes:\n${ya.slice(0, 40).map((u) => `  - ${u}`).join('\n')}\n` : ''}
+No descargues nada ni modifiques otros archivos. Escribe los resultados en \`${salida}\` con este JSON exacto:
+
+{
+  "resultados": [
+    {
+      "titulo": "Título del recurso",
+      "url": "https://…",
+      "autor": "autor u organización",
+      "tipo": "pdf | web | video | articulo | libro",
+      "descripcion": "qué contiene y para qué sirve en estos apuntes (1-2 frases)",
+      "fiabilidad": "por qué es fiable (breve)",
+      "idioma": "es, en…",
+      "licencia": "si se conoce (CC BY, dominio público…), si no, cadena vacía"
+    }
+  ]
+}`,
+      post: { tipo: 'busqueda', datos: { salida, consulta: consulta.trim() } },
+    });
+  }
+
+  async resultadosBusqueda(asig: string, doc?: string) {
+    return leerResultados(this.dirBusqueda(asig, doc));
+  }
+
+  private async cambiarResultado(asig: string, doc: string | undefined, id: string, cambios: Partial<ResultadoBusqueda>) {
+    const dir = this.dirBusqueda(asig, doc);
+    return this.conCandado(`${dir}/busqueda`, async () => {
+      const lista = await leerResultados(dir);
+      const r = lista.find((x) => x.id === id);
+      if (!r) throw new ErrorUsuario('Resultado no encontrado', 404);
+      Object.assign(r, cambios);
+      await guardarResultados(dir, lista);
+      return r;
+    });
+  }
+
+  async anadirFuente(asig: string, doc: string | undefined, id: string) {
+    const r = (await leerResultados(this.dirBusqueda(asig, doc))).find((x) => x.id === id);
+    if (!r) throw new ErrorUsuario('Resultado no encontrado', 404);
+    try {
+      const archivo = await descargarFuente(r, this.almacen.dirFuentes(asig, doc), this.dep.dirBin ?? '');
+      await this.prepararFuentes(asig, doc);
+      return this.cambiarResultado(asig, doc, id, { estado: 'anadida', archivo, error: undefined });
+    } catch (e) {
+      await this.cambiarResultado(asig, doc, id, { error: (e as Error).message });
+      throw e;
+    }
+  }
+
+  async descartarResultado(asig: string, doc: string | undefined, id: string) {
+    return this.cambiarResultado(asig, doc, id, { estado: 'descartada' });
+  }
+
+  async limpiarBusqueda(asig: string, doc?: string) {
+    const dir = this.dirBusqueda(asig, doc);
+    return this.conCandado(`${dir}/busqueda`, async () => {
+      await guardarResultados(dir, (await leerResultados(dir)).filter((r) => r.estado === 'anadida'));
     });
   }
 
@@ -822,6 +978,12 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
   private postprocesar(t: Trabajo, post: Postproceso): Promise<string | void> {
     const datos = post.datos ?? {};
     switch (post.tipo) {
+      case 'busqueda': {
+        const dir = this.dirBusqueda(t.asignatura, t.documento);
+        return incorporarResultados(dir, path.join(dir, String(datos.salida)), String(datos.consulta)).then((n) =>
+          n ? `${n} fuente${n === 1 ? '' : 's'} encontrada${n === 1 ? '' : 's'}. Elige cuáles añadir.` : 'No ha encontrado fuentes nuevas',
+        );
+      }
       case 'investigacion':
         return this.postInvestigacion(t, datos);
       case 'indice':
