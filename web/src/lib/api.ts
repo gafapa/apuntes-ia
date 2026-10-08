@@ -82,7 +82,10 @@ export const api = {
 
   // Flujo del documento
   flujo: (a: string, d: string) => pedir<EstadoFlujo>('GET', `${doc(a, d)}/flujo`),
-  investigar: (a: string, d: string, indicaciones?: string) => pedir<Trabajo>('POST', `${doc(a, d)}/flujo/investigar`, { indicaciones }),
+  investigar: (a: string, d: string, indicaciones?: string, soloPreguntas = false) =>
+    pedir<Trabajo>('POST', `${doc(a, d)}/flujo/investigar`, { indicaciones, soloPreguntas }),
+  anadirPregunta: (a: string, d: string, texto: string) => pedir('POST', `${doc(a, d)}/flujo/preguntas`, { texto }),
+  eliminarPregunta: (a: string, d: string, id: string) => pedir('DELETE', `${doc(a, d)}/flujo/preguntas/${e(id)}`),
   proponerIndice: (a: string, d: string, indicaciones?: string) => pedir<Trabajo>('POST', `${doc(a, d)}/flujo/indice`, { indicaciones }),
   guardarIndice: (a: string, d: string, indice: Indice) => pedir<Indice>('PUT', `${doc(a, d)}/flujo/indice`, indice),
   aprobarIndice: (a: string, d: string) => pedir<Indice>('POST', `${doc(a, d)}/flujo/indice/aprobar`),

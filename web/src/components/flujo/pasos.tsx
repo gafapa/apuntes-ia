@@ -42,8 +42,14 @@ export function estadoPaso(id: IdPaso, e: EstadoFlujo | undefined, trabajos: Tra
   if (!e) return { hecho: false, trabajando: false };
   const secciones = e.secciones.filter((s) => !ARCHIVO_AUTOEVALUACION.test(s.archivo));
   switch (id) {
-    case 'investigacion':
-      return { hecho: !!e.investigacion, trabajando: enCurso('investigacion') };
+    case 'investigacion': {
+      const pendientes = e.preguntas.filter((p) => p.estado === 'pendiente').length;
+      return {
+        hecho: !!e.investigacion && pendientes === 0,
+        trabajando: enCurso('investigacion'),
+        aviso: pendientes ? `${pendientes} ${pendientes === 1 ? 'pregunta' : 'preguntas'}` : undefined,
+      };
+    }
     case 'indice':
       return {
         hecho: !!e.indice?.aprobado,

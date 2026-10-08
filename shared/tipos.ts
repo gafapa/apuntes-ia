@@ -187,8 +187,18 @@ export interface Recurso {
   usado: boolean; // aparece en alguna sección
 }
 
+/** Pregunta que el usuario quiere que responda la investigación. */
+export interface PreguntaInvestigacion {
+  id: string;
+  texto: string;
+  estado: 'pendiente' | 'investigando' | 'respondida';
+  creado: string;
+  respuesta?: string; // extraída del dossier al consultar el estado
+}
+
 export interface EstadoFlujo {
   investigacion?: { palabras: number; actualizado: string };
+  preguntas: PreguntaInvestigacion[];
   indice?: Indice;
   secciones: Seccion[];
   sugerencias: Sugerencia[];

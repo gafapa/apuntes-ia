@@ -302,7 +302,16 @@ export async function crearServidor(op: OpcionesServidor) {
   const cuerpo = (req: FastifyRequest) => (req.body ?? {}) as Cuerpo;
 
   app.get(`${D}/flujo`, async (req) => flujo.estado(params(req).a, params(req).d));
-  app.post(`${D}/flujo/investigar`, async (req) => flujo.investigar(params(req).a, params(req).d, cuerpo(req).indicaciones));
+  app.post(`${D}/flujo/investigar`, async (req) =>
+    flujo.investigar(params(req).a, params(req).d, cuerpo(req).indicaciones, !!(req.body as { soloPreguntas?: boolean })?.soloPreguntas),
+  );
+  app.post(`${D}/flujo/preguntas`, async (req) =>
+    flujo.anadirPregunta(params(req).a, params(req).d, String((req.body as { texto?: string })?.texto ?? '')),
+  );
+  app.delete(`${D}/flujo/preguntas/:id`, async (req) => {
+    await flujo.eliminarPregunta(params(req).a, params(req).d, (req.params as { id: string }).id);
+    return { ok: true };
+  });
   app.post(`${D}/flujo/indice`, async (req) => flujo.proponerIndice(params(req).a, params(req).d, cuerpo(req).indicaciones));
   app.put(`${D}/flujo/indice`, async (req) => flujo.guardarIndice(params(req).a, params(req).d, req.body as Indice));
   app.post(`${D}/flujo/indice/aprobar`, async (req) => flujo.aprobarIndice(params(req).a, params(req).d));

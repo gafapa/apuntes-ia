@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp, BookOpen, Check, FileSearch, ListTree, Pencil, Plus, Save, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, BookOpen, Check, CheckCircle2, CircleDashed, FileSearch, ListTree, Loader2, Pencil, Plus, Save, Trash2 } from 'lucide-react';
 import type { EntradaIndice, EstadoFlujo, Indice, Trabajo } from '../../../../shared/tipos';
 import { api, urlDatos } from '../../lib/api';
 import { useEstado } from '../../lib/estado';
@@ -15,18 +15,19 @@ interface Props {
   recargar: () => void;
 }
 
-export function PasoInvestigacion({ a, d, estado, trabajos }: Props) {
+export function PasoInvestigacion({ a, d, estado, trabajos, recargar }: Props) {
   const activos = trabajosDe(trabajos, 'investigacion');
   const [verDossier, setVerDossier] = useState(false);
   const inv = estado.investigacion;
+  const pendientes = estado.preguntas.filter((p) => p.estado === 'pendiente');
   return (
     <Paso
       numero={1}
       titulo="Investigación"
       opcional
-      hecho={!!inv}
+      hecho={!!inv && pendientes.length === 0}
       trabajando={activos.length > 0}
-      descripcion="El investigador lee el material aportado, busca en la web y prepara un dossier con conceptos, datos, ejemplos y fuentes."
+      descripcion="El investigador lee el material aportado, busca en la web y prepara un dossier con conceptos, datos, ejemplos y fuentes. Puedes añadirle preguntas concretas en cualquier momento."
       acciones={
         <>
           {inv && (
@@ -34,31 +35,130 @@ export function PasoInvestigacion({ a, d, estado, trabajos }: Props) {
               Ver dossier
             </Boton>
           )}
-          <BotonAgente
-            texto={inv ? 'Ampliar' : 'Investigar'}
-            variante={inv ? 'secundario' : 'primario'}
-            icono={<FileSearch className="size-4" />}
-            disabled={activos.length > 0}
-            onLanzar={(ind) => api.investigar(a, d, ind)}
-            ayudaIndicaciones="Por ejemplo: céntrate en el temario de la PAU, usa fuentes en español, incluye ejemplos de la vida cotidiana…"
-          />
+          {inv && pendientes.length > 0 ? (
+            <BotonAgente
+              texto={`Investigar ${pendientes.length === 1 ? '1 pregunta' : `${pendientes.length} preguntas`}`}
+              icono={<FileSearch className="size-4" />}
+              disabled={activos.length > 0}
+              onLanzar={(ind) => api.investigar(a, d, ind, true)}
+              ayudaIndicaciones="Por ejemplo: busca datos recientes, usa fuentes oficiales…"
+            />
+          ) : (
+            <BotonAgente
+              texto={inv ? 'Ampliar' : 'Investigar'}
+              variante={inv ? 'secundario' : 'primario'}
+              icono={<FileSearch className="size-4" />}
+              disabled={activos.length > 0}
+              onLanzar={(ind) => api.investigar(a, d, ind)}
+              ayudaIndicaciones="Por ejemplo: céntrate en el temario de la PAU, usa fuentes en español, incluye ejemplos de la vida cotidiana…"
+            />
+          )}
         </>
       }
     >
-      {(activos.length > 0 || inv) && (
-        <div className="space-y-2">
-          {activos.map((t) => (
-            <ActividadAgente key={t.id} t={t} />
-          ))}
-          {inv && (
-            <p className="text-[13px] text-texto-2">
-              Dossier de {inv.palabras.toLocaleString('es')} palabras · actualizado {fechaCorta(inv.actualizado)}
-            </p>
-          )}
-        </div>
-      )}
+      <div className="space-y-4">
+        {activos.map((t) => (
+          <ActividadAgente key={t.id} t={t} />
+        ))}
+        {inv && (
+          <p className="text-[13px] text-texto-2">
+            Dossier de {inv.palabras.toLocaleString('es')} palabras · actualizado {fechaCorta(inv.actualizado)}
+          </p>
+        )}
+        <Preguntas a={a} d={d} estado={estado} recargar={recargar} hayDossier={!!inv} />
+      </div>
       <ModalDossier a={a} d={d} abierto={verDossier} onCerrar={() => setVerDossier(false)} />
     </Paso>
+  );
+}
+
+/** Preguntas concretas que el usuario quiere que responda la investigación. */
+function Preguntas({ a, d, estado, recargar, hayDossier }: { a: string; d: string; estado: EstadoFlujo; recargar: () => void; hayDossier: boolean }) {
+  const { avisar } = useEstado();
+  const [texto, setTexto] = useState('');
+  const [abierta, setAbierta] = useState<string>();
+  const [enviando, setEnviando] = useState(false);
+
+  const anadir = async () => {
+    if (!texto.trim()) return;
+    setEnviando(true);
+    try {
+      await api.anadirPregunta(a, d, texto);
+      setTexto('');
+      recargar();
+    } catch (e) {
+      avisar((e as Error).message, 'error');
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline justify-between">
+        <span className="text-[13px] font-semibold">Preguntas de investigación</span>
+        <span className="text-[12px] text-texto-3">
+          {hayDossier ? 'Las pendientes se investigan con el botón de arriba' : 'Se responderán al investigar'}
+        </span>
+      </div>
+      {estado.preguntas.length > 0 && (
+        <ul className="mb-2 divide-y divide-borde rounded-lg border border-borde">
+          {estado.preguntas.map((p) => {
+            const desplegada = abierta === p.id && p.respuesta;
+            return (
+              <li key={p.id} className="group">
+                <div className="flex items-start gap-2.5 px-3 py-2">
+                  <span className="mt-1">
+                    {p.estado === 'investigando' ? (
+                      <Loader2 className="size-3.5 animate-spin text-acento" />
+                    ) : p.estado === 'respondida' ? (
+                      <CheckCircle2 className="size-3.5 text-ok" />
+                    ) : (
+                      <CircleDashed className="size-3.5 text-texto-3" />
+                    )}
+                  </span>
+                  <button
+                    disabled={!p.respuesta}
+                    onClick={() => setAbierta(desplegada ? undefined : p.id)}
+                    className="min-w-0 flex-1 text-left text-[13.5px] enabled:cursor-pointer enabled:hover:text-acento"
+                  >
+                    {p.texto}
+                    <span className="block text-[11.5px] text-texto-3">
+                      {p.estado === 'investigando' ? 'Investigando…' : p.respuesta ? (desplegada ? 'Ocultar respuesta' : 'Ver respuesta') : 'Pendiente'}
+                    </span>
+                  </button>
+                  {p.estado !== 'investigando' && (
+                    <BotonIcono
+                      titulo="Quitar pregunta"
+                      className="opacity-0 group-hover:opacity-100 hover:text-error"
+                      onClick={() => api.eliminarPregunta(a, d, p.id).then(recargar)}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </BotonIcono>
+                  )}
+                </div>
+                {desplegada && (
+                  <div className="border-t border-borde bg-fondo/50 px-9 py-3">
+                    <VistaPrevia texto={p.respuesta!} base={urlDatos(a, 'documentos', d)} />
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <div className="flex gap-2">
+        <Entrada
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && anadir()}
+          placeholder="¿Qué papel tiene la fotosíntesis en el cambio climático?"
+        />
+        <Boton icono={<Plus className="size-4" />} cargando={enviando} disabled={!texto.trim()} onClick={anadir}>
+          Añadir
+        </Boton>
+      </div>
+    </div>
   );
 }
 

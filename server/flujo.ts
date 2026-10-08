@@ -15,6 +15,7 @@ import type {
   Indice,
   Motor,
   PasoFlujo,
+  PreguntaInvestigacion,
   PropuestaVisual,
   Sugerencia,
   TipoRevision,
@@ -168,9 +169,15 @@ export class Flujo {
   async estado(asig: string, doc: string): Promise<EstadoFlujo> {
     const a = this.almacen;
     const info = await a.infoArchivoDoc(asig, doc, 'investigacion.md');
+    const dossier = info ? await a.leerArchivoDoc(asig, doc, 'investigacion.md') : '';
     const secciones = await a.listarSecciones(asig, doc);
+    const preguntas = (await a.leerJsonDoc<PreguntaInvestigacion[]>(asig, doc, 'preguntas.json', [])).map((p) => ({
+      ...p,
+      respuesta: respuestaEnDossier(dossier, p.texto),
+    }));
     return {
-      investigacion: info ? { palabras: contarPalabras(await a.leerArchivoDoc(asig, doc, 'investigacion.md')), actualizado: info.modificado } : undefined,
+      investigacion: info ? { palabras: contarPalabras(dossier), actualizado: info.modificado } : undefined,
+      preguntas,
       indice: (await a.leerJsonDoc<Indice | null>(asig, doc, 'indice.json', null)) ?? undefined,
       secciones,
       sugerencias: await a.leerJsonDoc<Sugerencia[]>(asig, doc, 'sugerencias.json', []),
@@ -214,18 +221,35 @@ export class Flujo {
   // ---------------------------------------------------------------------------
   // 1. Investigación
 
-  async investigar(asig: string, doc: string, indicaciones?: string) {
+  async investigar(asig: string, doc: string, indicaciones?: string, soloPreguntas = false) {
     if (this.ocupado('investigacion', asig, doc)) throw new ErrorUsuario('Ya hay una investigación en curso');
     await this.prepararFuentes(asig, doc);
     const existe = existsSync(path.join(this.almacen.dirDocumento(asig, doc), 'investigacion.md'));
+    const pendientes = (await this.almacen.leerJsonDoc<PreguntaInvestigacion[]>(asig, doc, 'preguntas.json', [])).filter(
+      (p) => p.estado !== 'respondida',
+    );
+    if (soloPreguntas && !pendientes.length) throw new ErrorUsuario('No hay preguntas pendientes');
+    const bloquePreguntas = pendientes.length
+      ? `
+
+### Preguntas del usuario
+Responde también a estas preguntas. Para cada una, añade en \`investigacion.md\`, dentro de la sección \`## Preguntas investigadas\` (créala antes de \`## Fuentes\` si no existe), un apartado con este encabezado exacto y la respuesta debajo, citando las fuentes con [n]:
+${pendientes.map((p) => `- \`### Pregunta: ${p.texto}\``).join('\n')}`
+      : '';
+    await this.marcarPreguntas(asig, doc, pendientes.map((p) => p.id), 'investigando');
+    const tarea = soloPreguntas
+      ? `Investiga las preguntas pendientes del usuario y añade las respuestas al dossier \`investigacion.md\`, sin rehacer el resto del dossier.
+Consulta el material aportado (\`fuentes/\`, \`../../fuentes/\`) y fuentes fiables de la web. Añade las fuentes nuevas a la lista \`## Fuentes\` con su número [n]. No inventes datos ni referencias.${bloquePreguntas}`
+      : null;
     return this.lanzar({
       agente: 'investigador',
       asignatura: asig,
       documento: doc,
-      titulo: existe ? 'Ampliar la investigación' : 'Investigar el tema',
+      titulo: soloPreguntas ? `Investigar ${pendientes.length === 1 ? '1 pregunta' : `${pendientes.length} preguntas`}` : existe ? 'Ampliar la investigación' : 'Investigar el tema',
       paso: 'investigacion',
       indicaciones,
-      tarea: `Elabora el dossier de investigación del documento y guárdalo en \`investigacion.md\`${existe ? ' (ya existe: amplíalo y mejóralo, conservando lo valioso)' : ''}.
+      post: { tipo: 'investigacion', datos: { preguntas: pendientes.map((p) => p.id) } },
+      tarea: tarea ?? `Elabora el dossier de investigación del documento y guárdalo en \`investigacion.md\`${existe ? ' (ya existe: amplíalo y mejóralo, conservando lo valioso)' : ''}.
 
 1. Lee todo el material aportado en \`fuentes/\` y \`../../fuentes/\` si lo hay (para .docx, .odt y .pptx usa su versión de texto en \`.texto/\`; los PDF e imágenes léelos directamente).
 2. Busca en la web lo necesario para cubrir el objetivo del documento con rigor (entre 5 y 12 fuentes fiables).
@@ -238,8 +262,42 @@ export class Flujo {
    - \`## Ejemplos, aplicaciones y curiosidades\`.
    - \`## Ideas para apoyos visuales\`.
    - \`## Fuentes\`: lista numerada [n] con autor u organización, título, URL o nombre del archivo y fecha de consulta.
-Marca con «(material aportado)» las ideas que procedan del material del profesor. No inventes datos ni referencias.`,
-      post: { tipo: 'investigacion' },
+Marca con «(material aportado)» las ideas que procedan del material del profesor. No inventes datos ni referencias.${bloquePreguntas}`,
+    });
+  }
+
+  // Preguntas de investigación (las escribe el usuario; el servidor es el único que guarda el archivo)
+
+  async anadirPregunta(asig: string, doc: string, texto: string) {
+    const limpio = texto.trim().replace(/\s+/g, ' ');
+    if (!limpio) throw new ErrorUsuario('Escribe la pregunta');
+    return this.conCandado(`${asig}/${doc}/preguntas`, async () => {
+      const lista = await this.almacen.leerJsonDoc<PreguntaInvestigacion[]>(asig, doc, 'preguntas.json', []);
+      if (lista.some((p) => p.texto.toLowerCase() === limpio.toLowerCase())) throw new ErrorUsuario('Esa pregunta ya está en la lista');
+      const p: PreguntaInvestigacion = { id: randomUUID().slice(0, 8), texto: limpio, estado: 'pendiente', creado: new Date().toISOString() };
+      lista.push(p);
+      await this.almacen.escribirJsonDoc(asig, doc, 'preguntas.json', lista);
+      return p;
+    });
+  }
+
+  async eliminarPregunta(asig: string, doc: string, id: string) {
+    return this.conCandado(`${asig}/${doc}/preguntas`, async () => {
+      const lista = await this.almacen.leerJsonDoc<PreguntaInvestigacion[]>(asig, doc, 'preguntas.json', []);
+      await this.almacen.escribirJsonDoc(asig, doc, 'preguntas.json', lista.filter((p) => p.id !== id));
+    });
+  }
+
+  private async marcarPreguntas(asig: string, doc: string, ids: string[], estado: PreguntaInvestigacion['estado'] | 'segun-dossier') {
+    if (!ids.length) return;
+    return this.conCandado(`${asig}/${doc}/preguntas`, async () => {
+      const lista = await this.almacen.leerJsonDoc<PreguntaInvestigacion[]>(asig, doc, 'preguntas.json', []);
+      const dossier = estado === 'segun-dossier' ? await this.almacen.leerArchivoDoc(asig, doc, 'investigacion.md') : '';
+      for (const p of lista) {
+        if (!ids.includes(p.id)) continue;
+        p.estado = estado === 'segun-dossier' ? (respuestaEnDossier(dossier, p.texto) ? 'respondida' : 'pendiente') : estado;
+      }
+      await this.almacen.escribirJsonDoc(asig, doc, 'preguntas.json', lista);
     });
   }
 
@@ -717,6 +775,10 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
   }
 
   private async alFallarPost(t: Trabajo, post: Postproceso) {
+    if (post.tipo === 'investigacion' && t.documento) {
+      await this.marcarPreguntas(t.asignatura, t.documento, (post.datos?.preguntas as string[]) ?? [], 'segun-dossier').catch(() => {});
+      return;
+    }
     if (!['diagrama', 'imagen-ia', 'imagen-web'].includes(post.tipo) || !t.documento) return;
     const ultimoError = t.eventos.filter((e) => e.tipo === 'error').at(-1)?.texto;
     await this.cambiarPropuesta(t.asignatura, t.documento, String(post.datos?.id), {
@@ -730,7 +792,14 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
     const doc = t.documento!;
     const info = await this.almacen.infoArchivoDoc(asig, doc, 'investigacion.md');
     if (!info) throw new Error('El agente no ha creado investigacion.md. Respóndele para que lo haga.');
-    return 'Dossier de investigación listo';
+    const ids = (datos.preguntas as string[] | undefined) ?? [];
+    if (!ids.length) return 'Dossier de investigación listo';
+    await this.marcarPreguntas(asig, doc, ids, 'segun-dossier');
+    const lista = await this.almacen.leerJsonDoc<PreguntaInvestigacion[]>(asig, doc, 'preguntas.json', []);
+    const sin = lista.filter((p) => ids.includes(p.id) && p.estado !== 'respondida').length;
+    return sin
+      ? `Dossier actualizado, pero ${sin === 1 ? 'una pregunta quedó' : `${sin} preguntas quedaron`} sin responder. Respóndele para que las complete.`
+      : `Dossier actualizado: ${ids.length === 1 ? 'pregunta respondida' : `${ids.length} preguntas respondidas`}`;
 
   }
 
@@ -885,6 +954,28 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
     await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada', archivo: rel, credito });
     return encontrado ? 'Imagen descargada e insertada' : 'Imagen añadida al final de la sección';
   }
+}
+
+/** Respuesta a una pregunta dentro del dossier (apartado «### Pregunta: …»), si existe. */
+function respuestaEnDossier(dossier: string, pregunta: string): string | undefined {
+  if (!dossier) return undefined;
+  const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[¿?¡!.\s]+/g, ' ').trim().toLowerCase();
+  const objetivo = norm(pregunta);
+  const lineas = dossier.split(/\r?\n/);
+  for (let i = 0; i < lineas.length; i++) {
+    const m = lineas[i].match(/^(#{2,4})\s*Pregunta:\s*(.+)$/i);
+    if (!m || norm(m[2]) !== objetivo) continue;
+    const nivel = m[1].length;
+    const cuerpo: string[] = [];
+    for (let j = i + 1; j < lineas.length; j++) {
+      const h = lineas[j].match(/^(#{1,6})\s/);
+      if (h && h[1].length <= nivel) break;
+      cuerpo.push(lineas[j]);
+    }
+    const texto = cuerpo.join('\n').trim();
+    return texto || undefined;
+  }
+  return undefined;
 }
 
 /** Descarga una imagen de internet a la carpeta de recursos y devuelve el nombre del archivo. */
