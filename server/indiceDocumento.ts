@@ -104,7 +104,7 @@ export async function retocar(
     if (op.portada) {
       // Portada en página propia: tras la fecha (o el último párrafo del bloque de título), salto
       const fin = ['Date', 'Author', 'Subtitle', 'Title']
-        .map((e) => doc.search(new RegExp(`<w:pStyle w:val="${e}"\s*/>`)))
+        .map((e) => doc.search(new RegExp(`<w:pStyle w:val="${e}"\\s*/>`)))
         .find((i) => i >= 0);
       if (fin !== undefined) {
         const cierre = doc.indexOf('</w:p>', fin) + '</w:p>'.length;
@@ -132,7 +132,7 @@ export async function retocar(
     let estilos = await zip.file('word/styles.xml')!.async('string');
     // Figuras y pies centrados (estilos de Pandoc)
     for (const id of ['CaptionedFigure', 'Figure', 'ImageCaption', 'TableCaption']) {
-      estilos = estilos.replace(new RegExp(`<w:style [^>]*w:styleId="${id}"[^>]*>[\s\S]*?</w:style>`), (st) =>
+      estilos = estilos.replace(new RegExp(`<w:style [^>]*w:styleId="${id}"[^>]*>[\\s\\S]*?</w:style>`), (st) =>
         /<w:pPr>/.test(st) ? ajustar(st, 'pPr', '<w:jc w:val="center"/>') : st.replace('</w:style>', '<w:pPr><w:jc w:val="center"/></w:pPr></w:style>'),
       );
     }
@@ -152,7 +152,7 @@ export async function retocar(
       let ajustes = await zip.file('word/settings.xml')!.async('string');
       if (!ajustes.includes('w:updateFields')) {
         const posteriores = ['hdrShapeDefaults', 'footnotePr', 'endnotePr', 'compat', 'docVars', 'rsids', 'mathPr', 'attachedSchema', 'themeFontLang', 'clrSchemeMapping', 'doNotIncludeSubdocsInStats', 'doNotAutoCompressPictures', 'forceUpgrade', 'captions', 'readModeInkLockDown', 'smartTagType', 'schemaLibrary', 'shapeDefaults', 'doNotEmbedSmartTags', 'decimalSymbol', 'listSeparator'];
-        const i = posteriores.map((n) => ajustes.search(new RegExp(`<w:${n}[\s>/]`))).filter((x) => x >= 0).sort((a, b) => a - b)[0];
+        const i = posteriores.map((n) => ajustes.search(new RegExp(`<w:${n}[\\s>/]`))).filter((x) => x >= 0).sort((a, b) => a - b)[0];
         const pos = i ?? ajustes.lastIndexOf('</w:settings>');
         ajustes = `${ajustes.slice(0, pos)}<w:updateFields w:val="true"/>${ajustes.slice(pos)}`;
       }

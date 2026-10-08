@@ -41,6 +41,12 @@ const TEXTOS: Record<string, { indice: string; figura: string; tabla: string }> 
   en: { indice: 'Contents', figura: 'Figure', tabla: 'Table' },
 };
 
+/** Código de idioma y textos (Índice, Figura, Tabla) según el idioma de la asignatura. */
+export function idiomaExportacion(idioma: string) {
+  const lang = IDIOMAS[idioma.trim().toLowerCase()] ?? 'es';
+  return { lang, textos: TEXTOS[lang] ?? TEXTOS.es };
+}
+
 // Salto entre secciones (en PDF lo hace la plantilla de Typst)
 const SALTO = {
   docx: `\n${saltoPagina('docx')}\n`,
@@ -65,8 +71,7 @@ export async function exportar(
   await fs.rm(dirTmp, { recursive: true, force: true });
   await fs.mkdir(dirTmp, { recursive: true });
 
-  const lang = IDIOMAS[asignatura.idioma.trim().toLowerCase()] ?? 'es';
-  const textos = TEXTOS[lang] ?? TEXTOS.es;
+  const { lang, textos } = idiomaExportacion(asignatura.idioma);
 
   try {
     // 1. Diagramas → PNG

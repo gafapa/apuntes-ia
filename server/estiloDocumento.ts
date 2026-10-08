@@ -40,9 +40,9 @@ export function fusionar(tipo: keyof typeof ORDEN, dentro: string, nuevos: strin
 /** Aplica `fusionar` a todas las apariciones de <w:tipo>…</w:tipo> (o lo crea tras la etiqueta de apertura). */
 export function ajustar(xml: string, tipo: keyof typeof ORDEN, nuevos: string): string {
   if (new RegExp(`<w:${tipo}>`).test(xml)) {
-    return xml.replace(new RegExp(`<w:${tipo}>([\s\S]*?)</w:${tipo}>`), (_m, d: string) => `<w:${tipo}>${fusionar(tipo, d, nuevos)}</w:${tipo}>`);
+    return xml.replace(new RegExp(`<w:${tipo}>([\\s\\S]*?)</w:${tipo}>`), (_m, d: string) => `<w:${tipo}>${fusionar(tipo, d, nuevos)}</w:${tipo}>`);
   }
-  if (new RegExp(`<w:${tipo}\s*/>`).test(xml)) return xml.replace(new RegExp(`<w:${tipo}\s*/>`), `<w:${tipo}>${fusionar(tipo, '', nuevos)}</w:${tipo}>`);
+  if (new RegExp(`<w:${tipo}\\s*/>`).test(xml)) return xml.replace(new RegExp(`<w:${tipo}\\s*/>`), `<w:${tipo}>${fusionar(tipo, '', nuevos)}</w:${tipo}>`);
   return xml;
 }
 

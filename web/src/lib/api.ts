@@ -132,6 +132,16 @@ export const api = {
     if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? 'Error al subir');
     return (await r.json()) as { docx: boolean; odt: boolean };
   },
+  /** Descarga el documento de base para crear una plantilla (se guarda donde elija el usuario). */
+  descargarPlantillaBase: async (a: string, formato: 'docx' | 'odt') => {
+    const r = await fetch(`${asig(a)}/plantillas/base/${formato}`);
+    if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? 'No se pudo generar la plantilla');
+    const nombre = /filename="([^"]+)"/.exec(r.headers.get('content-disposition') ?? '')?.[1] ?? `plantilla-base.${formato}`;
+    const url = URL.createObjectURL(await r.blob());
+    const enlace = Object.assign(document.createElement('a'), { href: url, download: nombre });
+    enlace.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  },
   eliminarPlantilla: (a: string, formato: 'docx' | 'odt') => pedir<{ docx: boolean; odt: boolean }>('DELETE', `${asig(a)}/plantillas/${formato}`),
 
   busqueda: (a: string, d?: string) => pedir<ResultadoBusqueda[]>('GET', `${d ? doc(a, d) : asig(a)}/busqueda-fuentes`),

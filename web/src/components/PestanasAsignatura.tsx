@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BookA, FileType, Pencil, Save, Trash2, Upload } from 'lucide-react';
+import { BookA, Download, FileType, Pencil, Save, Trash2, Upload } from 'lucide-react';
 import { api, urlDatos } from '../lib/api';
 import { useEstado } from '../lib/estado';
 import { AreaTexto, Boton, Insignia, confirmar } from './ui';
@@ -85,6 +85,17 @@ export function PestanaPlantillas({ a }: { a: string }) {
       avisar((e as Error).message, 'error');
     }
   };
+  const [descargando, setDescargando] = useState<'docx' | 'odt'>();
+  const descargarBase = async (formato: 'docx' | 'odt') => {
+    setDescargando(formato);
+    try {
+      await api.descargarPlantillaBase(a, formato);
+    } catch (e) {
+      avisar((e as Error).message, 'error');
+    } finally {
+      setDescargando(undefined);
+    }
+  };
   const quitar = async (formato: 'docx' | 'odt') => {
     if (!(await confirmar('¿Quitar la plantilla?', { texto: 'Se volverán a usar los estilos por defecto.', boton: 'Quitar', peligro: true }))) return;
     setPlantillas(await api.eliminarPlantilla(a, formato));
@@ -93,9 +104,24 @@ export function PestanaPlantillas({ a }: { a: string }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-texto-2">
-        Al exportar a Word o LibreOffice se usan los estilos de estas plantillas (fuentes, colores, márgenes, encabezados…). Usa un documento tuyo
-        cuyos estilos «Título», «Título 1», «Título 2», «Normal», etc. tengan el aspecto que quieres; su contenido se ignora.
+        Al exportar a Word o LibreOffice se usan los estilos de estas plantillas (fuentes, colores, márgenes, encabezados…); su contenido se ignora.
       </p>
+      <div className="rounded-xl border border-borde bg-panel-2/50 p-4">
+        <div className="text-sm font-medium">Crear una plantilla a partir del documento de base</div>
+        <ol className="mt-1.5 list-decimal space-y-0.5 pl-5 text-[13px] text-texto-2">
+          <li>Descarga el documento de base: trae un ejemplo de cada elemento (portada, índice, títulos, listas, citas, código, tablas, figuras, notas…) con el nombre de su estilo.</li>
+          <li>Ábrelo y cambia los estilos a tu gusto (no el texto), además de márgenes, encabezado y pie de página.</li>
+          <li>Guárdalo y súbelo aquí.</li>
+        </ol>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {(['docx', 'odt'] as const).map((f) => (
+            <Boton key={f} tam="sm" icono={<Download className="size-3.5" />} cargando={descargando === f} onClick={() => descargarBase(f)}>
+              Documento de base {f === 'docx' ? 'Word' : 'LibreOffice'}
+            </Boton>
+          ))}
+        </div>
+        <p className="mt-2 text-[12px] text-texto-3">Si la asignatura ya tiene plantilla propia, el documento de base parte de ella, para seguir retocándola.</p>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         {(['docx', 'odt'] as const).map((f) => (
           <div key={f} className="flex items-center gap-3 rounded-xl border border-borde bg-panel p-4">

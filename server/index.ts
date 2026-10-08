@@ -17,6 +17,7 @@ import { cargarAjustes, guardarAjustes } from './ajustes';
 import { Flujo } from './flujo';
 import { exportar } from './exportar';
 import { Contador } from './tokens';
+import { plantillaBase } from './plantillaBase';
 import { buscar as buscarRag, indexar } from './rag';
 
 export interface OpcionesServidor {
@@ -460,6 +461,18 @@ export async function crearServidor(op: OpcionesServidor) {
       await pipeline(parte.file, fs.createWriteStream(almacen.rutaPlantilla(a, ext.slice(1) as 'docx' | 'odt')));
     }
     return almacen.plantillas(a);
+  });
+  // Documento de base con todos los elementos, para crear la plantilla a partir de él
+  app.get('/api/asignaturas/:a/plantillas/base/:formato', async (req, reply) => {
+    const { a, formato } = req.params as PA & { formato: string };
+    if (formato !== 'docx' && formato !== 'odt') throw new ErrorUsuario('Formato no válido');
+    if (!dirBin) throw new ErrorUsuario('No está disponible en este modo');
+    const datos = await plantillaBase(almacen, dirBin, a, formato);
+    const nombre = `plantilla-base-${a}.${formato}`;
+    reply
+      .header('Content-Type', formato === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/vnd.oasis.opendocument.text')
+      .header('Content-Disposition', `attachment; filename="${nombre}"`);
+    return datos;
   });
   app.delete('/api/asignaturas/:a/plantillas/:formato', async (req) => {
     const { a, formato } = req.params as PA & { formato: string };
