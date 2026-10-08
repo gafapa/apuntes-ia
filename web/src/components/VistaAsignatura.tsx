@@ -3,10 +3,15 @@ import { FileText, Plus, Trash2 } from 'lucide-react';
 import type { AsignaturaDetalle } from '../../../shared/tipos';
 import { api } from '../lib/api';
 import { useEstado } from '../lib/estado';
-import { AreaTexto, Boton, Campo, Entrada, Vacio, confirmar, cx } from './ui';
+import { AreaTexto, Boton, Campo, Vacio, confirmar, cx } from './ui';
 import { GestorFuentes } from './GestorFuentes';
 import { ModalNuevoDocumento } from './Modales';
 import { PestanaGlosario, PestanaPlantillas } from './PestanasAsignatura';
+import { SelectorEnsenanza, type ValorEnsenanza } from './SelectorEnsenanza';
+import { describirNivel, type Etapa } from '../../../shared/catalogo/educacion';
+
+/** Las asignaturas antiguas guardaban «español»; ahora el idioma es «Castellano». */
+const normalizarIdioma = (i: string) => (/^(español|castellano)$/i.test(i.trim()) ? 'Castellano' : i);
 
 const COLORES = ['#7c5cff', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#64748b'];
 
@@ -152,15 +157,39 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
 
 function FormContexto({ a, onGuardado }: { a: AsignaturaDetalle; onGuardado: (a: AsignaturaDetalle) => void }) {
   const { avisar } = useEstado();
-  const inicial = { nombre: a.nombre, nivel: a.nivel, destinatarios: a.destinatarios, idioma: a.idioma, estilo: a.estilo, color: a.color, contexto: a.contexto };
+  const inicial = { destinatarios: a.destinatarios, estilo: a.estilo, color: a.color, contexto: a.contexto };
+  const ensenanzaInicial: ValorEnsenanza = {
+    etapa: (a.etapa as Etapa) ?? (a.nivel ? 'libre' : undefined),
+    curso: a.curso,
+    modalidad: a.modalidad,
+    familia: a.familia,
+    titulo: a.titulo,
+    nombre: a.nombre,
+    nivelLibre: a.etapa && a.etapa !== 'libre' ? '' : a.nivel,
+    idioma: normalizarIdioma(a.idioma),
+  };
   const [f, setF] = useState(inicial);
+  const [ens, setEns] = useState<ValorEnsenanza>(ensenanzaInicial);
   const [guardando, setGuardando] = useState(false);
-  const cambiado = JSON.stringify(f) !== JSON.stringify(inicial);
+  const cambiado = JSON.stringify(f) !== JSON.stringify(inicial) || JSON.stringify(ens) !== JSON.stringify(ensenanzaInicial);
 
   const guardar = async () => {
+    if (!ens.nombre.trim()) return avisar('Indica la asignatura', 'error');
     setGuardando(true);
     try {
-      onGuardado(await api.guardarAsignatura(a.id, f));
+      onGuardado(
+        await api.guardarAsignatura(a.id, {
+          ...f,
+          nombre: ens.nombre.trim(),
+          nivel: ens.etapa === 'libre' || !ens.etapa ? ens.nivelLibre.trim() : describirNivel(ens),
+          etapa: ens.etapa ?? '',
+          curso: ens.curso ?? '',
+          modalidad: ens.modalidad ?? '',
+          familia: ens.familia ?? '',
+          titulo: ens.titulo ?? '',
+          idioma: ens.idioma.trim() || 'Castellano',
+        }),
+      );
       avisar('Asignatura guardada', 'ok');
     } catch (e) {
       avisar((e as Error).message, 'error');
@@ -171,21 +200,11 @@ function FormContexto({ a, onGuardado }: { a: AsignaturaDetalle; onGuardado: (a:
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-4">
-        <Campo etiqueta="Nombre">
-          <Entrada value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} />
-        </Campo>
-        <Campo etiqueta="Nivel o curso">
-          <Entrada value={f.nivel} onChange={(e) => setF({ ...f, nivel: e.target.value })} />
-        </Campo>
-      </div>
+      <SelectorEnsenanza valor={ens} onCambio={setEns} />
       <Campo etiqueta="Destinatarios" ayuda="Edad, nivel previo, objetivo (examen, repaso, divulgación)… Los documentos pueden sobrescribirlo.">
         <AreaTexto rows={2} value={f.destinatarios} onChange={(e) => setF({ ...f, destinatarios: e.target.value })} />
       </Campo>
       <div className="grid grid-cols-2 gap-4">
-        <Campo etiqueta="Idioma">
-          <Entrada value={f.idioma} onChange={(e) => setF({ ...f, idioma: e.target.value })} />
-        </Campo>
         <Campo etiqueta="Color">
           <div className="flex h-9 items-center gap-2">
             {COLORES.map((c) => (
@@ -214,7 +233,7 @@ function FormContexto({ a, onGuardado }: { a: AsignaturaDetalle; onGuardado: (a:
       </Campo>
       <div className="flex justify-end gap-2">
         {cambiado && (
-          <Boton variante="fantasma" onClick={() => setF(inicial)}>
+          <Boton variante="fantasma" onClick={() => (setF(inicial), setEns(ensenanzaInicial))}>
             Descartar
           </Boton>
         )}

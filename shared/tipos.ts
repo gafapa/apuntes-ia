@@ -5,7 +5,13 @@ export type Motor = 'claude' | 'codex';
 export interface Asignatura {
   id: string; // nombre de la carpeta
   nombre: string;
-  nivel: string; // p. ej. "2º Bachillerato"
+  nivel: string; // descripción legible, p. ej. "2º de Bachillerato · Ciencias y Tecnología"
+  // Enseñanza según el catálogo oficial (shared/catalogo/educacion.ts)
+  etapa?: string; // primaria | eso | bachillerato | fp-basica | fp-medio | fp-superior | libre
+  curso?: string;
+  modalidad?: string; // Bachillerato
+  familia?: string; // FP: familia profesional
+  titulo?: string; // FP: título del ciclo
   destinatarios: string; // a quién van dirigidos los apuntes
   idioma: string;
   estilo: string; // tono y forma de escribir

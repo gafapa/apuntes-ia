@@ -80,7 +80,10 @@ export function BarraLateral() {
                   onClick={() => seleccionar({ asignatura: a.id })}
                 >
                   <span className="size-2.5 shrink-0 rounded-full" style={{ background: a.color }} />
-                  <span className="truncate">{a.nombre}</span>
+                  <span className="min-w-0" title={[a.nombre, a.nivel].filter(Boolean).join(' · ')}>
+                    <span className="block truncate">{a.nombre}</span>
+                    {a.nivel && <span className="block truncate text-[11px] leading-tight font-normal text-texto-3">{a.nivel}</span>}
+                  </span>
                 </button>
                 <BotonIcono
                   titulo="Nuevo documento"

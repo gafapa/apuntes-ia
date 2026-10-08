@@ -13,6 +13,9 @@ import { ejecutarBinario, rutaPandoc } from './conversion';
 const IDIOMAS: Record<string, string> = {
   español: 'es',
   castellano: 'es',
+  valenciano: 'ca',
+  'aranés (occitano)': 'oc',
+  aranés: 'oc',
   inglés: 'en',
   ingles: 'en',
   english: 'en',

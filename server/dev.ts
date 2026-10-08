@@ -25,7 +25,11 @@ crearServidor({
   dirBin: path.resolve('resources-bin', { win32: 'win', darwin: 'mac' }[process.platform as string] ?? 'linux'),
   version: real ? 'en vivo' : 'desarrollo',
   dirTrabajos: real ? undefined : path.join(datos, '.trabajos'),
+}).catch((e) => {
+  console.error(e?.code === 'EADDRINUSE' ? 'El puerto 4317 está ocupado: ya hay otro servidor de Apuntes IA abierto.' : e);
+  process.exit(1);
 }).then((servidor) => {
+  if (!servidor) return;
   console.log(`Servidor en ${servidor.url} · ajustes en ${archivoAjustes}`);
   // Al reiniciarse (tsx watch) o cerrarse, se cierran los agentes; se relanzan al arrancar de nuevo
   const salir = () => servidor.cerrar().finally(() => process.exit(0));

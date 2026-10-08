@@ -1,6 +1,15 @@
 // Definición de los agentes y construcción del contexto que reciben.
 import type { AsignaturaDetalle, Documento, InfoAgente, Seccion } from '../../shared/tipos';
 
+const ETAPAS: Record<string, string> = {
+  primaria: 'Educación Primaria',
+  eso: 'Educación Secundaria Obligatoria (ESO)',
+  bachillerato: 'Bachillerato',
+  'fp-basica': 'Formación Profesional de Grado Básico',
+  'fp-medio': 'Formación Profesional de Grado Medio',
+  'fp-superior': 'Formación Profesional de Grado Superior',
+};
+
 /**
  * Instrucciones por defecto de cada agente (rol y criterio). El usuario puede
  * sustituirlas en Ajustes. El formato de salida que necesita la app NO va aquí,
@@ -131,7 +140,9 @@ export function bloqueContexto({ asignatura: a, documento: d, secciones, seccion
   const destinatarios = d?.destinatarios?.trim() || a.destinatarios || 'no especificados';
   const partes = [
     '## Asignatura',
-    `- Nombre: ${a.nombre}`,
+    `- Nombre: ${a.nombre}${a.etapa?.startsWith('fp-') ? ' (módulo profesional)' : ''}`,
+    a.etapa && ETAPAS[a.etapa] && `- Enseñanza: ${ETAPAS[a.etapa]} (sistema educativo español, LOMLOE)`,
+    a.titulo && `- Ciclo formativo: ${a.titulo}${a.familia ? ` (familia profesional de ${a.familia})` : ''}`,
     a.nivel && `- Nivel: ${a.nivel}`,
     `- Idioma de los apuntes: ${a.idioma || 'español'}`,
     a.estilo && `- Estilo de redacción: ${a.estilo}`,

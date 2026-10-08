@@ -112,8 +112,13 @@ export class Almacen {
       id,
       nombre,
       nivel: datos.nivel ?? '',
+      etapa: datos.etapa,
+      curso: datos.curso,
+      modalidad: datos.modalidad,
+      familia: datos.familia,
+      titulo: datos.titulo,
       destinatarios: datos.destinatarios ?? '',
-      idioma: datos.idioma || 'español',
+      idioma: datos.idioma || 'Castellano',
       estilo: datos.estilo ?? '',
       color: datos.color || COLORES[n % COLORES.length],
       creado: ahora(),
@@ -128,7 +133,7 @@ export class Almacen {
   async actualizarAsignatura(id: string, datos: Partial<AsignaturaDetalle>): Promise<AsignaturaDetalle> {
     const dir = this.dirAsignatura(id);
     const actual = await leerJson<Asignatura>(path.join(dir, 'asignatura.json'));
-    const campos = ['nombre', 'nivel', 'destinatarios', 'idioma', 'estilo', 'color'] as const;
+    const campos = ['nombre', 'nivel', 'destinatarios', 'idioma', 'estilo', 'color', 'etapa', 'curso', 'modalidad', 'familia', 'titulo'] as const;
     const nuevo: Asignatura = { ...actual, id, actualizado: ahora() };
     for (const c of campos) if (typeof datos[c] === 'string') nuevo[c] = datos[c]!;
     await escribirJson(path.join(dir, 'asignatura.json'), nuevo);

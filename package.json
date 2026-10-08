@@ -20,7 +20,8 @@
     "dist": "npm run build && npm run fetch-bin && electron-builder",
     "start": "npm run build && electron .",
     "dist:publicar": "npm run build && npm run fetch-bin && electron-builder --publish always",
-    "app": "node scripts/app-en-vivo.mjs"
+    "app": "node scripts/app-en-vivo.mjs",
+    "catalogo:fp": "node scripts/catalogo-fp.mjs"
   },
   "dependencies": {
     "@fastify/multipart": "^10.1.2",

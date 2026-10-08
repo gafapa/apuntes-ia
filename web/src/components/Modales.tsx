@@ -2,22 +2,46 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useEstado } from '../lib/estado';
 import { api } from '../lib/api';
 import { AreaTexto, Boton, Campo, Entrada, Modal } from './ui';
+import { SelectorEnsenanza, type ValorEnsenanza } from './SelectorEnsenanza';
+import { describirNivel, destinatariosSugeridos } from '../../../shared/catalogo/educacion';
 
 export function ModalNuevaAsignatura({ abierto, onCerrar }: { abierto: boolean; onCerrar: () => void }) {
   const { cargarAsignaturas, seleccionar, avisar } = useEstado();
-  const vacio = { nombre: '', nivel: '', destinatarios: '', idioma: 'español' };
-  const [f, setF] = useState(vacio);
+  const vacio: ValorEnsenanza = { nombre: '', nivelLibre: '', idioma: 'Castellano' };
+  const [v, setV] = useState<ValorEnsenanza>(vacio);
+  const [destinatarios, setDestinatarios] = useState('');
+  const [destinatariosTocados, setDestinatariosTocados] = useState(false);
   const [guardando, setGuardando] = useState(false);
   useEffect(() => {
-    if (abierto) setF(vacio);
+    if (abierto) {
+      setV(vacio);
+      setDestinatarios('');
+      setDestinatariosTocados(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abierto]);
 
+  // Destinatarios sugeridos según la enseñanza, mientras el usuario no los escriba
+  useEffect(() => {
+    if (!destinatariosTocados) setDestinatarios(destinatariosSugeridos(v));
+  }, [v, destinatariosTocados]);
+
   const crear = async (e: FormEvent) => {
     e.preventDefault();
+    if (!v.nombre.trim()) return avisar('Indica la asignatura', 'error');
     setGuardando(true);
     try {
-      const a = await api.crearAsignatura(f);
+      const a = await api.crearAsignatura({
+        nombre: v.nombre.trim(),
+        nivel: v.etapa === 'libre' || !v.etapa ? v.nivelLibre.trim() : describirNivel(v),
+        etapa: v.etapa,
+        curso: v.curso,
+        modalidad: v.modalidad,
+        familia: v.familia,
+        titulo: v.titulo,
+        idioma: v.idioma.trim() || 'Castellano',
+        destinatarios,
+      });
       await cargarAsignaturas();
       seleccionar({ asignatura: a.id });
       onCerrar();
@@ -29,24 +53,23 @@ export function ModalNuevaAsignatura({ abierto, onCerrar }: { abierto: boolean; 
   };
 
   return (
-    <Modal abierto={abierto} onCerrar={onCerrar} titulo="Nueva asignatura" descripcion="Define el contexto común de todos sus apuntes. Podrás completarlo después.">
+    <Modal
+      abierto={abierto}
+      onCerrar={onCerrar}
+      ancho="max-w-xl"
+      titulo="Nueva asignatura"
+      descripcion="Elige la enseñanza y la asignatura del catálogo oficial, o escribe la tuya. Podrás completar el contexto después."
+    >
       <form onSubmit={crear} className="space-y-4">
-        <Campo etiqueta="Nombre">
-          <Entrada autoFocus required value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} placeholder="Biología" />
-        </Campo>
-        <div className="grid grid-cols-2 gap-3">
-          <Campo etiqueta="Nivel o curso">
-            <Entrada value={f.nivel} onChange={(e) => setF({ ...f, nivel: e.target.value })} placeholder="2º Bachillerato" />
-          </Campo>
-          <Campo etiqueta="Idioma de los apuntes">
-            <Entrada value={f.idioma} onChange={(e) => setF({ ...f, idioma: e.target.value })} />
-          </Campo>
-        </div>
+        <SelectorEnsenanza valor={v} onCambio={setV} />
         <Campo etiqueta="Destinatarios" ayuda="A quién van dirigidos. Cada documento puede indicar otros distintos.">
           <AreaTexto
             rows={2}
-            value={f.destinatarios}
-            onChange={(e) => setF({ ...f, destinatarios: e.target.value })}
+            value={destinatarios}
+            onChange={(e) => {
+              setDestinatarios(e.target.value);
+              setDestinatariosTocados(true);
+            }}
             placeholder="Alumnado de 17-18 años que prepara la PAU; nivel medio, poco tiempo de estudio"
           />
         </Campo>
@@ -54,7 +77,7 @@ export function ModalNuevaAsignatura({ abierto, onCerrar }: { abierto: boolean; 
           <Boton type="button" onClick={onCerrar}>
             Cancelar
           </Boton>
-          <Boton type="submit" variante="primario" cargando={guardando}>
+          <Boton type="submit" variante="primario" cargando={guardando} disabled={!v.nombre.trim()}>
             Crear asignatura
           </Boton>
         </div>

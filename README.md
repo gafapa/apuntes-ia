@@ -73,6 +73,19 @@ Además: orquestador (chat libre, conoce el estado del flujo) y glosario de la a
 Los agentes que proponen cosas escriben un JSON en `.agentes/` y es el servidor quien lo
 valida e incorpora, para que varios agentes trabajen a la vez sin pisarse.
 
+## Catálogo oficial de enseñanzas
+
+Al crear una asignatura se elige la enseñanza (Primaria, ESO, Bachillerato, FP de Grado
+Básico, Medio o Superior, u «Otra» libre), el curso y la asignatura de una lista oficial,
+aunque siempre se puede escribir otra (las comunidades autónomas tienen materias propias).
+
+- Primaria, ESO y Bachillerato: Reales Decretos 157/2022, 217/2022 y 243/2022 (BOE), en
+  `shared/catalogo/educacion.ts`.
+- FP: 190 títulos de 27 familias con sus módulos, del catálogo del Ministerio en TodoFP,
+  en `shared/catalogo/fp.json`. Para actualizarlo: `npm run catalogo:fp`.
+- Idiomas: los oficiales de España (castellano, catalán, valenciano, gallego, euskera y
+  aranés) más «Otro» libre.
+
 ## Estructura
 
 | Carpeta | Contenido |

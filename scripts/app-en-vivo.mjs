@@ -42,6 +42,16 @@ async function esperar(url, ms = 60000) {
   throw new Error(`No responde ${url}`);
 }
 
+// 0. Los puertos deben estar libres: si no, la app podría hablar con otro servidor (p. ej. uno
+//    de desarrollo con datos de prueba) sin que se note
+for (const url of ['http://127.0.0.1:4317/api/version', `${URL_VITE}/`]) {
+  try {
+    await fetch(url, { signal: AbortSignal.timeout(1500) });
+    console.error(`\nYa hay algo escuchando en ${new URL(url).host}. Cierra la otra instancia (npm run dev, otra app en vivo…) y vuelve a intentarlo.`);
+    process.exit(1);
+  } catch {}
+}
+
 // 1. Proceso principal de Electron
 await build({
   entryPoints: ['electron/main.ts'],
@@ -63,6 +73,13 @@ await Promise.all([esperar(`${URL_VITE}/`), esperar('http://127.0.0.1:4317/api/v
   console.error(`\n${e.message}. ¿Está abierta la app instalada? Ciérrala y vuelve a intentarlo.`);
   terminar(1);
 });
+
+const { version } = await (await fetch('http://127.0.0.1:4317/api/version')).json();
+if (version !== 'en vivo') {
+  console.error('\nEl servidor que responde no es el de la app en vivo (¿hay otro abierto?). Ciérralo y vuelve a intentarlo.');
+  terminar(1);
+  await new Promise(() => {}); // no abrir la ventana mientras se cierra todo
+}
 
 // 4. Ventana de la app
 const electron = lanzar('app', npx, ['electron', '.'], { APUNTES_EN_VIVO: URL_VITE });
