@@ -9,6 +9,7 @@
 // - La portada queda en una página propia (título grande en el color de la asignatura).
 import fs from 'node:fs/promises';
 import JSZip from 'jszip';
+import { ajustar, espaciarOdt, espaciarWord } from './estiloDocumento';
 
 export interface Entrada {
   nivel: number;
@@ -103,7 +104,7 @@ export async function retocar(
     if (op.portada) {
       // Portada en página propia: tras la fecha (o el último párrafo del bloque de título), salto
       const fin = ['Date', 'Author', 'Subtitle', 'Title']
-        .map((e) => doc.search(new RegExp(`<w:pStyle w:val="${e}"\\s*/>`)))
+        .map((e) => doc.search(new RegExp(`<w:pStyle w:val="${e}"\s*/>`)))
         .find((i) => i >= 0);
       if (fin !== undefined) {
         const cierre = doc.indexOf('</w:p>', fin) + '</w:p>'.length;
@@ -111,50 +112,50 @@ export async function retocar(
       }
       if (!op.plantillaPropia) {
         // Título grande y en el color de la asignatura, más abajo en la página
-        doc = doc.replace(
-          /<w:pPr>\s*<w:pStyle w:val="Title"\s*\/>\s*<\/w:pPr>([\s\S]*?)<\/w:p>/,
-          (_m, runs: string) =>
-            `<w:pPr><w:pStyle w:val="Title"/><w:spacing w:before="3600" w:after="360"/></w:pPr>${runs.replace(
-              /<w:rPr>/g,
-              `<w:rPr><w:b/><w:color w:val="${color}"/><w:sz w:val="64"/>`,
-            )}</w:p>`,
+        doc = doc.replace(/<w:p>\s*<w:pPr>\s*<w:pStyle w:val="Title"\s*\/>[\s\S]*?<\/w:p>/, (p) =>
+          ajustar(p, 'pPr', '<w:spacing w:before="3600" w:after="360"/>').replace(/<w:rPr>[\s\S]*?<\/w:rPr>/g, (r) =>
+            ajustar(r, 'rPr', `<w:b/><w:color w:val="${color}"/><w:sz w:val="64"/>`),
+          ),
         );
       }
     }
-    // Tablas centradas y con bordes finos (el estilo de Pandoc solo raya bajo la cabecera)
+    // Tablas centradas y, salvo plantilla propia, con bordes finos (Pandoc solo raya bajo la cabecera)
     const borde = (lado: string) => `<w:${lado} w:val="single" w:sz="4" w:space="0" w:color="A6A6A6"/>`;
     const bordes = `<w:tblBorders>${['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(borde).join('')}</w:tblBorders>`;
-    doc = doc.replace(/<w:tblPr>/g, `<w:tblPr><w:jc w:val="center"/>${op.plantillaPropia ? '' : bordes}`);
+    doc = doc.replace(/<w:tblPr>[\s\S]*?<\/w:tblPr>/g, (t) => ajustar(t, 'tblPr', `<w:jc w:val="center"/>${op.plantillaPropia ? '' : bordes}`));
     // Imágenes sin pie (párrafos normales con un dibujo): también centradas
     doc = doc.replace(/<w:p>((?:(?!<\/w:p>)[\s\S])*?<w:drawing>[\s\S]*?<\/w:p>)/g, (p) =>
-      /<w:jc /.test(p)
-        ? p
-        : p.includes('<w:pPr>')
-          ? p.replace('<w:pPr>', '<w:pPr><w:jc w:val="center"/>')
-          : p.replace('<w:p>', '<w:p><w:pPr><w:jc w:val="center"/></w:pPr>'),
+      /^<w:p>\s*<w:pPr>/.test(p) ? ajustar(p, 'pPr', '<w:jc w:val="center"/>') : p.replace('<w:p>', '<w:p><w:pPr><w:jc w:val="center"/></w:pPr>'),
     );
     zip.file('word/document.xml', doc);
-    // Figuras y pies centrados (estilos de Pandoc)
+
     let estilos = await zip.file('word/styles.xml')!.async('string');
+    // Figuras y pies centrados (estilos de Pandoc)
     for (const id of ['CaptionedFigure', 'Figure', 'ImageCaption', 'TableCaption']) {
-      estilos = estilos.replace(new RegExp(`(<w:style [^>]*w:styleId="${id}"[^>]*>[\\s\\S]*?)(</w:style>)`), (_m, cuerpo: string, cierre: string) => {
-        if (/<w:jc /.test(cuerpo)) cuerpo = cuerpo.replace(/<w:jc w:val="[^"]*"\s*\/>/, '<w:jc w:val="center"/>');
-        else if (/<w:pPr>/.test(cuerpo)) cuerpo = cuerpo.replace('<w:pPr>', '<w:pPr><w:jc w:val="center"/>');
-        else cuerpo += '<w:pPr><w:jc w:val="center"/></w:pPr>';
-        return cuerpo + cierre;
-      });
+      estilos = estilos.replace(new RegExp(`<w:style [^>]*w:styleId="${id}"[^>]*>[\s\S]*?</w:style>`), (st) =>
+        /<w:pPr>/.test(st) ? ajustar(st, 'pPr', '<w:jc w:val="center"/>') : st.replace('</w:style>', '<w:pPr><w:jc w:val="center"/></w:pPr></w:style>'),
+      );
     }
-    // Cabecera de las tablas: negrita y fondo gris claro (formato condicional de la primera fila)
-    if (!op.plantillaPropia)
+    if (!op.plantillaPropia) {
+      // Cabecera de las tablas: negrita y fondo gris claro (formato condicional de la primera fila)
       estilos = estilos.replace(
-      /(<w:style [^>]*w:styleId="Table"[^>]*>[\s\S]*?)<w:tblStylePr w:type="firstRow">[\s\S]*?<\/w:tblStylePr>/,
-      '$1<w:tblStylePr w:type="firstRow"><w:rPr><w:b/></w:rPr><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="F2F2F2"/><w:vAlign w:val="center"/></w:tcPr></w:tblStylePr>',
-    );
+        /(<w:style [^>]*w:styleId="Table"[^>]*>[\s\S]*?)<w:tblStylePr w:type="firstRow">[\s\S]*?<\/w:tblStylePr>/,
+        '$1<w:tblStylePr w:type="firstRow"><w:rPr><w:b/></w:rPr><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="F2F2F2"/><w:vAlign w:val="center"/></w:tcPr></w:tblStylePr>',
+      );
+      // Espaciado entre elementos (Pandoc lo deja todo muy junto)
+      estilos = espaciarWord(estilos, color);
+    }
     zip.file('word/styles.xml', estilos);
     if (op.indice) {
-      // Que Word actualice el índice (números de página) al abrir el documento
+      // Que Word actualice el índice (números de página) al abrir el documento.
+      // updateFields debe ir antes de estos elementos (orden del esquema de settings.xml)
       let ajustes = await zip.file('word/settings.xml')!.async('string');
-      if (!ajustes.includes('w:updateFields')) ajustes = ajustes.replace(/<w:settings([^>]*)>/, '<w:settings$1><w:updateFields w:val="true"/>');
+      if (!ajustes.includes('w:updateFields')) {
+        const posteriores = ['hdrShapeDefaults', 'footnotePr', 'endnotePr', 'compat', 'docVars', 'rsids', 'mathPr', 'attachedSchema', 'themeFontLang', 'clrSchemeMapping', 'doNotIncludeSubdocsInStats', 'doNotAutoCompressPictures', 'forceUpgrade', 'captions', 'readModeInkLockDown', 'smartTagType', 'schemaLibrary', 'shapeDefaults', 'doNotEmbedSmartTags', 'decimalSymbol', 'listSeparator'];
+        const i = posteriores.map((n) => ajustes.search(new RegExp(`<w:${n}[\s>/]`))).filter((x) => x >= 0).sort((a, b) => a - b)[0];
+        const pos = i ?? ajustes.lastIndexOf('</w:settings>');
+        ajustes = `${ajustes.slice(0, pos)}<w:updateFields w:val="true"/>${ajustes.slice(pos)}`;
+      }
       zip.file('word/settings.xml', ajustes);
     }
   } else {
@@ -174,6 +175,7 @@ export async function retocar(
           : `${ini}><style:paragraph-properties fo:text-align="center"/>`,
       );
     }
+    if (!op.plantillaPropia) estilos = espaciarOdt(estilos, op.color);
     zip.file('styles.xml', estilos);
     let cont = await zip.file('content.xml')!.async('string');
     // Imágenes sin pie: el párrafo que solo contiene la imagen pasa al estilo centrado «Figure»

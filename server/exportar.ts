@@ -216,7 +216,14 @@ function plantillaTypst(color: string, op: OpcionesExportacion): string {
 ) = {
   set document(title: title, keywords: keywords)
   set text(lang: lang, size: fontsize, font: ("Libertinus Serif",))
-  set par(justify: true, leading: 0.68em, spacing: 1.05em)
+  set par(justify: true, leading: 0.72em, spacing: 1.25em)
+  // Listas, fórmulas y bloques de código con aire alrededor
+  set list(spacing: 0.75em, indent: 0.6em, body-indent: 0.6em)
+  set enum(spacing: 0.75em, indent: 0.6em, body-indent: 0.6em)
+  show list: set block(above: 1em, below: 1.2em)
+  show enum: set block(above: 1em, below: 1.2em)
+  show math.equation.where(block: true): set block(above: 1.3em, below: 1.3em)
+  show raw.where(block: true): it => block(above: 1.2em, below: 1.3em, fill: luma(245), inset: 9pt, radius: 3pt, width: 100%, it)
   show raw: set text(font: ("Cascadia Code", "Consolas", "DejaVu Sans Mono"))
   show link: set text(fill: acento)
 
@@ -246,16 +253,18 @@ function plantillaTypst(color: string, op: OpcionesExportacion): string {
       #line(length: 100%, stroke: 1.2pt + acento)
     ]
   }
-  show heading.where(level: 2): it => block(above: 1.5em, below: 0.8em, text(size: 14pt, weight: "semibold", it))
-  show heading.where(level: 3): it => block(above: 1.2em, below: 0.6em, text(size: 12pt, weight: "semibold", fill: luma(60), it))
+  show heading.where(level: 2): it => block(above: 2em, below: 1em, sticky: true, text(size: 14pt, weight: "semibold", fill: acento.darken(15%), it))
+  show heading.where(level: 3): it => block(above: 1.6em, below: 0.8em, sticky: true, text(size: 12pt, weight: "semibold", fill: luma(60), it))
 
   show figure.caption: set text(size: 9pt, fill: luma(90), style: "italic")
   show quote: it => block(
-    fill: acento.lighten(92%), stroke: (left: 3pt + acento), inset: (x: 12pt, y: 9pt), radius: (right: 4pt), width: 100%, it.body,
+    fill: acento.lighten(92%), stroke: (left: 3pt + acento), inset: (x: 12pt, y: 10pt), radius: (right: 4pt), width: 100%, above: 1.4em, below: 1.4em, it.body,
   )
-  set table(stroke: 0.5pt + luma(150), inset: 6pt, fill: (_, y) => if y == 0 { acento.lighten(88%) })
+  set table(stroke: 0.5pt + luma(150), inset: (x: 7pt, y: 6pt), fill: (_, y) => if y == 0 { acento.lighten(88%) })
   // Figuras, tablas y sus pies, centrados
   show figure: set align(center)
+  show figure: set block(above: 1.8em, below: 1.8em)
+  set figure(gap: 0.8em)
   show table: it => align(center, it)
   show figure.where(kind: table): set figure.caption(position: bottom)
   show table.cell.where(y: 0): set text(weight: "bold")
