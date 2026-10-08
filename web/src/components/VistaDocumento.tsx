@@ -33,7 +33,7 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
   const { asignaturas, seleccionar, avisar, cargarAsignaturas } = useEstado();
   const asig = asignaturas.find((a) => a.id === asignatura);
   const [doc, setDoc] = useState<Documento>();
-  const flujo = useFlujoActual()!;
+  const flujo = useFlujoActual();
   const [vista, elegir] = useVistaDocumento();
   const irASeccion = useEstado((s) => s.irASeccion);
 
@@ -64,7 +64,7 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
     };
   }, [asignatura, documento, avisar, seleccionar]);
 
-  if (!doc || !asig) return null;
+  if (!doc || !asig || !flujo) return null;
   const destinatarios = doc.destinatarios.trim() || asig.destinatarios;
   const paso = PASOS.find((p) => p.id === vista);
 
