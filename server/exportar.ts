@@ -11,6 +11,8 @@ import { anchoExportacion, dimensiones } from './imagenes';
 import { bloqueIndice, prepararEncabezados, retocar, saltoPagina } from './indiceDocumento';
 import { prepararPies } from './pies';
 import { ajustarAnchos } from './tablas';
+import { traducirQuimica } from './quimica';
+import { PATRON_MOLECULA, consultaMolecula } from '../shared/quimica';
 import { Almacen, ErrorUsuario, slug } from './store';
 import { ejecutarBinario, rutaPandoc } from './conversion';
 
@@ -93,6 +95,16 @@ export async function exportar(
         const ancho = d ? `{width=${anchoExportacion(d, 96 * ESCALA_DIAGRAMAS)}cm}` : '';
         return `\n![${(pie ?? '').trim()}](${archivo})${ancho}\n`;
       })
+        // Moléculas: la interfaz las ha dibujado como diagramas (clave «m» + hash de la consulta)
+        .replace(PATRON_MOLECULA, (_m, contenido: string, pie?: string) => {
+          const consulta = consultaMolecula(contenido);
+          const archivo = `.exportacion/diagrama-m${hashTexto(consulta)}.png`;
+          if (!existsSync(path.join(dirDoc, archivo))) return `\n*[Molécula no disponible: ${consulta.replace(/[*_[\]]/g, '')}]*\n`;
+          const d = dimensiones(path.join(dirDoc, archivo));
+          // Tamaño natural, pero sin pasar de 8 cm: una molécula no necesita media página
+          const ancho = d ? `{width=${Math.min(8, anchoExportacion(d, 96 * ESCALA_DIAGRAMAS * 0.8))}cm}` : '';
+          return `\n![${(pie ?? '').trim()}](${archivo})${ancho}\n`;
+        })
         // Resto de imágenes (fotos, imágenes generadas): tamaño acotado, salvo que el texto ya lo indique
         .replace(/(!\[[^\]]*\]\(([^)\s]+)\))(?!\{)/g, (todo, img: string, ruta: string) => {
           if (/^https?:/.test(ruta) || ruta.startsWith('.exportacion/')) return todo;
@@ -109,7 +121,9 @@ export async function exportar(
     );
     const salto = op.saltoSeccion ? SALTO[op.formato] : '';
     // Todas las imágenes, esquemas y tablas con pie (numerado en Word/ODT)
-    let md = prepararPies(ajustarAnchos(partes.map((p) => p.trim()).join(`\n\n${salto}\n\n`)), op.formato, textos, op.pies !== false);
+    // Química (\ce{…}) traducida a LaTeX que entiende Pandoc
+    const unido = traducirQuimica(partes.map((p) => p.trim()).join(`\n\n${salto}\n\n`));
+    let md = prepararPies(ajustarAnchos(unido), op.formato, textos, op.pies !== false);
     if (op.formato === 'docx' || op.formato === 'odt') {
       // Índice ya relleno y numerado (el de Pandoc es un campo vacío hasta actualizarlo a mano)
       const r = prepararEncabezados(md, op.numerar);

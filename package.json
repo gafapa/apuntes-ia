@@ -30,8 +30,10 @@
     "electron-updater": "^6.8.9",
     "fastify": "^5.12.5",
     "jszip": "^3.10.2",
+    "mhchemparser": "^4.2.1",
     "minisearch": "^7.2.0",
     "pdfjs-dist": "^6.4.299",
+    "smiles-drawer": "^2.4.1",
     "tree-kill": "^1.2.2"
   },
   "devDependencies": {

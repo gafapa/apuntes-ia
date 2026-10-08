@@ -111,6 +111,8 @@ cronologías, mapas conceptuales. Decides el tipo más adecuado:
 - diagrama: esquemas, flujos, mapas conceptuales, cronologías (se dibujan con Mermaid). Es la
   opción preferente para todo lo que sea estructura o relación.
 - imagen-web: fotografías o ilustraciones reales que ya existen con licencia libre (Wikimedia Commons).
+- molecula: la fórmula estructural (2D) de un compuesto químico concreto; la app la dibuja a partir
+  de PubChem, así que es exacta. Úsala en lugar de una imagen cuando haya que ver la estructura.
 - imagen-ia: ilustraciones que no existen y que una IA puede generar bien (escenas, ilustraciones
   didácticas sencillas). Evítala si la imagen debe ser exacta (anatomía detallada, mapas, gráficas).
 No propongas visuales decorativos ni más de uno cada pocos párrafos.`,
@@ -188,6 +190,7 @@ export function bloqueContexto({ asignatura: a, documento: d, secciones, seccion
       '- `../../glosario.md`: términos y notación de la asignatura.',
       '- `recursos/`: imágenes y diagramas. En el Markdown se enlazan como `![descripción](recursos/archivo.png)`.',
       '- Diagramas: bloques ```mermaid. Fórmulas: LaTeX con $...$ y $$...$$.',
+      '- Química: fórmulas y reacciones con mhchem dentro de una fórmula, p. ej. `$\\ce{2H2 + O2 -> 2H2O}$`, `$\\ce{SO4^2-}$`, `$\\ce{N2 + 3H2 <=> 2NH3}$`. Estructura de una molécula: bloque ```molecula con su nombre en inglés tal como figura en PubChem (p. ej. `aspirin`) o su SMILES; la app la dibuja con los datos reales de PubChem.',
     );
     if (secciones?.length) {
       partes.push('', '### Secciones actuales', ...secciones.map((s) => `- ${s.archivo}: ${s.titulo} (${s.palabras} palabras)`));
@@ -215,7 +218,7 @@ export function construirPrompt(instrucciones: string, ctx: ContextoPrompt, tare
     '- Usa las herramientas para leer y escribir archivos y, si las tienes, para buscar en la web. No toques archivos fuera de la carpeta del documento y de la asignatura, salvo que la tarea lo pida.',
     '- Ahorra pasos: si el mensaje ya incluye el contenido de un archivo, no vuelvas a leerlo, y no explores carpetas sin necesidad.',
     '- Escribe siempre en el idioma de los apuntes. No inventes datos ni referencias.',
-    '- Toda imagen, esquema, diagrama y tabla lleva un pie breve y descriptivo: imagen → `![Pie](recursos/archivo.png)` en su propio párrafo; diagrama → bloque ```mermaid seguido de la línea `*Figura: pie*`; tabla → línea `Tabla: pie` justo después de la tabla, separada por una línea en blanco.',
+    '- Toda imagen, esquema, diagrama y tabla lleva un pie breve y descriptivo: imagen → `![Pie](recursos/archivo.png)` en su propio párrafo; diagrama o molécula → bloque ```mermaid o ```molecula seguido de la línea `*Figura: pie*`; tabla → línea `Tabla: pie` justo después de la tabla, separada por una línea en blanco.',
     '- Termina con un resumen breve (2-4 líneas) de lo que has hecho.',
   ].join('\n');
   const prompt = [

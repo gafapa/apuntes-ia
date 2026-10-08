@@ -216,7 +216,7 @@ export interface Sugerencia {
   creado: string;
 }
 
-export type TipoVisual = 'diagrama' | 'imagen-ia' | 'imagen-web';
+export type TipoVisual = 'diagrama' | 'molecula' | 'imagen-ia' | 'imagen-web';
 
 export interface PropuestaVisual {
   id: string;
@@ -228,6 +228,7 @@ export interface PropuestaVisual {
   estado: 'propuesta' | 'generando' | 'insertada' | 'descartada' | 'error';
   archivo?: string; // recurso generado
   credito?: string; // autoría/licencia de imágenes de internet
+  molecula?: string; // tipo molecula: nombre en inglés (PubChem) o SMILES
   url?: string; // origen de una imagen de internet (para reintentar la descarga)
   reemplaza?: string; // ruta de una imagen rota del texto que este visual sustituye
   error?: string;

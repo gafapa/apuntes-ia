@@ -3,6 +3,8 @@
 import { ESCALA_DIAGRAMAS, PATRON_MERMAID, hashTexto } from '../../../shared/hash';
 import type { OpcionesExportacion } from '../../../shared/tipos';
 import { api } from './api';
+import { PATRON_MOLECULA, consultaMolecula } from '../../../shared/quimica';
+import { dibujarMolecula, resolverMolecula } from './moleculas';
 
 let contador = 0;
 
@@ -89,9 +91,29 @@ export async function diagramasAPng(textos: string[]): Promise<Record<string, st
   return res;
 }
 
+/**
+ * Dibuja cada molécula en PNG. Clave: «m» + hash de su consulta (el servidor la busca igual).
+ * Las que no se pueden resolver o dibujar se omiten (el servidor pone un aviso en su lugar).
+ */
+export async function moleculasAPng(textos: string[]): Promise<Record<string, string>> {
+  const consultas = new Set<string>();
+  for (const t of textos) for (const m of t.matchAll(PATRON_MOLECULA)) consultas.add(consultaMolecula(m[1]));
+  const res: Record<string, string> = {};
+  for (const consulta of consultas) {
+    if (!consulta) continue;
+    try {
+      const m = await resolverMolecula(consulta);
+      res[`m${hashTexto(consulta)}`] = await svgAPng(await dibujarMolecula(m.smiles));
+    } catch (e) {
+      console.warn('Molécula no exportable', consulta, e);
+    }
+  }
+  return res;
+}
+
 export async function exportarDocumento(asignatura: string, documento: string, opciones: OpcionesExportacion) {
   const secciones = await api.secciones(asignatura, documento);
   const textos = await Promise.all(secciones.map((s) => api.leerSeccion(asignatura, documento, s.archivo).then((r) => r.contenido)));
-  const diagramas = await diagramasAPng(textos);
+  const diagramas = { ...(await diagramasAPng(textos)), ...(await moleculasAPng(textos)) };
   return api.exportar(asignatura, documento, opciones, diagramas);
 }

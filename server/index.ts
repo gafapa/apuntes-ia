@@ -18,6 +18,7 @@ import { Flujo } from './flujo';
 import { exportar } from './exportar';
 import { Contador } from './tokens';
 import { plantillaBase } from './plantillaBase';
+import { Moleculas } from './moleculas';
 import { buscar as buscarRag, indexar } from './rag';
 
 export interface OpcionesServidor {
@@ -52,7 +53,8 @@ export async function crearServidor(op: OpcionesServidor) {
   refrescarMotores().catch(() => {});
   const motoresListos = () => new Set(motores.filter((m) => m.instalado && m.sesion).map((m) => m.motor));
 
-  const flujo = new Flujo({ almacen: () => almacen, cola, ajustes: () => ajustes, motoresListos, dirBin, mcpFuentes: op.mcpFuentes });
+  const moleculas = new Moleculas(path.join(path.dirname(op.archivoAjustes), 'moleculas.json'));
+  const flujo = new Flujo({ almacen: () => almacen, cola, ajustes: () => ajustes, motoresListos, dirBin, mcpFuentes: op.mcpFuentes, moleculas });
   await cola.cargar(); // retoma los trabajos que seguían en marcha
   contador.sembrar(cola.listar());
 
@@ -308,6 +310,14 @@ export async function crearServidor(op: OpcionesServidor) {
 
   app.get('/api/uso', async () => cola.uso);
   app.get('/api/tokens', async () => contador.leer());
+  // Estructura de una molécula (nombre o SMILES) para los bloques ```molecula
+  app.get('/api/molecula', async (req) => {
+    try {
+      return await moleculas.resolver(String((req.query as { q?: string }).q ?? ''));
+    } catch (e) {
+      throw new ErrorUsuario((e as Error).message, 404);
+    }
+  });
   app.delete('/api/tokens', async () => {
     contador.reiniciar();
     const c = contador.leer();

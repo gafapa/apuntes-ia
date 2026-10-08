@@ -33,6 +33,7 @@ import { Almacen, ErrorUsuario, slug } from './store';
 import type { Cola, Postproceso } from './agents/cola';
 import { PedirAlAgente } from './agents/cola';
 import { dimensiones } from './imagenes';
+import type { Moleculas } from './moleculas';
 import { AGENTES, construirPrompt } from './agents/agentes';
 import { extraerJson, insertarTrasAncla, sustituirFragmento, buscarFragmento, contarPalabras } from './texto';
 import { asegurarTextos } from './conversion';
@@ -47,6 +48,7 @@ interface Dependencias {
   motoresListos: () => Set<Motor>;
   dirBin?: string;
   mcpFuentes?: { comando: string; args: string[]; env?: Record<string, string> };
+  moleculas?: Moleculas;
 }
 
 interface Lanzamiento {
@@ -738,7 +740,8 @@ Si el usuario te responde pidiendo cambios, vuelve a escribir el archivo complet
 ${secciones.map((s) => `- secciones/${s.archivo} (${s.titulo})`).join('\n')}
 
 Ten en cuenta los que ya existen (imágenes \`![...]\` y bloques \`\`\`mermaid) y no los dupliques.
-Tipos permitidos: "diagrama"${conCodex ? ', "imagen-web" e "imagen-ia"' : ' e "imagen-web" (la generación de imágenes con IA no está disponible)'}.
+Tipos permitidos: "diagrama", "molecula"${conCodex ? ', "imagen-web" e "imagen-ia"' : ' e "imagen-web" (la generación de imágenes con IA no está disponible)'}.
+En las de tipo "molecula", añade "molecula": el nombre del compuesto en inglés tal como figura en PubChem (p. ej. "aspirin") o su SMILES.
 
 NO modifiques las secciones. Escribe tus propuestas en \`${salida}\` con este JSON exacto:
 
@@ -772,7 +775,8 @@ Como máximo 2 o 3 por sección, y solo donde aporten. Si el usuario te responde
 
   async editarPropuesta(asig: string, doc: string, id: string, cambios: Partial<PropuestaVisual>) {
     const permitidos: Partial<PropuestaVisual> = {};
-    if (cambios.tipo && ['diagrama', 'imagen-ia', 'imagen-web'].includes(cambios.tipo)) permitidos.tipo = cambios.tipo;
+    if (cambios.tipo && ['diagrama', 'molecula', 'imagen-ia', 'imagen-web'].includes(cambios.tipo)) permitidos.tipo = cambios.tipo;
+    if (typeof cambios.molecula === 'string') permitidos.molecula = cambios.molecula.trim();
     if (typeof cambios.titulo === 'string') permitidos.titulo = cambios.titulo;
     if (typeof cambios.descripcion === 'string') permitidos.descripcion = cambios.descripcion;
     if (cambios.estado === 'descartada' || cambios.estado === 'propuesta') permitidos.estado = cambios.estado;
@@ -817,6 +821,24 @@ Como máximo 2 o 3 por sección, y solo donde aporten. Si el usuario te responde
 Lee la sección para que el visual sea coherente con su contenido y su terminología.`;
 
     try {
+      if (p.tipo === 'molecula') {
+        // Si ya se sabe qué molécula es, se inserta directamente (sin agente)
+        const directa = p.molecula && (await this.dep.moleculas?.resolver(p.molecula).catch(() => undefined));
+        if (directa) {
+          await this.insertarMolecula(asig, doc, p, p.molecula!);
+          return { insertada: true };
+        }
+        const salida = this.salida(`molecula-${p.id}`, 'md');
+        return await this.lanzar({
+          ...comun,
+          titulo: `Molécula: ${p.titulo}`,
+          esfuerzo: 'low',
+          tarea: `${contexto}${p.molecula ? `\n\nSe indicó «${p.molecula}», pero PubChem no lo reconoce.` : ''}
+
+Identifica el compuesto y escribe en \`${salida}\` SOLO esta línea: su nombre en inglés tal como figura en PubChem (p. ej. «acetylsalicylic acid» o «aspirin») o, si no es un compuesto conocido, su SMILES. Nada más. NO modifiques la sección.`,
+          post: { tipo: 'molecula', datos: { salida, id } },
+        });
+      }
       if (p.tipo === 'diagrama') {
         const salida = this.salida(`diagrama-${p.id}`, 'md');
         return await this.lanzar({
@@ -1023,11 +1045,11 @@ No descargues nada ni modifiques otros archivos. Escribe los resultados en \`${s
         }),
     );
     for (const v of visuales) {
-      if (v.tipo === 'diagrama' || v.estado !== 'error' || res.some((x) => x.visual === v.id)) continue;
+      if (v.tipo === 'diagrama' || v.tipo === 'molecula' || v.estado !== 'error' || res.some((x) => x.visual === v.id)) continue;
       res.push({ seccion: v.seccion, alt: v.titulo, motivo: 'error', error: v.error, visual: v.id, reparando: false });
     }
     for (const v of visuales) {
-      if (v.estado !== 'generando' || v.tipo === 'diagrama' || res.some((x) => x.visual === v.id)) continue;
+      if (v.estado !== 'generando' || v.tipo === 'diagrama' || v.tipo === 'molecula' || res.some((x) => x.visual === v.id)) continue;
       if (v.reemplaza || v.error) res.push({ seccion: v.seccion, alt: v.titulo, motivo: 'error', visual: v.id, reparando: true });
     }
     return res;
@@ -1129,7 +1151,7 @@ ${pendientes.map((p) => `- secciones/${p.seccion}: ${p.tipo} «${p.muestra}»`).
 
 Formato del pie:
 - Imagen: el pie va como texto alternativo, \`![Pie](recursos/archivo.png)\`.
-- Diagrama: una línea \`*Figura: pie*\` justo después del bloque \`\`\`mermaid (separada por una línea en blanco).
+- Diagrama o molécula: una línea \`*Figura: pie*\` justo después del bloque \`\`\`mermaid o \`\`\`molecula (separada por una línea en blanco).
 - Tabla: una línea \`Tabla: pie\` justo después de la tabla (separada por una línea en blanco).
 
 Edita solo esos elementos; no cambies nada más del texto. Si alguno ya tiene un pie en otro formato (en cursiva, en negrita, encima de la tabla…), no añadas otro: convierte el que hay al formato indicado. Nunca dejes dos pies para el mismo elemento.`,
@@ -1184,6 +1206,8 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
         return this.postDiagrama(t, datos);
       case 'imagen-ia':
         return this.postImagenIa(t, datos);
+      case 'molecula':
+        return this.postMolecula(t, datos);
       case 'imagen-web':
         return this.postImagenWeb(t, datos);
       default:
@@ -1196,7 +1220,7 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
       await this.marcarPreguntas(t.asignatura, t.documento, (post.datos?.preguntas as string[]) ?? [], 'segun-dossier').catch(() => {});
       return;
     }
-    if (!['diagrama', 'imagen-ia', 'imagen-web'].includes(post.tipo) || !t.documento) return;
+    if (!['diagrama', 'molecula', 'imagen-ia', 'imagen-web'].includes(post.tipo) || !t.documento) return;
     const ultimoError = t.eventos.filter((e) => e.tipo === 'error').at(-1)?.texto;
     await this.cambiarPropuesta(t.asignatura, t.documento, String(post.datos?.id), {
       estado: 'error',
@@ -1302,7 +1326,7 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
     const conCodex = !!datos.conCodex;
     const secciones = (datos.archivos as string[]).map((archivo) => ({ archivo }));
     const r = await this.leerSalida<{ propuestas?: Partial<PropuestaVisual>[] }>(asig, doc, salida);
-    const tipos: TipoVisual[] = conCodex ? ['diagrama', 'imagen-web', 'imagen-ia'] : ['diagrama', 'imagen-web'];
+    const tipos: TipoVisual[] = conCodex ? ['diagrama', 'molecula', 'imagen-web', 'imagen-ia'] : ['diagrama', 'molecula', 'imagen-web'];
     return this.conCandado(`${asig}/${doc}/visuales`, async () => {
       const actuales = await this.almacen.leerJsonDoc<PropuestaVisual[]>(asig, doc, 'visuales.json', []);
       const nombres = new Set(secciones.map((s) => s.archivo));
@@ -1317,6 +1341,7 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
           tipo: tipos.includes(p.tipo as TipoVisual) ? (p.tipo as TipoVisual) : 'diagrama',
           titulo: String(p.titulo ?? '').trim() || 'Figura',
           descripcion: String(p.descripcion),
+          ...(p.molecula ? { molecula: String(p.molecula).trim() } : {}),
           estado: 'propuesta',
           creado: new Date().toISOString(),
         });
@@ -1341,6 +1366,35 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
     await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada' });
     return encontrado ? 'Diagrama insertado' : 'Diagrama añadido al final de la sección (no se encontró el párrafo indicado)';
 
+  }
+
+  /** Inserta el bloque ```molecula (y su pie) en la sección y marca la propuesta como insertada. */
+  private async insertarMolecula(asig: string, doc: string, p: PropuestaVisual, consulta: string) {
+    const bloque = ['```molecula', consulta, '```', '', `*Figura: ${p.titulo}*`].join('\n');
+    const encontrado = await this.insertarEnSeccion(asig, doc, p, bloque);
+    await this.cambiarPropuesta(asig, doc, p.id, { estado: 'insertada', molecula: consulta, error: undefined });
+    return encontrado;
+  }
+
+  private async postMolecula(t: Trabajo, datos: Record<string, unknown>): Promise<string | void> {
+    const asig = t.asignatura;
+    const doc = t.documento!;
+    const salida = String(datos.salida);
+    const p = await this.propuesta(asig, doc, String(datos.id));
+    const texto = await fs.readFile(path.join(this.almacen.dirDocumento(asig, doc), salida), 'utf8').catch(() => '');
+    const consulta = texto
+      .replace(/```\w*/g, '')
+      .split('\n')
+      .map((l) => l.trim().replace(/^[«"'`]|[»"'`]$/g, ''))
+      .find(Boolean);
+    if (!consulta) throw new PedirAlAgente('No ha indicado la molécula.', `Escribe en \`${salida}\` el nombre en inglés (PubChem) o el SMILES del compuesto.`);
+    try {
+      await this.dep.moleculas?.resolver(consulta);
+    } catch (e) {
+      throw new PedirAlAgente(`${(e as Error).message}`, `PubChem no reconoce «${consulta}». Escribe en \`${salida}\` otro nombre en inglés del compuesto (el que use PubChem) o su SMILES.`);
+    }
+    const encontrado = await this.insertarMolecula(asig, doc, p, consulta);
+    return encontrado ? 'Molécula insertada' : 'Molécula añadida al final de la sección';
   }
 
   private async postImagenIa(t: Trabajo, datos: Record<string, unknown>): Promise<string | void> {

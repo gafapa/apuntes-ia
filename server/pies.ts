@@ -5,9 +5,10 @@
 // Al exportar, lo que no tenga pie recibe uno genérico numerado, y en Word/ODT los pies
 // se numeran («Figura 3.», «Tabla 1.»), como hace Typst en el PDF.
 import { PATRON_MERMAID } from '../shared/hash';
+import { PATRON_MOLECULA, consultaMolecula } from '../shared/quimica';
 
 export interface ElementoSinPie {
-  tipo: 'imagen' | 'diagrama' | 'tabla';
+  tipo: 'imagen' | 'diagrama' | 'molecula' | 'tabla';
   muestra: string;
 }
 
@@ -22,6 +23,9 @@ export function elementosSinPie(md: string): ElementoSinPie[] {
   const res: ElementoSinPie[] = [];
   for (const m of md.matchAll(PATRON_MERMAID)) {
     if (!m[2]?.trim()) res.push({ tipo: 'diagrama', muestra: m[1].trim().split('\n').slice(0, 2).join(' ').slice(0, 80) });
+  }
+  for (const m of md.matchAll(PATRON_MOLECULA)) {
+    if (!m[2]?.trim()) res.push({ tipo: 'molecula', muestra: consultaMolecula(m[1]) });
   }
   const lineas = sinBloquesDeCodigo(md).split('\n');
   for (let i = 0; i < lineas.length; i++) {

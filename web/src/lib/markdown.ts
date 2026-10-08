@@ -3,6 +3,10 @@ import MarkdownIt from 'markdown-it';
 // @ts-expect-error: el paquete no incluye tipos
 import texmath from 'markdown-it-texmath';
 import katex from 'katex';
+// Notación química de mhchem: $\ce{2H2 + O2 -> 2H2O}$
+import 'katex/contrib/mhchem';
+import { consultaMolecula } from '../../../shared/quimica';
+import { dibujarMolecula, resolverMolecula } from './moleculas';
 
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true });
 md.use(texmath, { engine: katex, delimiters: ['dollars', 'brackets'], katexOptions: { throwOnError: false } });
@@ -13,6 +17,9 @@ md.renderer.rules.fence = (tokens, idx, opts, env, self) => {
   const t = tokens[idx];
   if (t.info.trim() === 'mermaid') {
     return `<div class="mermaid" data-codigo="${encodeURIComponent(t.content)}"></div>`;
+  }
+  if (t.info.trim() === 'molecula') {
+    return `<div class="molecula" data-consulta="${encodeURIComponent(consultaMolecula(t.content))}"></div>`;
   }
   return fenceOriginal(tokens, idx, opts, env, self);
 };
@@ -52,8 +59,34 @@ export function renderizar(texto: string, base?: string): string {
 let mermaidListo: Promise<typeof import('mermaid').default> | undefined;
 let contador = 0;
 
-/** Dibuja los diagramas Mermaid pendientes dentro de un contenedor. */
+/** Dibuja las moléculas pendientes dentro de un contenedor. */
+async function dibujarMoleculas(contenedor: HTMLElement) {
+  const oscuro = document.documentElement.classList.contains('dark');
+  for (const nodo of contenedor.querySelectorAll<HTMLElement>('.molecula[data-consulta]')) {
+    const consulta = decodeURIComponent(nodo.dataset.consulta ?? '');
+    nodo.removeAttribute('data-consulta');
+    nodo.textContent = 'Buscando la molécula…';
+    try {
+      const m = await resolverMolecula(consulta);
+      nodo.innerHTML = await dibujarMolecula(m.smiles, oscuro);
+      const info = document.createElement('div');
+      info.className = 'molecula-info';
+      info.textContent = [m.nombre ?? consulta, m.formula].filter(Boolean).join(' · ') + (m.verificada ? '' : ' · SMILES no comprobado en PubChem');
+      info.title = m.iupac ? `IUPAC: ${m.iupac}\nSMILES: ${m.smiles}` : `SMILES: ${m.smiles}`;
+      nodo.appendChild(info);
+    } catch (e) {
+      nodo.innerHTML = '';
+      const err = document.createElement('div');
+      err.className = 'mermaid-error';
+      err.textContent = `Molécula «${consulta}»: ${(e as Error).message}`;
+      nodo.appendChild(err);
+    }
+  }
+}
+
+/** Dibuja los diagramas Mermaid y las moléculas pendientes dentro de un contenedor. */
 export async function dibujarDiagramas(contenedor: HTMLElement) {
+  void dibujarMoleculas(contenedor);
   const nodos = [...contenedor.querySelectorAll<HTMLElement>('.mermaid[data-codigo]')];
   if (!nodos.length) return;
   mermaidListo ??= import('mermaid').then((m) => m.default);

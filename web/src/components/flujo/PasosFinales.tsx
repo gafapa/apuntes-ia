@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
+  Atom,
   Check,
   ClipboardCheck,
   Download,
@@ -34,6 +35,7 @@ interface Props {
 
 const TIPOS: { id: TipoVisual; nombre: string; icono: typeof Network; ayuda: string }[] = [
   { id: 'diagrama', nombre: 'Diagrama', icono: Network, ayuda: 'Esquema dibujado con Mermaid' },
+  { id: 'molecula', nombre: 'Molécula', icono: Atom, ayuda: 'Fórmula estructural dibujada con los datos de PubChem' },
   { id: 'imagen-web', nombre: 'Imagen web', icono: Globe, ayuda: 'Imagen real con licencia libre' },
   { id: 'imagen-ia', nombre: 'Imagen IA', icono: Sparkles, ayuda: 'Generada con Codex' },
 ];
@@ -145,6 +147,7 @@ function TarjetaPropuesta({
   const { avisar } = useEstado();
   const [titulo, setTitulo] = useState(p.titulo);
   const [descripcion, setDescripcion] = useState(p.descripcion);
+  const [molecula, setMolecula] = useState(p.molecula ?? '');
   const generando = p.estado === 'generando';
 
   const guardar = (cambios: Partial<PropuestaVisual>) =>
@@ -152,7 +155,9 @@ function TarjetaPropuesta({
 
   const generar = async () => {
     try {
-      if (titulo !== p.titulo || descripcion !== p.descripcion) await api.editarPropuesta(a, d, p.id, { titulo, descripcion });
+      if (titulo !== p.titulo || descripcion !== p.descripcion || molecula !== (p.molecula ?? '')) {
+        await api.editarPropuesta(a, d, p.id, { titulo, descripcion, molecula });
+      }
       await api.generarVisual(a, d, p.id);
       recargar();
     } catch (e) {
@@ -202,6 +207,16 @@ function TarjetaPropuesta({
         onChange={(e) => setDescripcion(e.target.value)}
         onBlur={() => descripcion !== p.descripcion && guardar({ descripcion })}
       />
+      {p.tipo === 'molecula' && (
+        <Entrada
+          className="mt-1.5 h-8 font-mono text-[12.5px]"
+          placeholder="Molécula: nombre en inglés (p. ej. aspirin) o SMILES; si lo dejas vacío, lo decide el agente"
+          value={molecula}
+          disabled={generando}
+          onChange={(e) => setMolecula(e.target.value)}
+          onBlur={() => molecula !== (p.molecula ?? '') && guardar({ molecula })}
+        />
+      )}
       {p.estado === 'error' && (
         <p className="mt-2 flex items-start gap-1.5 text-[12px] text-error">
           <AlertCircle className="mt-0.5 size-3.5 shrink-0" />

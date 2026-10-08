@@ -38,6 +38,17 @@ const e = encodeURIComponent;
 const asig = (a: string) => `/api/asignaturas/${e(a)}`;
 const doc = (a: string, d: string) => `${asig(a)}/documentos/${e(d)}`;
 
+/** Molécula de un bloque ```molecula (estructura tomada de PubChem). */
+export interface Molecula {
+  consulta: string;
+  smiles: string;
+  nombre?: string;
+  iupac?: string;
+  formula?: string;
+  cid?: number;
+  verificada: boolean;
+}
+
 export type AsignaturaResumen = Asignatura & { documentos: Documento[] };
 
 export const api = {
@@ -50,6 +61,7 @@ export const api = {
     pedir('POST', '/api/abrir-carpeta', { asignatura, documento, sub }),
   uso: () => pedir<UsoSuscripcion>('GET', '/api/uso'),
   tokens: () => pedir<ContadorTokens>('GET', '/api/tokens'),
+  molecula: (q: string) => pedir<Molecula>('GET', `/api/molecula?q=${e(q)}`),
   reiniciarTokens: () => pedir<ContadorTokens>('DELETE', '/api/tokens'),
 
   asignaturas: () => pedir<AsignaturaResumen[]>('GET', '/api/asignaturas'),

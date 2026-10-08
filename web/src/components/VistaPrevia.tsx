@@ -19,8 +19,8 @@ export function VistaPrevia({ texto, base }: { texto: string; base: string }) {
     const el = e.target as HTMLElement;
     const img = el.closest('img');
     if (img) return setAmpliado({ tipo: 'imagen', src: img.src });
-    const diagrama = el.closest('.mermaid');
-    if (diagrama?.querySelector('svg')) setAmpliado({ tipo: 'svg', html: diagrama.innerHTML });
+    const svg = el.closest('.mermaid, .molecula')?.querySelector('svg');
+    if (svg) setAmpliado({ tipo: 'svg', html: svg.outerHTML });
   };
 
   return (
