@@ -21,7 +21,7 @@ const archivoAjustes = real ? path.join(carpetaUsuarioElectron(), 'ajustes.json'
 crearServidor({
   archivoAjustes,
   carpetaDatosPorDefecto: datos,
-  puerto: 4317,
+  puerto: Number(process.env.APUNTES_PUERTO ?? 4317),
   dirBin: path.resolve('resources-bin', { win32: 'win', darwin: 'mac' }[process.platform as string] ?? 'linux'),
   version: real ? 'en vivo' : 'desarrollo',
   dirTrabajos: real ? undefined : path.join(datos, '.trabajos'),

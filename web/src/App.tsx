@@ -9,6 +9,7 @@ import { VistaDocumento } from './components/VistaDocumento';
 import { PanelAgentes } from './components/PanelAgentes';
 import { AsistenteInicio } from './components/AsistenteInicio';
 import { Confirmador, cx } from './components/ui';
+import { ProveedorFlujo } from './components/flujo/pasos';
 
 export default function App() {
   const { seleccion, asignaturas, cargarAsignaturas, cargarAjustes, cargarMotores } = useEstado();
@@ -21,13 +22,13 @@ export default function App() {
   }, [cargarAsignaturas, cargarAjustes, cargarMotores]);
 
   const existe = asignaturas.some((a) => a.id === seleccion.asignatura);
-
-  return (
+  const enDocumento = !!(seleccion.asignatura && seleccion.documento && existe);
+  const contenido = (
     <div className="flex h-full overflow-hidden">
       <BarraLateral />
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {seleccion.asignatura && seleccion.documento ? (
-          <VistaDocumento key={`${seleccion.asignatura}/${seleccion.documento}`} asignatura={seleccion.asignatura} documento={seleccion.documento} />
+        {enDocumento ? (
+          <VistaDocumento key={`${seleccion.asignatura}/${seleccion.documento}`} asignatura={seleccion.asignatura!} documento={seleccion.documento!} />
         ) : seleccion.asignatura ? (
           <VistaAsignatura key={seleccion.asignatura} asignatura={seleccion.asignatura} />
         ) : (
@@ -39,6 +40,15 @@ export default function App() {
       <Confirmador />
       <AsistenteInicio />
     </div>
+  );
+
+  // Dentro de un documento, la barra lateral y la vista central comparten el estado del flujo
+  return enDocumento ? (
+    <ProveedorFlujo key={`${seleccion.asignatura}/${seleccion.documento}`} a={seleccion.asignatura!} d={seleccion.documento!}>
+      {contenido}
+    </ProveedorFlujo>
+  ) : (
+    contenido
   );
 }
 

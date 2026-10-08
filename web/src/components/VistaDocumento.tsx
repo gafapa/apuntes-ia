@@ -23,12 +23,9 @@ import { Editor } from './Editor';
 import { VistaPrevia } from './VistaPrevia';
 import { GestorFuentes } from './GestorFuentes';
 import { GaleriaRecursos } from './GaleriaRecursos';
-import { VistaFlujo } from './flujo/VistaFlujo';
-import { useFlujo } from './flujo/comun';
-import { PanelExportar } from './flujo/PasosFinales';
-import { Modal } from './ui';
+import { VistaPaso } from './flujo/VistaFlujo';
+import { PASOS, useFlujoActual, useVistaDocumento } from './flujo/pasos';
 
-type Pestana = 'flujo' | 'apuntes' | 'recursos' | 'ficha' | 'material';
 type Modo = 'editar' | 'dividido' | 'vista';
 const TODO = '__todo__';
 
@@ -36,21 +33,14 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
   const { asignaturas, seleccionar, avisar, cargarAsignaturas } = useEstado();
   const asig = asignaturas.find((a) => a.id === asignatura);
   const [doc, setDoc] = useState<Documento>();
-  const [pestana, setPestana] = useState<Pestana>(() => (localStorage.getItem(`pestana:${asignatura}/${documento}`) as Pestana) || 'flujo');
-  const [exportar, setExportar] = useState(false);
-  const flujo = useFlujo(asignatura, documento);
+  const flujo = useFlujoActual()!;
+  const [vista, elegir] = useVistaDocumento();
   const irASeccion = useEstado((s) => s.irASeccion);
-
-  const cambiarPestana = (p: Pestana) => {
-    setPestana(p);
-    try {
-      localStorage.setItem(`pestana:${asignatura}/${documento}`, p);
-    } catch {}
-  };
 
   // Desde el flujo se puede pedir abrir una sección concreta en el editor
   useEffect(() => {
-    if (irASeccion) setPestana('apuntes');
+    if (irASeccion) elegir('apuntes');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [irASeccion]);
 
   useEffect(() => {
@@ -76,56 +66,34 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
 
   if (!doc || !asig) return null;
   const destinatarios = doc.destinatarios.trim() || asig.destinatarios;
+  const paso = PASOS.find((p) => p.id === vista);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-4 border-b border-borde bg-panel px-5">
         <div className="flex min-w-0 items-center gap-1.5 text-sm">
-          <button onClick={() => seleccionar({ asignatura })} className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-texto-2 hover:text-texto cursor-pointer">
-            <span className="size-2 rounded-full" style={{ background: asig.color }} />
-            {asig.nombre}
-          </button>
-          <ChevronRight className="size-3.5 text-texto-3" />
           <span className="truncate font-semibold">{doc.titulo}</span>
+          <ChevronRight className="size-3.5 shrink-0 text-texto-3" />
+          <span className="shrink-0 text-texto-2">{paso?.titulo ?? { apuntes: 'Apuntes', recursos: 'Imágenes', material: 'Fuentes', ficha: 'Ficha' }[vista as string]}</span>
           {destinatarios && (
-            <Insignia color={doc.destinatarios.trim() ? 'acento' : 'neutro'} className="ml-1 max-w-72 truncate">
+            <Insignia color={doc.destinatarios.trim() ? 'acento' : 'neutro'} className="ml-2 max-w-80 truncate">
               <span className="truncate" title={`Destinatarios${doc.destinatarios.trim() ? ' propios del documento' : ' de la asignatura'}: ${destinatarios}`}>
                 Para: {destinatarios}
               </span>
             </Insignia>
           )}
         </div>
-        <div className="ml-auto flex items-center gap-1 rounded-lg bg-panel-2 p-0.5">
-          {(
-            [
-              ['flujo', 'Flujo'],
-              ['apuntes', 'Apuntes'],
-              ['recursos', 'Imágenes'],
-              ['ficha', 'Ficha'],
-              ['material', 'Fuentes'],
-            ] as [Pestana, string][]
-          ).map(([id, txt]) => (
-            <button
-              key={id}
-              onClick={() => cambiarPestana(id)}
-              className={cx(
-                'rounded-md px-3 py-1 text-[13px] font-medium transition-colors cursor-pointer',
-                pestana === id ? 'bg-panel text-texto shadow-sm' : 'text-texto-2 hover:text-texto',
-              )}
-            >
-              {txt}
-            </button>
-          ))}
-        </div>
-        <Boton tam="sm" icono={<Download className="size-3.5" />} onClick={() => setExportar(true)}>
-          Exportar
-        </Boton>
+        {vista !== 'exportar' && (
+          <Boton tam="sm" className="ml-auto" icono={<Download className="size-3.5" />} onClick={() => elegir('exportar')}>
+            Exportar
+          </Boton>
+        )}
       </header>
 
-      {pestana === 'flujo' && <VistaFlujo a={asignatura} d={documento} estado={flujo.estado} trabajos={flujo.trabajos} recargar={flujo.recargar} />}
-      {pestana === 'apuntes' && <Apuntes asignatura={asignatura} documento={documento} />}
-      {pestana === 'recursos' && <GaleriaRecursos a={asignatura} d={documento} />}
-      {pestana === 'ficha' && (
+      {paso && <VistaPaso id={paso.id} a={asignatura} d={documento} estado={flujo.estado} trabajos={flujo.trabajos} recargar={flujo.recargar} onIr={elegir} />}
+      {vista === 'apuntes' && <Apuntes asignatura={asignatura} documento={documento} />}
+      {vista === 'recursos' && <GaleriaRecursos a={asignatura} d={documento} />}
+      {vista === 'ficha' && (
         <div className="flex-1 overflow-y-auto">
           <FichaDocumento
             doc={doc}
@@ -137,10 +105,7 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
           />
         </div>
       )}
-      <Modal abierto={exportar} onCerrar={() => setExportar(false)} titulo="Exportar apuntes" descripcion={doc.titulo}>
-        <PanelExportar a={asignatura} d={documento} estado={flujo.estado} recargar={flujo.recargar} />
-      </Modal>
-      {pestana === 'material' && (
+      {vista === 'material' && (
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-3xl px-10 py-8">
             <GestorFuentes

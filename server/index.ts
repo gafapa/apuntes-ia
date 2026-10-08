@@ -60,7 +60,8 @@ export async function crearServidor(op: OpcionesServidor) {
     const origen = req.headers.origin;
     if (!origen) return;
     const host = req.headers.host ?? '';
-    const permitido = [`http://${host}`, 'http://localhost:5173', 'http://127.0.0.1:5173'];
+    const web = process.env.APUNTES_PUERTO_WEB ?? '5173'; // interfaz de Vite en desarrollo
+    const permitido = [`http://${host}`, `http://localhost:${web}`, `http://127.0.0.1:${web}`];
     if (!permitido.includes(origen)) {
       return rep.code(403).send({ error: 'Origen no permitido' });
     }

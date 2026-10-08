@@ -31,6 +31,9 @@ interface Estado {
   /** Petición de abrir una sección en el editor (desde el flujo). */
   irASeccion?: string;
   actualizacion?: { estado: 'disponible' | 'descargada'; version: string };
+  /** Vista abierta en cada documento («asignatura/documento» → fase o pestaña). */
+  vistas: Record<string, string>;
+  elegirVista(clave: string, vista: string): void;
 
   cargarAsignaturas(): Promise<void>;
   seleccionar(s: Seleccion): void;
@@ -54,6 +57,14 @@ export const useEstado = create<Estado>((set, get) => ({
   versiones: {},
   avisos: [],
   conectado: false,
+  vistas: {},
+
+  elegirVista(clave, vista) {
+    set({ vistas: { ...get().vistas, [clave]: vista } });
+    try {
+      localStorage.setItem(`vista:${clave}`, vista);
+    } catch {}
+  },
 
   async cargarAsignaturas() {
     try {

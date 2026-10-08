@@ -5,6 +5,8 @@ import { api } from '../lib/api';
 import { BotonIcono, cx } from './ui';
 import { ModalNuevaAsignatura, ModalNuevoDocumento } from './Modales';
 import { ModalAjustes } from './ModalAjustes';
+import { NavegacionDocumento } from './flujo/NavegacionDocumento';
+import { useFlujoActual } from './flujo/pasos';
 
 export function BarraLateral() {
   const { asignaturas, seleccion, seleccionar } = useEstado();
@@ -13,6 +15,7 @@ export function BarraLateral() {
   const [nuevoDocEn, setNuevoDocEn] = useState<string>();
   const [ajustes, setAjustes] = useState(false);
   const [enVivo, setEnVivo] = useState(false);
+  const flujo = useFlujoActual();
   useEffect(() => {
     api.version().then((v) => setEnVivo(v.version === 'en vivo')).catch(() => {});
   }, []);
@@ -41,6 +44,10 @@ export function BarraLateral() {
         </div>
       </button>
 
+      {flujo ? (
+        <NavegacionDocumento />
+      ) : (
+      <>
       <div className="flex items-center justify-between px-4 pt-3 pb-1">
         <span className="text-[11px] font-semibold tracking-wider text-texto-3 uppercase">Asignaturas</span>
         <BotonIcono titulo="Nueva asignatura" onClick={() => setNuevaAsig(true)}>
@@ -125,6 +132,8 @@ export function BarraLateral() {
           );
         })}
       </nav>
+      </>
+      )}
 
       <PieBarra onAjustes={() => setAjustes(true)} />
 

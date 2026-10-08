@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Check, ChevronDown, Loader2, MessageSquarePlus } from 'lucide-react';
 import type { EstadoFlujo, PasoFlujo, Trabajo } from '../../../../shared/tipos';
 import { api } from '../../lib/api';
@@ -28,6 +28,9 @@ export function trabajosDe(trabajos: Trabajo[], paso: PasoFlujo, filtro?: (t: Tr
   return trabajos.filter((t) => t.paso === paso && activo(t) && (!filtro || filtro(t)));
 }
 
+/** Cuando la fase se muestra sola (elegida en la barra lateral): sin número ni plegado. */
+export const PasoSolo = createContext(false);
+
 /** Tarjeta de una fase del flujo, con su número y su estado. */
 export function Paso({
   numero,
@@ -53,9 +56,30 @@ export function Paso({
   abiertoInicial?: boolean;
 }) {
   const [abierto, setAbierto] = useState(abiertoInicial);
+  const solo = useContext(PasoSolo);
   useEffect(() => {
     if (trabajando) setAbierto(true);
   }, [trabajando]);
+  if (solo) {
+    return (
+      <section>
+        <div className="mb-5 flex items-start gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[12px] font-medium text-texto-3">Fase {numero}</span>
+              {opcional && <Insignia>Opcional</Insignia>}
+              {hecho && <Insignia color="ok">Hecha</Insignia>}
+              {trabajando && <Insignia color="acento">En curso</Insignia>}
+            </div>
+            <h2 className="mt-0.5 text-xl font-semibold tracking-tight">{titulo}</h2>
+            <p className="mt-1 text-sm text-texto-2">{descripcion}</p>
+          </div>
+          {acciones && <div className="flex shrink-0 flex-wrap items-start justify-end gap-2">{acciones}</div>}
+        </div>
+        {children && <div className={cx('rounded-xl border bg-panel p-5 shadow-suave', trabajando ? 'border-acento/40' : 'border-borde')}>{children}</div>}
+      </section>
+    );
+  }
   return (
     <section className="relative pl-12">
       <div
