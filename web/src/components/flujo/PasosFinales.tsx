@@ -295,6 +295,10 @@ export function PanelExportar({ a, d, estado, recargar }: { a: string; d: string
   useEffect(() => {
     api.sinPie(a, d).then(setSinPie).catch(() => {});
   }, [a, d, firmaSecciones, anadiendoPies]);
+  const [faltan, setFaltan] = useState<{ seccion: string; ruta: string; alt: string }[]>([]);
+  useEffect(() => {
+    api.imagenesQueFaltan(a, d).then(setFaltan).catch(() => {});
+  }, [a, d, firmaSecciones, estado?.visuales]);
   const cambiar = (c: Partial<OpcionesExportacion>) => {
     const n = { ...op, ...c };
     setOp(n);
@@ -374,6 +378,22 @@ export function PanelExportar({ a, d, estado, recargar }: { a: string; d: string
           >
             {anadiendoPies ? 'Añadiendo…' : 'Añadir pies con IA'}
           </Boton>
+        </div>
+      )}
+      {faltan.length > 0 && (
+        <div className="flex items-start gap-3 rounded-lg border border-aviso/40 bg-aviso/10 px-3 py-2 text-[12.5px]">
+          <AlertCircle className="mt-0.5 size-4 shrink-0 text-aviso" />
+          <div className="flex-1">
+            {faltan.length === 1 ? 'Falta el archivo de una imagen' : `Faltan los archivos de ${faltan.length} imágenes`}; se exportarán como
+            «Imagen pendiente»:
+            <ul className="mt-1 list-disc pl-4 text-texto-2">
+              {faltan.map((f) => (
+                <li key={f.seccion + f.ruta}>
+                  {f.alt || f.ruta} <span className="text-texto-3">({f.ruta}, en {f.seccion.replace(/\.md$/, '')})</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       )}
       {op.formato !== 'pdf' && (

@@ -10,6 +10,7 @@ import { ESCALA_DIAGRAMAS, PATRON_MERMAID, hashTexto } from '../shared/hash';
 import { anchoExportacion, dimensiones } from './imagenes';
 import { bloqueIndice, prepararEncabezados, retocar, saltoPagina } from './indiceDocumento';
 import { prepararPies } from './pies';
+import { ajustarAnchos } from './tablas';
 import { Almacen, ErrorUsuario, slug } from './store';
 import { ejecutarBinario, rutaPandoc } from './conversion';
 
@@ -90,6 +91,12 @@ export async function exportar(
         // Resto de imágenes (fotos, imágenes generadas): tamaño acotado, salvo que el texto ya lo indique
         .replace(/(!\[[^\]]*\]\(([^)\s]+)\))(?!\{)/g, (todo, img: string, ruta: string) => {
           if (/^https?:/.test(ruta) || ruta.startsWith('.exportacion/')) return todo;
+          // Imagen enlazada que no existe (p. ej. una captura que el agente dejó indicada):
+          // un aviso visible en lugar de que falle toda la exportación
+          if (!existsSync(path.join(dirDoc, decodeURIComponent(ruta)))) {
+            const alt = img.match(/^!\[([^\]]*)\]/)?.[1] || ruta;
+            return `*[Imagen pendiente: ${alt.replace(/[*_[\]]/g, '')} — falta el archivo ${ruta}]*`;
+          }
           const d = dimensiones(path.join(dirDoc, decodeURIComponent(ruta)));
           // Fotos e ilustraciones: se supone una resolución de 150 ppp
           return d ? `${img}{width=${anchoExportacion(d, 150)}cm}` : todo;
@@ -97,7 +104,7 @@ export async function exportar(
     );
     const salto = op.saltoSeccion ? SALTO[op.formato] : '';
     // Todas las imágenes, esquemas y tablas con pie (numerado en Word/ODT)
-    let md = prepararPies(partes.map((p) => p.trim()).join(`\n\n${salto}\n\n`), op.formato, textos, op.pies !== false);
+    let md = prepararPies(ajustarAnchos(partes.map((p) => p.trim()).join(`\n\n${salto}\n\n`)), op.formato, textos, op.pies !== false);
     if (op.formato === 'docx' || op.formato === 'odt') {
       // Índice ya relleno y numerado (el de Pandoc es un campo vacío hasta actualizarlo a mano)
       const r = prepararEncabezados(md, op.numerar);
@@ -266,6 +273,13 @@ function plantillaTypst(color: string, op: OpcionesExportacion): string {
   show figure: set block(above: 1.8em, below: 1.8em)
   set figure(gap: 0.8em)
   show table: it => align(center, it)
+  // Celdas sin justificar ni partir palabras; cabecera centrada y cuerpo a la izquierda
+  show table.cell: it => {
+    set par(justify: false)
+    set text(hyphenate: false)
+    set align(if it.y == 0 { center } else { left })
+    it
+  }
   show figure.where(kind: table): set figure.caption(position: bottom)
   show table.cell.where(y: 0): set text(weight: "bold")
   show outline: it => { it; pagebreak(weak: true) }

@@ -1002,6 +1002,17 @@ No descargues nada ni modifiques otros archivos. Escribe los resultados en \`${s
     return textos.flatMap((t) => elementosSinPie(t.texto).map((e) => ({ ...e, seccion: t.archivo })));
   }
 
+  /** Imágenes enlazadas en las secciones cuyo archivo no existe (p. ej. capturas que debe hacer el docente). */
+  async imagenesQueFaltan(asig: string, doc: string) {
+    const dir = this.almacen.dirDocumento(asig, doc);
+    const textos = await this.almacen.textoCompleto(asig, doc);
+    return textos.flatMap((t) =>
+      [...t.texto.matchAll(/!\[([^\]]*)\]\(([^)\s]+)\)/g)]
+        .filter(([, , ruta]) => !/^https?:/.test(ruta) && !existsSync(path.join(dir, decodeURIComponent(ruta))))
+        .map(([, alt, ruta]) => ({ seccion: t.archivo, ruta, alt })),
+    );
+  }
+
   async anadirPies(asig: string, doc: string) {
     if (this.ocupado('revision', asig, doc, undefined, 'pies')) throw new ErrorUsuario('Ya se están añadiendo los pies');
     const pendientes = await this.sinPie(asig, doc);

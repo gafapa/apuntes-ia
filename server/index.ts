@@ -368,6 +368,7 @@ export async function crearServidor(op: OpcionesServidor) {
     return { ok: true };
   });
   app.get(`${D}/pies`, async (req) => flujo.sinPie(params(req).a, params(req).d));
+  app.get(`${D}/imagenes-faltan`, async (req) => flujo.imagenesQueFaltan(params(req).a, params(req).d));
   app.post(`${D}/pies`, async (req) => flujo.anadirPies(params(req).a, params(req).d));
   app.post(`${D}/flujo/autoevaluacion`, async (req) => flujo.autoevaluacion(params(req).a, params(req).d, cuerpo(req).indicaciones));
 
