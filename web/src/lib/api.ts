@@ -140,6 +140,15 @@ export const api = {
   descartarResultado: (a: string, id: string, d?: string) => pedir('POST', `${d ? doc(a, d) : asig(a)}/busqueda-fuentes/${e(id)}/descartar`),
   limpiarBusqueda: (a: string, d?: string) => pedir('DELETE', `${d ? doc(a, d) : asig(a)}/busqueda-fuentes`),
 
+  indiceFuentes: (a: string, d?: string) =>
+    pedir<{ archivo: string; fragmentos: number; paginas?: number; estado: 'indexado' | 'sin-texto' | 'no-admitido' }[]>('GET', `${d ? doc(a, d) : asig(a)}/fuentes-indice`),
+  buscarEnFuentes: (a: string, consulta: string, d?: string) =>
+    pedir<{ archivo: string; pagina?: number; titulo?: string; texto: string; carpeta: string; puntuacion: number }[]>(
+      'POST',
+      `${d ? doc(a, d) : asig(a)}/fuentes-indice/buscar`,
+      { consulta },
+    ),
+
   trabajos: () => pedir<Trabajo[]>('GET', '/api/trabajos'),
   trabajo: (id: string) => pedir<Trabajo>('GET', `/api/trabajos/${e(id)}`),
   lanzar: (datos: { motor?: Motor; tarea: string; asignatura: string; documento?: string; seccion?: string }) =>

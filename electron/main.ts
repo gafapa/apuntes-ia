@@ -39,6 +39,8 @@ async function iniciar() {
       : path.join(__dirname, '..', 'resources-bin', { win32: 'win', darwin: 'mac' }[process.platform as string] ?? 'linux'),
     version: app.getVersion(),
     instalarActualizacion: () => autoUpdater.quitAndInstall(),
+    // El ejecutable de la app hace de Node para el servidor MCP de fuentes
+    mcpFuentes: { comando: process.execPath, args: [path.join(__dirname, 'mcp-fuentes.cjs')], env: { ELECTRON_RUN_AS_NODE: '1' } },
   });
 
   ventana = new BrowserWindow({

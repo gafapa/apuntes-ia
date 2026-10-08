@@ -5,6 +5,7 @@ import { api, urlDatos } from '../lib/api';
 import { useEstado } from '../lib/estado';
 import { Boton, BotonIcono, Entrada, confirmar, cx } from './ui';
 import { BuscadorFuentes } from './BuscadorFuentes';
+import { BuscadorIndice } from './BuscadorIndice';
 
 function tamano(b: number) {
   if (b < 1024) return `${b} B`;
@@ -28,8 +29,14 @@ export function GestorFuentes({ asignatura, documento, descripcion }: { asignatu
   const input = useRef<HTMLInputElement>(null);
   const version = versiones[`${asignatura}/${documento ?? ''}`];
 
+  const [indice, setIndice] = useState<Record<string, { fragmentos: number; paginas?: number; estado: string }>>({});
   const cargar = useCallback(() => {
     api.fuentes(asignatura, documento).then(setFuentes).catch(() => {});
+    // El índice puede tardar unos segundos en PDFs grandes
+    api
+      .indiceFuentes(asignatura, documento)
+      .then((l) => setIndice(Object.fromEntries(l.map((x) => [x.archivo, x]))))
+      .catch(() => {});
   }, [asignatura, documento]);
   useEffect(cargar, [cargar, version]);
 
@@ -92,6 +99,8 @@ export function GestorFuentes({ asignatura, documento, descripcion }: { asignatu
 
       <BuscadorFuentes asignatura={asignatura} documento={documento} onAnadida={cargar} />
 
+      {Object.values(indice).some((x) => x.estado === 'indexado') && <BuscadorIndice asignatura={asignatura} documento={documento} />}
+
       {fuentes.length > 6 && (
         <Entrada value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder={`Filtrar ${fuentes.length} fuentes…`} />
       )}
@@ -103,6 +112,24 @@ export function GestorFuentes({ asignatura, documento, descripcion }: { asignatu
               <a href={urlDatos(...base, f.nombre)} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-sm hover:text-acento">
                 {f.nombre}
               </a>
+              {indice[f.nombre] && (
+                <span
+                  className={cx('text-[11px]', indice[f.nombre].estado === 'indexado' ? 'text-ok' : 'text-texto-3')}
+                  title={
+                    indice[f.nombre].estado === 'indexado'
+                      ? 'Los agentes pueden buscar en este archivo sin leerlo entero'
+                      : indice[f.nombre].estado === 'sin-texto'
+                        ? 'No tiene texto extraíble (¿PDF escaneado?): los agentes tendrán que leerlo directamente'
+                        : 'Los agentes lo leen directamente (imágenes y otros formatos)'
+                  }
+                >
+                  {indice[f.nombre].estado === 'indexado'
+                    ? `${indice[f.nombre].paginas ? `${indice[f.nombre].paginas} págs. · ` : ''}indexado`
+                    : indice[f.nombre].estado === 'sin-texto'
+                      ? 'sin texto'
+                      : 'sin indexar'}
+                </span>
+              )}
               <span className="text-xs text-texto-3">{tamano(f.tamano)}</span>
               <BotonIcono titulo="Eliminar" className="opacity-0 group-hover:opacity-100" onClick={() => eliminar(f)}>
                 <Trash2 className="size-3.5" />

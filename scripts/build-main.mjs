@@ -1,6 +1,7 @@
-// Compila el proceso principal de Electron (con el servidor) a dist/main.cjs.
-// Las dependencias de node_modules no se empaquetan: electron-builder las incluye.
+// Compila el proceso principal de Electron (con el servidor) a dist/main.cjs y el servidor
+// MCP de fuentes. Las dependencias del principal no se empaquetan: electron-builder las incluye.
 import { build } from 'esbuild';
+import { compilarMcp } from './compilar-mcp.mjs';
 
 await build({
   entryPoints: ['electron/main.ts'],
@@ -13,3 +14,4 @@ await build({
   sourcemap: true,
   logLevel: 'info',
 });
+await compilarMcp();

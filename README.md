@@ -86,6 +86,19 @@ aunque siempre se puede escribir otra (las comunidades autónomas tienen materia
 - Idiomas: los oficiales de España (castellano, catalán, valenciano, gallego, euskera y
   aranés) más «Otro» libre.
 
+## Índice de fuentes (RAG) y consumo de tokens
+
+- Al subir o añadir una fuente se extrae su texto (PDF página a página con pdfjs; Word,
+  ODT, PowerPoint y webs con Pandoc), se trocea en fragmentos y se indexa con BM25
+  (`server/rag.ts`, caché en `fuentes/.indice/`).
+- Los agentes reciben un servidor MCP propio (`server/mcp-fuentes.ts` → `dist/mcp-fuentes.cjs`)
+  con `buscar_en_fuentes`, `listar_fuentes` y `leer_pagina`, en Claude y en Codex.
+- Los redactores reciben en el mensaje los fragmentos de las fuentes y del dossier
+  relevantes para su sección.
+- Claude se lanza solo con las herramientas necesarias, sin MCP ni ajustes globales y con
+  un prompt de sistema propio; Codex, sin las funciones que no se usan.
+- `APUNTES_SIN_RAG=1` desactiva la búsqueda en fuentes (para comparar consumos).
+
 ## Estructura
 
 | Carpeta | Contenido |

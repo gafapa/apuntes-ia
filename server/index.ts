@@ -16,8 +16,8 @@ import { abrirArchivo, abrirCarpeta, abrirTerminal, comandoInstalacion, comandoS
 import { cargarAjustes, guardarAjustes } from './ajustes';
 import { Flujo } from './flujo';
 import { exportar } from './exportar';
-import { asegurarTextos } from './conversion';
 import { Contador } from './tokens';
+import { buscar as buscarRag, indexar } from './rag';
 
 export interface OpcionesServidor {
   archivoAjustes: string; // dónde se guardan los ajustes (fuera de la carpeta de datos)
@@ -26,6 +26,8 @@ export interface OpcionesServidor {
   dirBin?: string; // Pandoc y Typst
   version?: string;
   dirTrabajos?: string; // dónde se guardan los trabajos de los agentes (por defecto, junto a los ajustes)
+  /** Cómo lanzar el servidor MCP de búsqueda en las fuentes (dist/mcp-fuentes.cjs). */
+  mcpFuentes?: { comando: string; args: string[]; env?: Record<string, string> };
   /** Reinicia la app instalando la actualización descargada (solo en la app empaquetada). */
   instalarActualizacion?: () => void;
   puerto?: number;
@@ -49,7 +51,7 @@ export async function crearServidor(op: OpcionesServidor) {
   refrescarMotores().catch(() => {});
   const motoresListos = () => new Set(motores.filter((m) => m.instalado && m.sesion).map((m) => m.motor));
 
-  const flujo = new Flujo({ almacen: () => almacen, cola, ajustes: () => ajustes, motoresListos, dirBin });
+  const flujo = new Flujo({ almacen: () => almacen, cola, ajustes: () => ajustes, motoresListos, dirBin, mcpFuentes: op.mcpFuentes });
   await cola.cargar(); // retoma los trabajos que seguían en marcha
 
   const app = Fastify({ logger: false, bodyLimit: 80 * 1024 * 1024 });
@@ -260,12 +262,13 @@ export async function crearServidor(op: OpcionesServidor) {
         await pipeline(parte.file, fs.createWriteStream(destino));
         guardados.push(path.basename(destino));
       }
-      if (dirBin) asegurarTextos(almacen.dirFuentes(a, d), dirBin).catch(() => {});
+      flujo.prepararFuentes(a, d).catch(() => {}); // extraer texto e indexar
       return { guardados };
     });
     app.delete(`${base}/:nombre`, async (req) => {
       const { a, d, nombre } = req.params as Partial<PD> & PA & { nombre: string };
       await almacen.eliminarFuente(a, nombre, d);
+      flujo.prepararFuentes(a, d).catch(() => {});
       return { ok: true };
     });
   }
@@ -366,6 +369,21 @@ export async function crearServidor(op: OpcionesServidor) {
   });
   app.post(`${D}/flujo/autoevaluacion`, async (req) => flujo.autoevaluacion(params(req).a, params(req).d, cuerpo(req).indicaciones));
 
+
+  // Índice de las fuentes (RAG): estado y búsqueda para el usuario
+  for (const base of ['/api/asignaturas/:a/fuentes-indice', '/api/asignaturas/:a/documentos/:d/fuentes-indice']) {
+    type P = { a: string; d?: string };
+    app.get(base, async (req) => {
+      const { a, d } = req.params as P;
+      await flujo.prepararFuentes(a, d);
+      return indexar(almacen.dirFuentes(a, d));
+    });
+    app.post(`${base}/buscar`, async (req) => {
+      const { a, d } = req.params as P;
+      const consulta = String((req.body as { consulta?: string })?.consulta ?? '');
+      return buscarRag(flujo.carpetasFuentes(a, d), consulta, 10);
+    });
+  }
 
   // Buscador de fuentes (asignatura o documento)
   for (const base of ['/api/asignaturas/:a/busqueda-fuentes', '/api/asignaturas/:a/documentos/:d/busqueda-fuentes']) {

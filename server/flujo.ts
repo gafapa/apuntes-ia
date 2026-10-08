@@ -34,6 +34,7 @@ import { AGENTES, construirPrompt } from './agents/agentes';
 import { extraerJson, insertarTrasAncla, sustituirFragmento, buscarFragmento, contarPalabras } from './texto';
 import { asegurarTextos } from './conversion';
 import { DESCRIPCION_TIPO, descargarFuente, guardarResultados, incorporarResultados, leerResultados } from './buscador';
+import { buscar as buscarRag, buscarEnTexto, formatear, hayIndice, indexar } from './rag';
 
 interface Dependencias {
   almacen: () => Almacen;
@@ -41,6 +42,7 @@ interface Dependencias {
   ajustes: () => Ajustes;
   motoresListos: () => Set<Motor>;
   dirBin?: string;
+  mcpFuentes?: { comando: string; args: string[]; env?: Record<string, string> };
 }
 
 interface Lanzamiento {
@@ -58,7 +60,7 @@ interface Lanzamiento {
   web?: boolean; // sobrescribe si el agente puede buscar en la web
   esfuerzo?: Esfuerzo; // sobrescribe el esfuerzo del agente para esta tarea
   /** Contenido que se incluye en el mensaje para que el agente no tenga que leerlo (ahorra tokens). */
-  incluir?: { dossier?: boolean; secciones?: string[]; glosario?: boolean };
+  incluir?: { dossier?: boolean; secciones?: string[]; glosario?: boolean; consulta?: string };
   post?: Postproceso;
 }
 
@@ -146,10 +148,16 @@ export class Flujo {
     await fs.mkdir(path.join(cwd, '.agentes'), { recursive: true });
     const motor = this.motorPara(l.agente, l.motor);
     const referencia = await this.contenidoReferencia(asignatura.id, documento?.id, l.incluir);
+    // Con fuentes indexadas, el agente recibe la herramienta de búsqueda en lugar de leer documentos enteros
+    const carpetas = this.carpetasFuentes(asignatura.id, documento?.id);
+    const conIndice = !!this.dep.mcpFuentes && (await hayIndice(carpetas).catch(() => false));
+    const avisoFuentes = conIndice
+      ? '\n\n## Material aportado\nEstá indexado. Para consultarlo usa las herramientas `buscar_en_fuentes` (fragmentos relevantes con archivo y página), `listar_fuentes` y `leer_pagina`. No leas los PDF ni documentos largos enteros: busca lo que necesites. Cita la fuente (archivo y página) cuando uses un dato.'
+      : '';
     const { sistema, prompt } = construirPrompt(
       this.instrucciones(l.agente),
       { asignatura, documento, secciones, seccionActiva: l.seccionActiva },
-      l.tarea + referencia,
+      l.tarea + avisoFuentes + referencia,
       l.indicaciones,
     );
     const personal = this.dep.ajustes().agentes[l.agente] ?? {};
@@ -169,6 +177,9 @@ export class Flujo {
       esfuerzo: l.esfuerzo ?? personal.esfuerzo ?? AGENTES[l.agente].esfuerzo,
       // El modelo elegido es del motor configurado; si se usa el otro motor, su modelo por defecto
       modelo: motor === (personal.motor ?? AGENTES[l.agente].motor) ? personal.modelo : undefined,
+      mcp: conIndice
+        ? { ...this.dep.mcpFuentes!, args: [...this.dep.mcpFuentes!.args, ...Object.entries(carpetas).map(([k, v]) => `${k}=${v}`)] }
+        : undefined,
       cwd,
       dirsExtra: documento ? [dirAsig] : [],
       post: l.post,
@@ -186,7 +197,17 @@ export class Flujo {
     const MAX_SECCIONES = 90_000;
     if (incluir.dossier) {
       const d = await this.almacen.leerArchivoDoc(asig, doc, 'investigacion.md');
-      if (d.trim()) {
+      // Dossier largo y tarea concreta: solo las partes relevantes (y siempre la lista de fuentes)
+      if (incluir.consulta && d.length > 14_000) {
+        const partes2 = buscarEnTexto(d, 'investigacion.md', incluir.consulta, 10);
+        const fuentes = d.match(/\n## Fuentes[\s\S]*$/)?.[0] ?? '';
+        partes.push(
+          '===== investigacion.md (solo las partes relevantes para esta tarea; el dossier completo está en investigacion.md) =====',
+          partes2.map((p) => (p.titulo ? `[${p.titulo}]\n${p.texto}` : p.texto)).join('\n\n[…]\n\n'),
+          fuentes.trim(),
+          '===== fin del extracto del dossier =====',
+        );
+      } else if (d.trim()) {
         partes.push(
           '===== investigacion.md =====',
           d.length > MAX_DOSSIER ? `${d.slice(0, MAX_DOSSIER)}\n[… recortado: lee investigacion.md si necesitas el resto]` : d,
@@ -204,6 +225,10 @@ export class Flujo {
       if (total <= MAX_SECCIONES) {
         for (const x of textos) partes.push(`===== secciones/${x.archivo} =====`, x.texto, `===== fin de secciones/${x.archivo} =====`);
       }
+    }
+    if (incluir.consulta) {
+      const r = await buscarRag(this.carpetasFuentes(asig, doc), incluir.consulta, 6).catch(() => []);
+      if (r.length) partes.push('===== Fragmentos del material aportado más relevantes para esta tarea =====', formatear(r), '===== fin de los fragmentos =====');
     }
     if (!partes.length) return '';
     return `\n\n## Contenido actual de los archivos (ya incluido: no hace falta que los leas)\n${partes.join('\n')}`;
@@ -229,10 +254,17 @@ export class Flujo {
     }
   }
 
-  private async prepararFuentes(asig: string, doc?: string) {
-    if (!this.dep.dirBin) return;
-    await asegurarTextos(this.almacen.dirFuentes(asig), this.dep.dirBin).catch(() => {});
-    if (doc) await asegurarTextos(this.almacen.dirFuentes(asig, doc), this.dep.dirBin).catch(() => {});
+  /** Extrae el texto de las fuentes y actualiza su índice de búsqueda. */
+  async prepararFuentes(asig: string, doc?: string) {
+    for (const dir of [this.almacen.dirFuentes(asig), ...(doc ? [this.almacen.dirFuentes(asig, doc)] : [])]) {
+      if (this.dep.dirBin) await asegurarTextos(dir, this.dep.dirBin).catch(() => {});
+      await indexar(dir).catch((e) => console.warn('No se pudo indexar', dir, e));
+    }
+  }
+
+  /** Carpetas de fuentes visibles desde un documento (o una asignatura). */
+  carpetasFuentes(asig: string, doc?: string): Record<string, string> {
+    return { asignatura: this.almacen.dirFuentes(asig), ...(doc ? { documento: this.almacen.dirFuentes(asig, doc) } : {}) };
   }
 
   // ---------------------------------------------------------------------------
@@ -323,7 +355,7 @@ Consulta el material aportado (\`fuentes/\`, \`../../fuentes/\`) y fuentes fiabl
       post: { tipo: 'investigacion', datos: { preguntas: pendientes.map((p) => p.id) } },
       tarea: tarea ?? `Elabora el dossier de investigación del documento y guárdalo en \`investigacion.md\`${existe ? ' (ya existe: amplíalo y mejóralo, conservando lo valioso)' : ''}.
 
-1. Lee todo el material aportado en \`fuentes/\` y \`../../fuentes/\` si lo hay (para .docx, .odt y .pptx usa su versión de texto en \`.texto/\`; los PDF e imágenes léelos directamente).
+1. Revisa el material aportado en \`fuentes/\` y \`../../fuentes/\` si lo hay. Si tienes la herramienta \`buscar_en_fuentes\`, úsala (empieza con \`listar_fuentes\`) en lugar de leer los documentos enteros; si no, lee los archivos (para .docx, .odt y .pptx usa su versión de texto en \`.texto/\`). Las imágenes míralas directamente.
 2. Busca en la web lo necesario para cubrir el objetivo del documento con rigor (entre 5 y 12 fuentes fiables).
 3. Estructura del dossier (en Markdown):
    - \`# Dossier: <título del documento>\`
@@ -553,7 +585,20 @@ Si el usuario te pide cambios después, vuelve a escribir el archivo completo co
           titulo: `Redactar «${s.titulo}»`,
           paso: 'redaccion',
           seccion: archivo,
-          incluir: { dossier: true, glosario: true, secciones: [archivo] },
+          incluir: {
+            dossier: true,
+            glosario: true,
+            secciones: [archivo],
+            // Para recuperar del dossier y de las fuentes solo lo relevante para esta sección
+            consulta: [
+              entrada?.titulo ?? s.titulo,
+              entrada?.objetivo,
+              ...(entrada?.contenidos ?? []),
+              ...aplanarApartados(entrada?.apartados ?? []),
+            ]
+              .filter(Boolean)
+              .join('. '),
+          },
           indicaciones,
           tarea: `Redacta la sección \`secciones/${archivo}\`${s.palabras > 40 ? ' (ya tiene contenido: mejóralo y complétalo sin perder lo valioso)' : ''}.
 
@@ -1186,6 +1231,10 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
     await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada', archivo: rel, credito });
     return encontrado ? 'Imagen descargada e insertada' : 'Imagen añadida al final de la sección';
   }
+}
+
+function aplanarApartados(l: Apartado[]): string[] {
+  return l.flatMap((a) => [a.titulo, ...aplanarApartados(a.apartados ?? [])]);
 }
 
 /** Respuesta a una pregunta dentro del dossier (apartado «### Pregunta: …»), si existe. */

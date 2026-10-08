@@ -1,0 +1,123 @@
+// Servidor MCP (stdio) que da a los agentes acceso al índice de las fuentes:
+// buscar fragmentos relevantes, listar las fuentes y leer una página concreta.
+// Lo lanzan Claude Code y Codex como proceso hijo. Argumentos: etiqueta=carpeta_de_fuentes ...
+import { buscar, formatear, leerPagina, listar } from './rag';
+
+const carpetas: Record<string, string> = {};
+for (const a of process.argv.slice(2)) {
+  const i = a.indexOf('=');
+  if (i > 0) carpetas[a.slice(0, i)] = a.slice(i + 1);
+}
+
+const HERRAMIENTAS = [
+  {
+    name: 'buscar_en_fuentes',
+    description:
+      'Busca en el material aportado (PDF, documentos, páginas guardadas) los fragmentos más relevantes para una consulta. ' +
+      'Úsala en lugar de leer documentos enteros. Devuelve cada fragmento con su archivo y página para citarlo.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        consulta: { type: 'string', description: 'Qué buscar: conceptos, términos o una pregunta' },
+        max: { type: 'number', description: 'Número de fragmentos (por defecto 6, máximo 15)' },
+        archivo: { type: 'string', description: 'Opcional: buscar solo en este archivo' },
+      },
+      required: ['consulta'],
+    },
+  },
+  {
+    name: 'listar_fuentes',
+    description: 'Lista las fuentes indexadas con su número de páginas y cómo empiezan.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'leer_pagina',
+    description: 'Devuelve el texto completo de una página de un PDF (o de todo el archivo si no es un PDF). Útil para ampliar un fragmento encontrado.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        archivo: { type: 'string' },
+        pagina: { type: 'number' },
+      },
+      required: ['archivo'],
+    },
+  },
+];
+
+async function llamar(nombre: string, args: Record<string, unknown>): Promise<string> {
+  if (nombre === 'buscar_en_fuentes') {
+    const r = await buscar(carpetas, String(args.consulta ?? ''), Math.min(15, Number(args.max) || 6), args.archivo ? String(args.archivo) : undefined);
+    return r.length ? formatear(r) : 'No se han encontrado fragmentos relevantes. Prueba con otros términos.';
+  }
+  if (nombre === 'listar_fuentes') {
+    const l = await listar(carpetas);
+    return l.length
+      ? l.map((f) => `- ${f.carpeta === 'asignatura' ? '../../fuentes/' : 'fuentes/'}${f.archivo}${f.paginas ? ` (${f.paginas} págs.)` : ''}: ${f.inicio}…`).join('\n')
+      : 'No hay fuentes indexadas.';
+  }
+  if (nombre === 'leer_pagina') {
+    const archivo = String(args.archivo ?? '').replace(/^(\.\.\/\.\.\/)?fuentes\//, '');
+    const texto = await leerPagina(carpetas, archivo, args.pagina === undefined ? undefined : Number(args.pagina));
+    return texto ? texto.slice(0, 20000) : 'No se ha encontrado esa página o archivo.';
+  }
+  throw new Error(`Herramienta desconocida: ${nombre}`);
+}
+
+function responder(id: unknown, result?: unknown, error?: { code: number; message: string }) {
+  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, ...(error ? { error } : { result }) }) + '\n');
+}
+
+let resto = '';
+let pendientes = 0;
+let finEntrada = false;
+const quizasSalir = () => finEntrada && pendientes === 0 && process.exit(0);
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', async (d: string) => {
+  resto += d;
+  const lineas = resto.split('\n');
+  resto = lineas.pop() ?? '';
+  for (const linea of lineas) {
+    if (!linea.trim()) continue;
+    let m: { id?: unknown; method?: string; params?: any };
+    try {
+      m = JSON.parse(linea);
+    } catch {
+      continue;
+    }
+    if (m.id === undefined) continue; // notificaciones (p. ej. notifications/initialized)
+    pendientes++;
+    try {
+      switch (m.method) {
+        case 'initialize':
+          responder(m.id, {
+            protocolVersion: m.params?.protocolVersion ?? '2025-06-18',
+            capabilities: { tools: {} },
+            serverInfo: { name: 'fuentes', version: '1.0.0' },
+          });
+          break;
+        case 'ping':
+          responder(m.id, {});
+          break;
+        case 'tools/list':
+          responder(m.id, { tools: HERRAMIENTAS });
+          break;
+        case 'tools/call': {
+          const texto = await llamar(m.params?.name, m.params?.arguments ?? {});
+          responder(m.id, { content: [{ type: 'text', text: texto }] });
+          break;
+        }
+        default:
+          responder(m.id, undefined, { code: -32601, message: `Método no admitido: ${m.method}` });
+      }
+    } catch (e) {
+      responder(m.id, { content: [{ type: 'text', text: `Error: ${(e as Error).message}` }], isError: true });
+    } finally {
+      pendientes--;
+      quizasSalir();
+    }
+  }
+});
+process.stdin.on('end', () => {
+  finEntrada = true;
+  quizasSalir();
+});

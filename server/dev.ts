@@ -5,6 +5,8 @@
 import os from 'node:os';
 import path from 'node:path';
 import { crearServidor } from './index';
+// @ts-expect-error: script de compilación en JavaScript
+import { compilarMcp } from '../scripts/compilar-mcp.mjs';
 
 /** Carpeta de ajustes de Electron (app.getPath('userData')) para «Apuntes IA». */
 function carpetaUsuarioElectron() {
@@ -18,17 +20,19 @@ const real = process.env.APUNTES_REAL === '1';
 const datos = process.env.APUNTES_DATOS ?? path.join(os.homedir(), 'Documents', real ? 'Apuntes IA' : 'Apuntes IA (desarrollo)');
 const archivoAjustes = real ? path.join(carpetaUsuarioElectron(), 'ajustes.json') : path.join(datos, '.ajustes-dev.json');
 
-crearServidor({
+compilarMcp().then(() => crearServidor({
   archivoAjustes,
   carpetaDatosPorDefecto: datos,
   puerto: Number(process.env.APUNTES_PUERTO ?? 4317),
   dirBin: path.resolve('resources-bin', { win32: 'win', darwin: 'mac' }[process.platform as string] ?? 'linux'),
   version: real ? 'en vivo' : 'desarrollo',
   dirTrabajos: real ? undefined : path.join(datos, '.trabajos'),
-}).catch((e) => {
+  // APUNTES_SIN_RAG=1 desactiva la búsqueda en fuentes (para comparar el consumo de tokens)
+  mcpFuentes: process.env.APUNTES_SIN_RAG ? undefined : { comando: process.execPath, args: [path.resolve('dist/mcp-fuentes.cjs')] },
+})).catch((e: any) => {
   console.error(e?.code === 'EADDRINUSE' ? 'El puerto 4317 está ocupado: ya hay otro servidor de Apuntes IA abierto.' : e);
   process.exit(1);
-}).then((servidor) => {
+}).then((servidor: Awaited<ReturnType<typeof crearServidor>> | void) => {
   if (!servidor) return;
   console.log(`Servidor en ${servidor.url} · ajustes en ${archivoAjustes}`);
   // Al reiniciarse (tsx watch) o cerrarse, se cierran los agentes; se relanzan al arrancar de nuevo

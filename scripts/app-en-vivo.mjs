@@ -5,6 +5,7 @@
 // Usa los datos y ajustes reales de la app instalada (no pueden estar abiertas las dos a la vez).
 import { spawn } from 'node:child_process';
 import { build } from 'esbuild';
+import { compilarMcp } from './compilar-mcp.mjs';
 
 const URL_VITE = 'http://localhost:5173';
 const procesos = [];
@@ -64,6 +65,7 @@ await build({
   sourcemap: true,
   logLevel: 'warning',
 });
+await compilarMcp();
 
 // 2. Servidor con recarga automática (datos reales) y 3. interfaz con Vite
 lanzar('servidor', npx, ['tsx', 'watch', '--clear-screen=false', 'server/dev.ts'], { APUNTES_REAL: '1' });

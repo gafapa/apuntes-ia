@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, ChevronDown, CircleStop, Eraser, Globe, FileEdit, Loader2, PanelRightClose, PanelRightOpen, Send, Sparkles, Wrench } from 'lucide-react';
+import { Bot, ChevronDown, CircleStop, Eraser, Globe, FileEdit, Loader2, PanelRightClose, PanelRightOpen, Search, Send, Sparkles, Wrench } from 'lucide-react';
 import type { Motor, Trabajo } from '../../../shared/tipos';
 import { api } from '../lib/api';
 import { useEstado } from '../lib/estado';
@@ -335,6 +335,7 @@ function IconoEvento({ texto, tipo }: { texto: string; tipo: string }) {
   const c = 'mt-0.5 size-3.5 shrink-0';
   if (tipo === 'estado') return <span className={cx(c, 'flex items-center justify-center')}><span className="size-1.5 rounded-full bg-texto-3" /></span>;
   if (/^Buscando en la web|^Consultando/.test(texto)) return <Globe className={cx(c, 'text-sky-500')} />;
+  if (/^Buscando en tus fuentes|^Repasando la lista de fuentes/.test(texto)) return <Search className={cx(c, 'text-ok')} />;
   if (/^(Escribiendo|Editando|Modificando)/.test(texto)) return <FileEdit className={cx(c, 'text-acento')} />;
   return <Wrench className={cx(c, 'text-texto-3')} />;
 }

@@ -47,7 +47,14 @@ export interface PeticionTrabajo {
   web?: boolean;
   esfuerzo?: 'low' | 'medium' | 'high';
   modelo?: string;
+  /** Servidor MCP de búsqueda en las fuentes (si hay fuentes indexadas). */
+  mcp?: { comando: string; args: string[]; env?: Record<string, string> };
 }
+
+const HERRAMIENTAS_MCP = ['buscar_en_fuentes', 'listar_fuentes', 'leer_pagina'];
+
+/** Valor de cadena para TOML (comillas literales: sin escapes, válidas para rutas de Windows). */
+const toml = (s: string) => (s.includes("'") ? JSON.stringify(s) : `'${s}'`);
 
 /** Funciones de Codex que los agentes de apuntes no usan y que añaden miles de tokens a cada petición. */
 const CODEX_SIN_USAR = ['apps', 'browser_use', 'computer_use', 'memories', 'plugins', 'multi_agent', 'goals', 'hooks'];
@@ -357,6 +364,8 @@ export class Cola extends EventEmitter {
     // hooks y skills globales del usuario y con un prompt de sistema propio y corto
     // (medido: un «hola» pasa de ~21.000 a ~6.500 tokens de entrada con Claude).
     const herramientas = ['Read', 'Write', 'Edit', 'Glob', 'Grep', ...(p.web ? ['WebSearch', 'WebFetch'] : [])].join(',');
+    const permitidas = [herramientas, ...(p.mcp ? HERRAMIENTAS_MCP.map((h) => `mcp__fuentes__${h}`) : [])].join(',');
+    const mcpClaude = JSON.stringify({ mcpServers: p.mcp ? { fuentes: { command: p.mcp.comando, args: p.mcp.args, env: p.mcp.env ?? {} } } : {} });
     const archivoSistema = this.ruta(t.id, 'sistema.txt');
     if (p.motor === 'claude' && p.sistema) fs.writeFileSync(archivoSistema, p.sistema, 'utf8');
     const args =
@@ -367,8 +376,8 @@ export class Cola extends EventEmitter {
             '--verbose',
             '--permission-mode', 'acceptEdits',
             '--tools', herramientas,
-            '--allowedTools', herramientas,
-            '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
+            '--allowedTools', permitidas,
+            '--strict-mcp-config', '--mcp-config', mcpClaude,
             '--setting-sources', 'project,local',
             '--disable-slash-commands',
             '--no-chrome',
@@ -385,6 +394,15 @@ export class Cola extends EventEmitter {
             '-s', 'workspace-write',
             '-C', p.cwd,
             ...CODEX_SIN_USAR.flatMap((f) => ['--disable', f]),
+            ...(p.mcp
+              ? [
+                  '-c', `mcp_servers.fuentes.command=${toml(p.mcp.comando)}`,
+                  '-c', `mcp_servers.fuentes.args=[${p.mcp.args.map(toml).join(',')}]`,
+                  // Las herramientas de fuentes solo leen: se aprueban sin preguntar (en exec no hay a quién)
+                  '-c', `mcp_servers.fuentes.default_tools_approval_mode="approve"`,
+                  ...(p.mcp.env ? ['-c', `mcp_servers.fuentes.env={${Object.entries(p.mcp.env).map(([k, v]) => `${k}=${toml(v)}`).join(',')}}`] : []),
+                ]
+              : []),
             ...(p.esfuerzo ? ['-c', `model_reasoning_effort=${p.esfuerzo}`] : []),
             ...(p.modelo ? ['-m', p.modelo] : []),
             ...(p.dirsExtra ?? []).flatMap((d) => ['--add-dir', d]),
@@ -587,6 +605,7 @@ ${prompt}` : prompt;
       case 'item.started':
         if (item?.type === 'command_execution') this.evento(t, 'herramienta', `Ejecutando: ${recortar(item.command, 120)}`, sil);
         else if (item?.type === 'web_search') this.evento(t, 'herramienta', `Buscando en la web: ${item.query ?? ''}`, sil);
+        else if (item?.type === 'mcp_tool_call') this.evento(t, 'herramienta', describirHerramienta(`mcp__${item.server}__${item.tool}`, item.arguments ?? {}), sil);
         return;
       case 'item.completed':
         if (item?.type === 'agent_message' && item.text?.trim()) {
@@ -654,6 +673,12 @@ function describirHerramienta(nombre: string, input: any): string {
       return `Consultando ${recortar(input.url, 100)}`;
     case 'TodoWrite':
       return 'Planificando tareas';
+    case 'mcp__fuentes__buscar_en_fuentes':
+      return `Buscando en tus fuentes: ${recortar(input.consulta, 90)}`;
+    case 'mcp__fuentes__listar_fuentes':
+      return 'Repasando la lista de fuentes';
+    case 'mcp__fuentes__leer_pagina':
+      return `Leyendo ${nombreCorto(input.archivo)}${input.pagina ? `, pág. ${input.pagina}` : ''}`;
     default:
       return `Usando ${nombre}`;
   }
