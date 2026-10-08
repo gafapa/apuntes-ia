@@ -1,4 +1,5 @@
 import type {
+  MezclaVisuales,
   BusquedaImagenes,
   ResultadoImagen,
   ImagenFallida,
@@ -121,8 +122,8 @@ export const api = {
   decidirSugerencias: (a: string, d: string, ids: string[], decision: 'aceptar' | 'rechazar', propuesta?: string) =>
     pedir<{ aplicadas: number; fallidas: number }>('POST', `${doc(a, d)}/flujo/sugerencias/${decision}`, { ids, propuesta }),
   limpiarSugerencias: (a: string, d: string) => pedir('DELETE', `${doc(a, d)}/flujo/sugerencias`),
-  proponerVisuales: (a: string, d: string, archivos?: string[], indicaciones?: string) =>
-    pedir<Trabajo>('POST', `${doc(a, d)}/flujo/visuales`, { archivos, indicaciones }),
+  proponerVisuales: (a: string, d: string, archivos?: string[], indicaciones?: string, mezcla?: MezclaVisuales) =>
+    pedir<Trabajo>('POST', `${doc(a, d)}/flujo/visuales`, { archivos, indicaciones, mezcla }),
   editarPropuesta: (a: string, d: string, id: string, cambios: Partial<PropuestaVisual>) =>
     pedir<PropuestaVisual>('PUT', `${doc(a, d)}/flujo/visuales/${e(id)}`, cambios),
   generarVisual: (a: string, d: string, id: string, indicaciones?: string) =>

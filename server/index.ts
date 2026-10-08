@@ -8,7 +8,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { WebSocket } from 'ws';
-import type { Ajustes, EstadoMotor, Indice, MensajeWS, Motor, OpcionesExportacion, PropuestaVisual, TipoBusqueda, TipoRevision } from '../shared/tipos';
+import type { Ajustes, EstadoMotor, Indice, MensajeWS, MezclaVisuales, Motor, OpcionesExportacion, PropuestaVisual, TipoBusqueda, TipoRevision } from '../shared/tipos';
 import { Almacen, ErrorUsuario } from './store';
 import { Cola } from './agents/cola';
 import { AGENTES } from './agents/agentes';
@@ -387,7 +387,7 @@ export async function crearServidor(op: OpcionesServidor) {
     return { ok: true };
   });
   app.post(`${D}/flujo/visuales`, async (req) =>
-    flujo.proponerVisuales(params(req).a, params(req).d, cuerpo(req).archivos, cuerpo(req).indicaciones),
+    flujo.proponerVisuales(params(req).a, params(req).d, cuerpo(req).archivos, cuerpo(req).indicaciones, (req.body as { mezcla?: MezclaVisuales })?.mezcla),
   );
   app.put(`${D}/flujo/visuales/:id`, async (req) =>
     flujo.editarPropuesta(params(req).a, params(req).d, (req.params as { id: string }).id, req.body as Partial<PropuestaVisual>),

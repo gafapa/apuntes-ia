@@ -22,6 +22,7 @@ import type {
   ResultadoBusqueda,
   TipoBusqueda,
   PropuestaVisual,
+  MezclaVisuales,
   ImagenFallida,
   Sugerencia,
   TipoRevision,
@@ -731,7 +732,7 @@ Si el usuario te responde pidiendo cambios, vuelve a escribir el archivo complet
   // ---------------------------------------------------------------------------
   // 5. Visuales: el director propone, el usuario aprueba y el ilustrador genera
 
-  async proponerVisuales(asig: string, doc: string, archivos?: string[], indicaciones?: string) {
+  async proponerVisuales(asig: string, doc: string, archivos?: string[], indicaciones?: string, mezcla: MezclaVisuales = 'equilibrado') {
     if (this.ocupado('visuales', asig, doc, undefined, 'director')) throw new ErrorUsuario('Ya se están buscando huecos para visuales');
     const secciones = (await this.almacen.listarSecciones(asig, doc)).filter(
       (s) => (!archivos?.length || archivos.includes(s.archivo)) && !ARCHIVO_AUTOEVALUACION.test(s.archivo),
@@ -769,6 +770,13 @@ NO modifiques las secciones. Escribe tus propuestas en \`${salida}\` con este JS
   ]
 }
 
+${
+  {
+    imagenes: 'Reparto pedido por el usuario: MÁS IMÁGENES. La mayoría de las propuestas deben ser imágenes reales (imagen-web, o imagen-ia si lo que hay que mostrar no existe); propón diagramas solo para procesos que no se entiendan sin ellos.',
+    equilibrado: 'Reparto pedido por el usuario: EQUILIBRADO. Aproximadamente la mitad imágenes reales y la mitad esquemas, según lo que pida cada contenido.',
+    esquemas: 'Reparto pedido por el usuario: MÁS ESQUEMAS. La mayoría deben ser diagramas; propón imágenes solo cuando haya que ver algo real.',
+  }[mezcla] ?? ''
+}
 Como máximo 2 o 3 por sección, y solo donde aporten. Si el usuario te responde pidiendo cambios, vuelve a escribir el archivo completo.`,
       post: { tipo: 'visuales', datos: { salida, conCodex, archivos: secciones.map((s) => s.archivo) } },
     });

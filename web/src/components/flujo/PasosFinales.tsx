@@ -17,7 +17,7 @@ import {
   Wand2,
   X,
 } from 'lucide-react';
-import type { EstadoFlujo, ImagenFallida, OpcionesExportacion, PropuestaVisual, TipoVisual, Trabajo } from '../../../../shared/tipos';
+import type { EstadoFlujo, ImagenFallida, MezclaVisuales, OpcionesExportacion, PropuestaVisual, TipoVisual, Trabajo } from '../../../../shared/tipos';
 import { api } from '../../lib/api';
 import { useEstado } from '../../lib/estado';
 import { exportarDocumento } from '../../lib/exportacion';
@@ -48,6 +48,19 @@ export function PasoVisuales({ a, d, estado, trabajos, recargar }: Props) {
   const insertadas = estado.visuales.filter((p) => p.estado === 'insertada');
   const titulos = useMemo(() => new Map(estado.secciones.map((s) => [s.archivo, s.titulo])), [estado.secciones]);
   const listas = propuestas.filter((p) => p.estado === 'propuesta' || p.estado === 'error');
+  const [mezcla, setMezcla] = useState<MezclaVisuales>(() => {
+    try {
+      return (localStorage.getItem('mezclaVisuales') as MezclaVisuales) || 'equilibrado';
+    } catch {
+      return 'equilibrado';
+    }
+  });
+  const elegirMezcla = (m: MezclaVisuales) => {
+    setMezcla(m);
+    try {
+      localStorage.setItem('mezclaVisuales', m);
+    } catch {}
+  };
 
   const generarTodas = async () => {
     for (const p of listas) {
@@ -65,14 +78,36 @@ export function PasoVisuales({ a, d, estado, trabajos, recargar }: Props) {
       trabajando={director.length > 0 || propuestas.some((p) => p.estado === 'generando')}
       descripcion="El director visual detecta dónde ayuda un apoyo visual y decide de qué tipo. Tú apruebas y el ilustrador lo crea."
       acciones={
-        <BotonAgente
-          texto="Buscar dónde hacen falta"
-          variante={propuestas.length ? 'secundario' : 'primario'}
-          icono={<ImagePlus className="size-4" />}
-          disabled={director.length > 0 || !estado.secciones.length}
-          onLanzar={(ind) => api.proponerVisuales(a, d, undefined, ind)}
-          ayudaIndicaciones="Por ejemplo: prioriza mapas conceptuales, nada de imágenes IA, como mucho 5 visuales…"
-        />
+        <div className="flex items-center gap-2">
+          <div className="flex gap-0.5 rounded-lg bg-panel-2 p-0.5" title="Qué tipo de visuales debe proponer el director visual">
+            {(
+              [
+                ['imagenes', 'Más imágenes'],
+                ['equilibrado', 'Equilibrado'],
+                ['esquemas', 'Más esquemas'],
+              ] as [MezclaVisuales, string][]
+            ).map(([id, texto]) => (
+              <button
+                key={id}
+                onClick={() => elegirMezcla(id)}
+                className={cx(
+                  'rounded-md px-2 py-1 text-[11.5px] transition-colors cursor-pointer',
+                  mezcla === id ? 'bg-panel text-texto shadow-sm' : 'text-texto-3 hover:text-texto',
+                )}
+              >
+                {texto}
+              </button>
+            ))}
+          </div>
+          <BotonAgente
+            texto="Buscar dónde hacen falta"
+            variante={propuestas.length ? 'secundario' : 'primario'}
+            icono={<ImagePlus className="size-4" />}
+            disabled={director.length > 0 || !estado.secciones.length}
+            onLanzar={(ind) => api.proponerVisuales(a, d, undefined, ind, mezcla)}
+            ayudaIndicaciones="Por ejemplo: nada de imágenes IA, fotos de los equipos reales, como mucho 5 visuales…"
+          />
+        </div>
       }
     >
       <div className="space-y-3">
