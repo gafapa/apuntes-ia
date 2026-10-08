@@ -8,7 +8,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { WebSocket } from 'ws';
-import type { Ajustes, EstadoMotor, Indice, MensajeWS, MezclaVisuales, Motor, OpcionesExportacion, PropuestaVisual, TipoBusqueda, TipoRevision } from '../shared/tipos';
+import type { Ajustes, EstadoMotor, HerramientasChat, Indice, MensajeWS, MezclaVisuales, Motor, OpcionesExportacion, PropuestaVisual, TipoBusqueda, TipoRevision } from '../shared/tipos';
 import { Almacen, ErrorUsuario } from './store';
 import { Cola } from './agents/cola';
 import { AGENTES } from './agents/agentes';
@@ -309,8 +309,8 @@ export async function crearServidor(op: OpcionesServidor) {
   });
 
   app.post('/api/trabajos', async (req) => {
-    const b = req.body as { motor?: Motor; tarea: string; asignatura: string; documento?: string; seccion?: string };
-    return flujo.chat(b.asignatura, b.documento, b.tarea ?? '', b.motor, b.seccion);
+    const b = req.body as { motor?: Motor; tarea: string; asignatura: string; documento?: string; seccion?: string; herramientas?: HerramientasChat };
+    return flujo.chat(b.asignatura, b.documento, b.tarea ?? '', b.motor, b.seccion, b.herramientas);
   });
 
   app.get('/api/uso', async () => cola.uso);

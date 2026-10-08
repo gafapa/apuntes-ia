@@ -218,6 +218,13 @@ export interface Sugerencia {
   creado: string;
 }
 
+/** Herramientas que el usuario activa para una petición libre desde el panel de agentes. */
+export interface HerramientasChat {
+  web?: boolean;
+  imagenes?: boolean; // museos, bibliotecas y archivos
+  fuentes?: boolean; // búsqueda en el material aportado
+}
+
 /** Reparto entre imágenes reales y esquemas que se pide al director visual. */
 export type MezclaVisuales = 'imagenes' | 'equilibrado' | 'esquemas';
 

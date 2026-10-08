@@ -1,18 +1,34 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, ChevronDown, CircleStop, Eraser, Globe, FileEdit, Loader2, PanelRightClose, PanelRightOpen, Search, Send, Sparkles, Wrench } from 'lucide-react';
-import type { Motor, Trabajo } from '../../../shared/tipos';
+import { Bot, Check, ChevronDown, CircleStop, Eraser, Globe, FileEdit, Landmark, Library, Loader2, PanelRightClose, PanelRightOpen, Search, Send, Sparkles, Wrench } from 'lucide-react';
+import type { HerramientasChat, Motor, Trabajo } from '../../../shared/tipos';
 import { api } from '../lib/api';
 import { useEstado } from '../lib/estado';
 import { renderizar } from '../lib/markdown';
 import { BotonIcono, Insignia, cx } from './ui';
 import { ParTokens } from './ContadorTokens';
 
-const SUGERENCIAS = [
-  '¿Qué le falta a este documento para estar completo?',
-  'Añade un ejemplo práctico a la sección abierta',
-  'Haz un resumen en forma de esquema al final de la sección abierta',
-  'Revisa que las secciones no repitan contenidos entre sí',
+/** Herramientas que se pueden activar para una petición desde el panel. */
+const HERRAMIENTAS: { id: keyof HerramientasChat; nombre: string; corto: string; ayuda: string; icono: typeof Globe; porDefecto: boolean }[] = [
+  { id: 'web', nombre: 'Buscar en la web', corto: 'Web', ayuda: 'Puede buscar y consultar páginas web', icono: Globe, porDefecto: true },
+  {
+    id: 'imagenes',
+    nombre: 'Imágenes de museos y bibliotecas',
+    corto: 'Imágenes',
+    ayuda: 'Busca imágenes con licencia libre (Europeana, Met, Commons…) y las inserta con su crédito',
+    icono: Landmark,
+    porDefecto: false,
+  },
+  { id: 'fuentes', nombre: 'Buscar en tus fuentes', corto: 'Fuentes', ayuda: 'Consulta el material que has aportado (si está indexado)', icono: Library, porDefecto: true },
 ];
+
+function leerHerramientas(): Required<HerramientasChat> {
+  const base = Object.fromEntries(HERRAMIENTAS.map((h) => [h.id, h.porDefecto])) as Required<HerramientasChat>;
+  try {
+    return { ...base, ...JSON.parse(localStorage.getItem('herramientasChat') ?? '{}') };
+  } catch {
+    return base;
+  }
+}
 
 export function PanelAgentes() {
   const { seleccion, trabajos, ajustes, motores, seccionActiva, avisar } = useEstado();
@@ -21,6 +37,22 @@ export function PanelAgentes() {
   const [motor, setMotor] = useState<Motor>();
   const [enviando, setEnviando] = useState(false);
   const [soloEste, setSoloEste] = useState(true);
+  const [herramientas, setHerramientas] = useState(leerHerramientas);
+  const [menuHerramientas, setMenuHerramientas] = useState(false);
+  const cajaHerramientas = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuHerramientas) return;
+    const fuera = (e: MouseEvent) => !cajaHerramientas.current?.contains(e.target as Node) && setMenuHerramientas(false);
+    document.addEventListener('mousedown', fuera);
+    return () => document.removeEventListener('mousedown', fuera);
+  }, [menuHerramientas]);
+  const alternarHerramienta = (id: keyof HerramientasChat) => {
+    const n = { ...herramientas, [id]: !herramientas[id] };
+    setHerramientas(n);
+    try {
+      localStorage.setItem('herramientasChat', JSON.stringify(n));
+    } catch {}
+  };
   const motorElegido = motor ?? ajustes?.motorPorDefecto ?? 'claude';
   const disponible = (m: Motor) => motores?.find((x) => x.motor === m)?.instalado ?? true;
 
@@ -51,6 +83,7 @@ export function PanelAgentes() {
         asignatura: seleccion.asignatura,
         documento: seleccion.documento,
         seccion: seccionActiva,
+        herramientas,
       });
       setTarea('');
     } catch (e) {
@@ -93,7 +126,7 @@ export function PanelAgentes() {
 
       {/* Petición */}
       <div className="border-b border-borde p-3">
-        <div className="rounded-xl border border-borde bg-fondo focus-within:border-acento focus-within:ring-3 focus-within:ring-acento/15">
+        <div className="relative rounded-xl border border-borde bg-fondo focus-within:border-acento focus-within:ring-3 focus-within:ring-acento/15">
           <textarea
             value={tarea}
             onChange={(e) => setTarea(e.target.value)}
@@ -124,6 +157,48 @@ export function PanelAgentes() {
                 </button>
               ))}
             </div>
+            <div ref={cajaHerramientas}>
+              <button
+                onClick={() => setMenuHerramientas(!menuHerramientas)}
+                title="Herramientas que puede usar el agente en esta petición"
+                className={cx(
+                  'flex h-6 items-center gap-1 rounded-md px-1.5 text-[12px] transition-colors cursor-pointer',
+                  menuHerramientas ? 'bg-panel-2 text-texto' : 'text-texto-3 hover:bg-panel-2 hover:text-texto',
+                )}
+              >
+                <Wrench className="size-3.5" />
+                {HERRAMIENTAS.filter((h) => herramientas[h.id]).map((h) => (
+                  <h.icono key={h.id} className="size-3.5 text-acento" aria-label={h.corto} />
+                ))}
+              </button>
+              {menuHerramientas && (
+                <div className="aparecer absolute top-full right-0 left-0 z-30 mt-1.5 rounded-xl border border-borde bg-panel p-1.5 shadow-suave">
+                  <div className="px-2 pt-1 pb-1.5 text-[11px] font-semibold tracking-wider text-texto-3 uppercase">Herramientas</div>
+                  {HERRAMIENTAS.map((h) => (
+                    <button
+                      key={h.id}
+                      onClick={() => alternarHerramienta(h.id)}
+                      className="flex w-full items-start gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-panel-2 cursor-pointer"
+                    >
+                      <h.icono className={cx('mt-0.5 size-4 shrink-0', herramientas[h.id] ? 'text-acento' : 'text-texto-3')} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13px]">{h.nombre}</span>
+                        <span className="block text-[11.5px] leading-snug text-texto-3">{h.ayuda}</span>
+                      </span>
+                      <span
+                        className={cx(
+                          'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border',
+                          herramientas[h.id] ? 'border-acento bg-acento text-white' : 'border-borde',
+                        )}
+                      >
+                        {herramientas[h.id] && <Check className="size-3" />}
+                      </span>
+                    </button>
+                  ))}
+                  <p className="px-2 pt-1 pb-0.5 text-[11px] leading-snug text-texto-3">Leer y editar los apuntes está siempre disponible. Cada herramienta añade algo de consumo de tokens.</p>
+                </div>
+              )}
+            </div>
             {seccionActiva && (
               <span className="truncate text-[11px] text-texto-3" title="La IA sabe qué sección tienes abierta">
                 · {seccionActiva.replace(/^\d+-/, '').replace(/\.md$/, '')}
@@ -139,20 +214,6 @@ export function PanelAgentes() {
             </button>
           </div>
         </div>
-        {!tarea && seleccion.documento && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {SUGERENCIAS.map((s) => (
-              <button
-                key={s}
-                onClick={() => setTarea(s)}
-                className="max-w-full truncate rounded-full border border-borde px-2.5 py-1 text-[11.5px] text-texto-2 transition-colors hover:border-acento hover:text-acento cursor-pointer"
-                title={s}
-              >
-                {s.length > 48 ? s.slice(0, 46) + '…' : s}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       <div className="flex items-center justify-between px-4 pt-3 pb-1">

@@ -23,6 +23,7 @@ import type {
   TipoBusqueda,
   PropuestaVisual,
   MezclaVisuales,
+  HerramientasChat,
   ImagenFallida,
   Sugerencia,
   TipoRevision,
@@ -68,6 +69,8 @@ interface Lanzamiento {
   seccionActiva?: string;
   web?: boolean; // sobrescribe si el agente puede buscar en la web
   imagenes?: boolean; // herramienta de búsqueda de imágenes en museos y bibliotecas
+  guardarImagenes?: boolean; // y la de descargarlas a recursos/ (para peticiones libres)
+  fuentes?: boolean; // false: sin la búsqueda en las fuentes aunque estén indexadas
   esfuerzo?: Esfuerzo; // sobrescribe el esfuerzo del agente para esta tarea
   /** Contenido que se incluye en el mensaje para que el agente no tenga que leerlo (ahorra tokens). */
   incluir?: { dossier?: boolean; secciones?: string[]; glosario?: boolean; consulta?: string };
@@ -160,7 +163,7 @@ export class Flujo {
     const referencia = await this.contenidoReferencia(asignatura.id, documento?.id, l.incluir);
     // Con fuentes indexadas, el agente recibe la herramienta de búsqueda en lugar de leer documentos enteros
     const carpetas = this.carpetasFuentes(asignatura.id, documento?.id);
-    const conIndice = !!this.dep.mcpFuentes && (await hayIndice(carpetas).catch(() => false));
+    const conIndice = l.fuentes !== false && !!this.dep.mcpFuentes && (await hayIndice(carpetas).catch(() => false));
     const avisoFuentes = conIndice
       ? '\n\n## Material aportado\nEstá indexado. Para consultarlo usa las herramientas `buscar_en_fuentes` (fragmentos relevantes con archivo y página), `listar_fuentes` y `leer_pagina`. No leas los PDF ni documentos largos enteros: busca lo que necesites. Cita la fuente (archivo y página) cuando uses un dato.'
       : '';
@@ -194,6 +197,7 @@ export class Flujo {
               args: [
                 ...this.dep.mcpFuentes.args,
                 ...(l.imagenes ? ['--imagenes'] : []),
+                ...(l.imagenes && l.guardarImagenes ? [`--recursos=${path.join(cwd, 'recursos')}`] : []),
                 ...(conIndice ? Object.entries(carpetas).map(([k, v]) => `${k}=${v}`) : []),
               ],
               env: { ...this.dep.mcpFuentes.env, ...(l.imagenes ? { APUNTES_CLAVES_IMAGENES: JSON.stringify(this.dep.ajustes().claves ?? {}) } : {}) },
@@ -313,7 +317,14 @@ export class Flujo {
   // ---------------------------------------------------------------------------
   // Chat libre con el orquestador
 
-  async chat(asig: string, doc: string | undefined, tarea: string, motor?: Motor, seccionActiva?: string) {
+  async chat(
+    asig: string,
+    doc: string | undefined,
+    tarea: string,
+    motor?: Motor,
+    seccionActiva?: string,
+    herramientas: HerramientasChat = {},
+  ) {
     if (!tarea.trim()) throw new ErrorUsuario('Escribe qué quieres que haga');
     let estado = '';
     if (doc) {
@@ -338,6 +349,11 @@ export class Flujo {
       paso: 'chat',
       motor: motorFinal,
       seccionActiva,
+      // Herramientas elegidas en el panel (por defecto: web y fuentes sí, imágenes no)
+      web: herramientas.web ?? true,
+      imagenes: !!herramientas.imagenes && !!this.dep.mcpFuentes,
+      guardarImagenes: !!doc,
+      fuentes: herramientas.fuentes ?? true,
     });
   }
 

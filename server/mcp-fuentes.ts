@@ -4,12 +4,17 @@
 // Lo lanzan Claude Code y Codex como proceso hijo. Argumentos: [--imagenes] etiqueta=carpeta_de_fuentes ...
 // Las claves de las colecciones que las piden llegan en APUNTES_CLAVES_IMAGENES (JSON).
 import { buscar, formatear, leerPagina, listar } from './rag';
-import { buscarImagenes, credito, type ClavesImagenes } from './imagenesWeb';
+import { buscarImagenes, credito, descargarImagen, type ClavesImagenes } from './imagenesWeb';
 
 const carpetas: Record<string, string> = {};
 let conImagenes = false;
+let dirRecursos: string | undefined; // --recursos=<carpeta>: permite guardar imágenes en el documento
 for (const a of process.argv.slice(2)) {
   if (a === '--imagenes') conImagenes = true;
+  if (a.startsWith('--recursos=')) {
+    dirRecursos = a.slice('--recursos='.length);
+    continue;
+  }
   const i = a.indexOf('=');
   if (i > 0) carpetas[a.slice(0, i)] = a.slice(i + 1);
 }
@@ -32,6 +37,21 @@ const HERRAMIENTA_IMAGENES = {
       consulta_local: { type: 'string', description: 'La misma búsqueda en español (o el idioma de los apuntes) para Commons y los fondos españoles de Europeana: p. ej. "batalla de Lepanto"' },
     },
     required: ['consulta'],
+  },
+};
+
+const HERRAMIENTA_GUARDAR = {
+  name: 'guardar_imagen',
+  description:
+    'Descarga una imagen (la URL «imagen:» de un resultado de buscar_imagenes) a la carpeta recursos/ del documento y devuelve ' +
+    'la ruta para enlazarla en el Markdown: ![pie](recursos/archivo.jpg) y, debajo, la línea *Fuente: crédito ([origen](ficha))*.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      url: { type: 'string', description: 'URL directa de la imagen' },
+      nombre: { type: 'string', description: 'Nombre corto del archivo, sin extensión, p. ej. "batalla-lepanto"' },
+    },
+    required: ['url', 'nombre'],
   },
 };
 
@@ -70,9 +90,29 @@ const HERRAMIENTAS_FUENTES = [
   },
 ];
 
-const HERRAMIENTAS = [...(Object.keys(carpetas).length ? HERRAMIENTAS_FUENTES : []), ...(conImagenes ? [HERRAMIENTA_IMAGENES] : [])];
+const HERRAMIENTAS = [
+  ...(Object.keys(carpetas).length ? HERRAMIENTAS_FUENTES : []),
+  ...(conImagenes ? [HERRAMIENTA_IMAGENES] : []),
+  ...(conImagenes && dirRecursos ? [HERRAMIENTA_GUARDAR] : []),
+];
 
 async function llamar(nombre: string, args: Record<string, unknown>): Promise<string> {
+  if (nombre === 'guardar_imagen' && dirRecursos) {
+    const base =
+      String(args.nombre ?? 'imagen')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 50) || 'imagen';
+    try {
+      const archivo = await descargarImagen(String(args.url ?? ''), dirRecursos, base);
+      return `Guardada en recursos/${archivo}. Enlázala como ![pie](recursos/${archivo}) seguida de la línea *Fuente: … ([origen](…))*.`;
+    } catch (e) {
+      return `No se pudo descargar: ${(e as Error).message} Prueba con otra imagen.`;
+    }
+  }
   if (nombre === 'buscar_imagenes') {
     const r = await buscarImagenes(String(args.consulta ?? ''), { consultaLocal: args.consulta_local ? String(args.consulta_local) : undefined, claves });
     if (!r.resultados.length) return 'No se han encontrado imágenes con licencia libre. Prueba con otros términos (en inglés para los museos).';
