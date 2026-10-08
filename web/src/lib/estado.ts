@@ -1,6 +1,6 @@
 // Estado global de la interfaz y conexión WebSocket con el servidor.
 import { create } from 'zustand';
-import type { Ajustes, ContadorTokens, EstadoMotor, MensajeWS, Trabajo, UsoSuscripcion } from '../../../shared/tipos';
+import type { Ajustes, ContadorTokens, EstadoMotor, MensajeWS, SeleccionTexto, Trabajo, UsoSuscripcion } from '../../../shared/tipos';
 import { api, type AsignaturaResumen } from './api';
 
 export interface Aviso {
@@ -29,6 +29,8 @@ interface Estado {
   conectado: boolean;
   /** Aumenta cada vez que se recupera la conexión con el servidor: las vistas vuelven a cargar sus datos. */
   reconexion: number;
+  /** Fragmento seleccionado en la vista previa: el chat de la derecha actúa solo sobre él. */
+  seleccionTexto?: SeleccionTexto;
   /** Sección abierta en el editor (se envía como contexto a los agentes). */
   seccionActiva?: string;
   /** Petición de abrir una sección en el editor (desde el flujo). */

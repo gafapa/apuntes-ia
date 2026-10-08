@@ -11,15 +11,24 @@ import { dibujarMolecula, resolverMolecula } from './moleculas';
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true });
 md.use(texmath, { engine: katex, delimiters: ['dollars', 'brackets'], katexOptions: { throwOnError: false } });
 
+// Cada bloque de primer nivel lleva las líneas del Markdown de las que sale (data-l="desde-hasta",
+// desde 0 y sin incluir «hasta»): así una selección en la vista previa se traduce a su fragmento
+md.core.ruler.push('lineas', (state) => {
+  for (const t of state.tokens) {
+    if (t.map && t.level === 0 && (t.nesting === 1 || t.nesting === 0)) t.attrSet('data-l', `${t.map[0]}-${t.map[1]}`);
+  }
+});
+const lineas = (t: { map: [number, number] | null }) => (t.map ? ` data-l="${t.map[0]}-${t.map[1]}"` : '');
+
 // Bloques ```mermaid → contenedor que se renderiza después
 const fenceOriginal = md.renderer.rules.fence!;
 md.renderer.rules.fence = (tokens, idx, opts, env, self) => {
   const t = tokens[idx];
   if (t.info.trim() === 'mermaid') {
-    return `<div class="mermaid" data-codigo="${encodeURIComponent(t.content)}"></div>`;
+    return `<div class="mermaid"${lineas(t)} data-codigo="${encodeURIComponent(t.content)}"></div>`;
   }
   if (t.info.trim() === 'molecula') {
-    return `<div class="molecula" data-consulta="${encodeURIComponent(consultaMolecula(t.content))}"></div>`;
+    return `<div class="molecula"${lineas(t)} data-consulta="${encodeURIComponent(consultaMolecula(t.content))}"></div>`;
   }
   return fenceOriginal(tokens, idx, opts, env, self);
 };
@@ -49,12 +58,12 @@ export function renderizar(texto: string, base?: string): string {
     md
       .render(texto, { base })
       // Imagen sola en su párrafo → figura con su pie (el texto alternativo)
-      .replace(/<p>(<img [^>]*alt="([^"]+)"[^>]*>)<\/p>/g, '<figure>$1<figcaption>$2</figcaption></figure>')
+      .replace(/<p( data-l="[^"]*")?>(<img [^>]*alt="([^"]+)"[^>]*>)<\/p>/g, '<figure$1>$2<figcaption>$3</figcaption></figure>')
       // Pies de diagramas («*Figura: …*») y de tablas («Tabla: …»)
-      .replace(/<p>(<em>(?:Figura|Esquema|Diagrama)[^<]*<\/em>)<\/p>/g, '<p class="pie">$1</p>')
-      .replace(/<p>((?:Tabla|Table)\s*\d*\s*[:.][^<]*)<\/p>/g, '<p class="pie">$1</p>')
+      .replace(/<p( data-l="[^"]*")?>(<em>(?:Figura|Esquema|Diagrama)[^<]*<\/em>)<\/p>/g, '<p$1 class="pie">$2</p>')
+      .replace(/<p( data-l="[^"]*")?>((?:Tabla|Table)\s*\d*\s*[:.][^<]*)<\/p>/g, '<p$1 class="pie">$2</p>')
       // Referencias de imágenes ajenas (APA: «Tomado de …»; antes «*Fuente: …*»), bajo la figura
-      .replace(/<p>((?:Tomado|Adaptado) de |<em>Fuente:)/g, '<p class="pie referencia">$1')
+      .replace(/<p( data-l="[^"]*")?>((?:Tomado|Adaptado) de |<em>Fuente:)/g, '<p$1 class="pie referencia">$2')
   );
 }
 

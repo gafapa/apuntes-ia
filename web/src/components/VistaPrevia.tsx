@@ -1,12 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { dibujarDiagramas, renderizar } from '../lib/markdown';
+import { useEstado } from '../lib/estado';
 import { Visor, type ContenidoVisor } from './Visor';
 
-/** Vista previa de Markdown con fórmulas y diagramas. `base` es la URL de la carpeta del documento. */
-export function VistaPrevia({ texto, base }: { texto: string; base: string }) {
+/** Rango de líneas [desde, hasta) de un bloque de la vista previa (atributo data-l). */
+function lineasDe(el: Element): [number, number] | undefined {
+  const m = el.getAttribute('data-l')?.match(/^(\d+)-(\d+)$/);
+  return m ? [Number(m[1]), Number(m[2])] : undefined;
+}
+
+/**
+ * Vista previa de Markdown con fórmulas y diagramas. `base` es la URL de la carpeta del documento.
+ * Con `seccion`, se puede seleccionar texto (arrastrando) o elementos enteros (Ctrl+clic) y el chat
+ * de la derecha actúa solo sobre ese fragmento.
+ */
+export function VistaPrevia({ texto, base, seccion }: { texto: string; base: string; seccion?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const html = useMemo(() => renderizar(texto, base), [texto, base]);
   const [ampliado, setAmpliado] = useState<ContenidoVisor>();
+  const seleccion = useEstado((s) => (seccion && s.seleccionTexto?.seccion === seccion ? s.seleccionTexto : undefined));
 
   useEffect(() => {
     if (!ref.current) return;
@@ -14,18 +26,73 @@ export function VistaPrevia({ texto, base }: { texto: string; base: string }) {
     return () => clearTimeout(t);
   }, [html]);
 
-  // Clic en una imagen o un diagrama: verlo ampliado
+  // Resaltar los bloques seleccionados (también tras volver a dibujar la vista)
+  useEffect(() => {
+    if (!ref.current) return;
+    for (const el of ref.current.querySelectorAll('[data-l]')) {
+      const l = lineasDe(el);
+      el.classList.toggle('seleccionado', !!seleccion && !!l && l[0] < seleccion.hasta && l[1] > seleccion.desde);
+    }
+  }, [html, seleccion]);
+
+  const seleccionar = (desde: number, hasta: number, visible: string) => {
+    if (!seccion) return;
+    const lineas = texto.split('\n');
+    useEstado.setState({
+      seleccionTexto: { seccion, desde, hasta, fragmento: lineas.slice(desde, hasta).join('\n').trim(), texto: visible.trim() },
+    });
+  };
+
+  // Arrastrar para seleccionar texto: se toman los bloques que toca la selección
+  const alSoltar = () => {
+    if (!seccion || !ref.current) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+    const rango = sel.getRangeAt(0);
+    if (!ref.current.contains(rango.commonAncestorContainer)) return;
+    const tocados = [...ref.current.children].filter((el) => el.hasAttribute('data-l') && rango.intersectsNode(el));
+    const lineas = tocados.map(lineasDe).filter((l): l is [number, number] => !!l);
+    if (!lineas.length) return;
+    seleccionar(Math.min(...lineas.map((l) => l[0])), Math.max(...lineas.map((l) => l[1])), sel.toString());
+  };
+
+  // Clic en una imagen o un diagrama: verlo ampliado. Ctrl+clic: seleccionar el elemento entero
+  // (o añadirlo a la selección, que abarca desde el primero hasta el último)
   const alPulsar = (e: React.MouseEvent) => {
     const el = e.target as HTMLElement;
+    if (seccion && (e.ctrlKey || e.metaKey)) {
+      const bloque = el.closest('[data-l]');
+      const l = bloque && ref.current?.contains(bloque) ? lineasDe(bloque) : undefined;
+      if (!l) return;
+      e.preventDefault();
+      const nombre = bloque!.matches('figure, .mermaid, .molecula, table') ? `[${bloque!.querySelector('figcaption')?.textContent || bloque!.tagName.toLowerCase()}]` : bloque!.textContent ?? '';
+      if (seleccion) seleccionar(Math.min(seleccion.desde, l[0]), Math.max(seleccion.hasta, l[1]), `${seleccion.texto} … ${nombre}`);
+      else seleccionar(l[0], l[1], nombre);
+      return;
+    }
     const img = el.closest('img');
     if (img) return setAmpliado({ tipo: 'imagen', src: img.src });
     const svg = el.closest('.mermaid, .molecula')?.querySelector('svg');
     if (svg) setAmpliado({ tipo: 'svg', html: svg.outerHTML });
   };
 
+  // Esc: quitar la selección
+  useEffect(() => {
+    if (!seleccion) return;
+    const tecla = (e: KeyboardEvent) => e.key === 'Escape' && useEstado.setState({ seleccionTexto: undefined });
+    window.addEventListener('keydown', tecla);
+    return () => window.removeEventListener('keydown', tecla);
+  }, [seleccion]);
+
   return (
     <>
-      <div ref={ref} className="apunte" onClick={alPulsar} dangerouslySetInnerHTML={{ __html: html }} />
+      <div
+        ref={ref}
+        className="apunte"
+        onClick={alPulsar}
+        onMouseUp={alSoltar}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
       <Visor contenido={ampliado} onCerrar={() => setAmpliado(undefined)} />
     </>
   );

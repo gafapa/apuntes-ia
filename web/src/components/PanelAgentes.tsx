@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Check, ChevronDown, CircleStop, Eraser, Globe, FileEdit, Landmark, Library, Loader2, PanelRightClose, PanelRightOpen, Search, Send, Sparkles, Wrench } from 'lucide-react';
+import { Bot, Check, TextSelect, X, ChevronDown, CircleStop, Eraser, Globe, FileEdit, Landmark, Library, Loader2, PanelRightClose, PanelRightOpen, Search, Send, Sparkles, Wrench } from 'lucide-react';
 import type { HerramientasChat, Motor, Trabajo } from '../../../shared/tipos';
 import { api } from '../lib/api';
 import { useEstado } from '../lib/estado';
@@ -31,7 +31,7 @@ function leerHerramientas(): Required<HerramientasChat> {
 }
 
 export function PanelAgentes() {
-  const { seleccion, trabajos, ajustes, motores, seccionActiva, avisar } = useEstado();
+  const { seleccion, trabajos, ajustes, motores, seccionActiva, seleccionTexto, avisar } = useEstado();
   const [abierto, setAbierto] = useState(() => localStorage.getItem('panelAgentes') !== 'cerrado');
   const [tarea, setTarea] = useState('');
   const [motor, setMotor] = useState<Motor>();
@@ -82,10 +82,12 @@ export function PanelAgentes() {
         tarea,
         asignatura: seleccion.asignatura,
         documento: seleccion.documento,
-        seccion: seccionActiva,
+        seccion: seleccionTexto?.seccion ?? seccionActiva,
         herramientas,
+        seleccionTexto,
       });
       setTarea('');
+      useEstado.setState({ seleccionTexto: undefined });
     } catch (e) {
       avisar((e as Error).message, 'error');
     } finally {
@@ -126,6 +128,24 @@ export function PanelAgentes() {
 
       {/* Petición */}
       <div className="border-b border-borde p-3">
+        {seleccionTexto && (
+          <div className="mb-2 flex items-start gap-2 rounded-lg border border-acento/30 bg-acento-suave px-2.5 py-1.5 text-[12px]">
+            <TextSelect className="mt-0.5 size-3.5 shrink-0 text-acento" />
+            <div className="min-w-0 flex-1">
+              <div className="font-medium text-acento">Solo sobre la selección</div>
+              <div className="line-clamp-2 text-texto-2" title={seleccionTexto.fragmento}>
+                {seleccionTexto.texto || seleccionTexto.fragmento}
+              </div>
+            </div>
+            <button
+              className="shrink-0 rounded p-0.5 text-texto-3 hover:text-texto cursor-pointer"
+              title="Quitar la selección (Esc)"
+              onClick={() => useEstado.setState({ seleccionTexto: undefined })}
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        )}
         <div className="relative rounded-xl border border-borde bg-fondo focus-within:border-acento focus-within:ring-3 focus-within:ring-acento/15">
           <textarea
             value={tarea}
@@ -137,7 +157,13 @@ export function PanelAgentes() {
               }
             }}
             rows={3}
-            placeholder={seleccion.documento ? '¿Qué quieres que hagan los agentes con este documento?' : '¿Qué quieres que hagan los agentes en esta asignatura?'}
+            placeholder={
+              seleccionTexto
+                ? '¿Qué hago con la selección? (p. ej. «simplifícalo», «añade un ejemplo», «¿qué significa?»)'
+                : seleccion.documento
+                  ? '¿Qué quieres que hagan los agentes con este documento? Puedes seleccionar texto en la vista previa para actuar solo sobre él.'
+                  : '¿Qué quieres que hagan los agentes en esta asignatura?'
+            }
             className="block w-full resize-none bg-transparent px-3 pt-2.5 text-sm outline-none placeholder:text-texto-3"
           />
           <div className="flex items-center gap-2 px-2 pb-2">

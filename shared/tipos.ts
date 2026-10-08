@@ -218,6 +218,15 @@ export interface Sugerencia {
   creado: string;
 }
 
+/** Fragmento de una sección seleccionado en la vista previa: el chat actúa solo sobre él. */
+export interface SeleccionTexto {
+  seccion: string; // archivo de la sección
+  desde: number; // primera línea (desde 0)
+  hasta: number; // línea siguiente a la última
+  fragmento: string; // Markdown de esas líneas
+  texto: string; // texto seleccionado tal como se ve (puede ser solo parte del fragmento)
+}
+
 /** Herramientas que el usuario activa para una petición libre desde el panel de agentes. */
 export interface HerramientasChat {
   web?: boolean;

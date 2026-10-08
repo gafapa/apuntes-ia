@@ -128,6 +128,8 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
 
 function Apuntes({ asignatura, documento }: { asignatura: string; documento: string }) {
   const { avisar, versiones, reconexion } = useEstado();
+  // La selección de la vista previa es de este documento: al salir de él, se olvida
+  useEffect(() => () => useEstado.setState({ seleccionTexto: undefined }), [asignatura, documento]);
   const version = `${versiones[`${asignatura}/${documento}`] ?? 0}-${reconexion}`; // también al reconectar con el servidor
   const [secciones, setSecciones] = useState<Seccion[]>([]);
   const [activa, setActiva] = useState<string>();
@@ -135,7 +137,7 @@ function Apuntes({ asignatura, documento }: { asignatura: string; documento: str
   const [estadoGuardado, setEstadoGuardado] = useState<'guardado' | 'pendiente' | 'guardando'>('guardado');
   const [conflicto, setConflicto] = useState<string>();
   const [modo, setModo] = useState<Modo>(() => (localStorage.getItem('modoEditor') as Modo) || 'dividido');
-  const [completo, setCompleto] = useState('');
+  const [completo, setCompleto] = useState<{ archivo: string; texto: string }[]>([]);
   const guardadoRef = useRef(''); // último contenido sincronizado con el disco
   const textoRef = useRef(texto);
   textoRef.current = texto;
@@ -185,8 +187,9 @@ function Apuntes({ asignatura, documento }: { asignatura: string; documento: str
   // Documento completo
   useEffect(() => {
     if (activa !== TODO) return;
-    Promise.all(secciones.map((s) => api.leerSeccion(asignatura, documento, s.archivo).then((r) => r.contenido))).then((t) =>
-      setCompleto(t.join('\n\n')),
+    // Cada sección por separado, para saber de cuál es lo que se selecciona en la vista previa
+    Promise.all(secciones.map((s) => api.leerSeccion(asignatura, documento, s.archivo).then((r) => ({ archivo: s.archivo, texto: r.contenido })))).then(
+      setCompleto,
     );
   }, [activa, secciones, asignatura, documento]);
 
@@ -368,7 +371,11 @@ function Apuntes({ asignatura, documento }: { asignatura: string; documento: str
                 }
               />
             ) : (
-              <VistaPrevia texto={completo} base={base} />
+              <div className="space-y-8">
+                {completo.map((p) => (
+                  <VistaPrevia key={p.archivo} texto={p.texto} base={base} seccion={p.archivo} />
+                ))}
+              </div>
             )}
           </div>
         ) : (
@@ -438,7 +445,7 @@ function Apuntes({ asignatura, documento }: { asignatura: string; documento: str
               )}
               {modo !== 'editar' && (
                 <div className={cx('min-w-0 overflow-y-auto bg-panel px-8 py-6', modo === 'dividido' ? 'w-1/2' : 'flex-1')}>
-                  <VistaPrevia texto={texto} base={base} />
+                  <VistaPrevia texto={texto} base={base} seccion={activa} />
                 </div>
               )}
             </div>

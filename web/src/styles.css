@@ -128,6 +128,8 @@ body {
 .apunte .molecula svg { max-width: min(100%, 420px); height: auto; cursor: zoom-in; }
 .apunte .molecula-info { margin-top: 0.15em; font-size: 0.85em; color: var(--texto-3); cursor: help; }
 .apunte .mermaid-error { color: var(--error); font-size: 0.85em; white-space: pre-wrap; }
+/* Bloques seleccionados en la vista previa (el chat actúa solo sobre ellos) */
+.apunte .seleccionado { background: color-mix(in srgb, var(--acento) 9%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--acento) 9%, transparent), -6px 0 0 0 var(--acento); border-radius: 2px; }
 .apunte .katex-display { overflow-x: auto; overflow-y: hidden; }
 
 /* ---------- CodeMirror ---------- */

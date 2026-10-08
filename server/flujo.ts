@@ -24,6 +24,7 @@ import type {
   PropuestaVisual,
   MezclaVisuales,
   HerramientasChat,
+  SeleccionTexto,
   ImagenFallida,
   Sugerencia,
   TipoRevision,
@@ -324,8 +325,34 @@ export class Flujo {
     motor?: Motor,
     seccionActiva?: string,
     herramientas: HerramientasChat = {},
+    seleccionTexto?: SeleccionTexto,
   ) {
     if (!tarea.trim()) throw new ErrorUsuario('Escribe qué quieres que haga');
+    // Petición sobre un fragmento seleccionado en la vista previa: el agente no edita la sección,
+    // escribe el fragmento nuevo y la app lo sustituye en su sitio (así no puede tocar nada más)
+    let sobreSeleccion: { texto: string; post: Postproceso } | undefined;
+    if (doc && seleccionTexto?.fragmento.trim()) {
+      const sel = seleccionTexto;
+      const salida = this.salida('seleccion', 'md');
+      const parcial = sel.texto && sel.texto.replace(/\s+/g, ' ').length < sel.fragmento.replace(/\s+/g, ' ').length * 0.8;
+      sobreSeleccion = {
+        texto: `
+
+## Selección
+El usuario ha seleccionado este fragmento de \`secciones/${sel.seccion}\`${
+          parcial ? ` (y, dentro de él, en concreto el texto «${sel.texto.slice(0, 1500)}»)` : ''
+        }:
+
+\`\`\`\`markdown
+${sel.fragmento}
+\`\`\`\`
+
+Actúa SOLO sobre este fragmento; puedes leer la sección para entender el contexto.
+- Si la petición pide cambiarlo (reescribir, ampliar, corregir, añadir algo junto a él, sustituir una imagen…), NO edites la sección: escribe en \`${salida}\` el fragmento nuevo completo, en Markdown, que sustituirá exactamente al de arriba (incluye también lo que no cambie). Nada más en ese archivo.
+- Si es una pregunta o una consulta, respóndela sin escribir ningún archivo.`,
+        post: { tipo: 'seleccion', datos: { salida, seccion: sel.seccion, fragmento: sel.fragmento } },
+      };
+    }
     let estado = '';
     if (doc) {
       const e = await this.estado(asig, doc);
@@ -345,10 +372,11 @@ export class Flujo {
       asignatura: asig,
       documento: doc,
       titulo: tarea.trim().split(/\r?\n/)[0].slice(0, 120),
-      tarea: tarea + estado,
+      tarea: tarea + estado + (sobreSeleccion?.texto ?? ''),
       paso: 'chat',
       motor: motorFinal,
-      seccionActiva,
+      seccionActiva: seleccionTexto?.seccion ?? seccionActiva,
+      post: sobreSeleccion?.post,
       // Herramientas elegidas en el panel (por defecto: web y fuentes sí, imágenes no)
       web: herramientas.web ?? true,
       imagenes: !!herramientas.imagenes && !!this.dep.mcpFuentes,
@@ -1282,6 +1310,8 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
         return this.postImagenIa(t, datos);
       case 'molecula':
         return this.postMolecula(t, datos);
+      case 'seleccion':
+        return this.postSeleccion(t, datos);
       case 'imagen-web':
         return this.postImagenWeb(t, datos);
       default:
@@ -1448,6 +1478,33 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
     const encontrado = await this.insertarEnSeccion(asig, doc, p, bloque);
     await this.cambiarPropuesta(asig, doc, p.id, { estado: 'insertada', molecula: consulta, error: undefined });
     return encontrado;
+  }
+
+  /** Petición sobre una selección: si el agente ha escrito el fragmento nuevo, sustituye al seleccionado. */
+  private async postSeleccion(t: Trabajo, datos: Record<string, unknown>): Promise<string | void> {
+    const asig = t.asignatura;
+    const doc = t.documento!;
+    const salida = String(datos.salida);
+    const seccion = String(datos.seccion);
+    const original = String(datos.fragmento);
+    const ruta = path.join(this.almacen.dirDocumento(asig, doc), salida);
+    const nuevo = await fs.readFile(ruta, 'utf8').catch(() => undefined);
+    if (nuevo === undefined) return; // era una pregunta: ya ha respondido
+    // Por si lo ha envuelto en un bloque ```markdown
+    const limpio = nuevo.replace(/^\s*`{3,4}(?:markdown|md)?\s*\n([\s\S]*?)\n`{3,4}\s*$/, '$1').trim();
+    if (!limpio) throw new PedirAlAgente('El fragmento nuevo está vacío.', `\`${salida}\` está vacío. Escribe en él el fragmento nuevo completo.`);
+    const resultado = await this.conCandado(`${asig}/${doc}/sec/${seccion}`, async () => {
+      const texto = await this.almacen.leerSeccion(asig, doc, seccion);
+      const cambiado = sustituirFragmento(texto, original, limpio);
+      if (cambiado === null) return false;
+      await this.almacen.guardarSeccion(asig, doc, seccion, cambiado);
+      return true;
+    });
+    await fs.rm(ruta, { force: true }).catch(() => {});
+    if (!resultado) {
+      throw new Error('El fragmento seleccionado ya no está en la sección (¿se ha editado mientras tanto?). Vuelve a seleccionarlo y repite la petición.');
+    }
+    return 'Selección actualizada';
   }
 
   private async postMolecula(t: Trabajo, datos: Record<string, unknown>): Promise<string | void> {
