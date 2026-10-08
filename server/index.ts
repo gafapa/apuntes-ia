@@ -17,6 +17,7 @@ import { cargarAjustes, guardarAjustes } from './ajustes';
 import { Flujo } from './flujo';
 import { exportar } from './exportar';
 import { asegurarTextos } from './conversion';
+import { Contador } from './tokens';
 
 export interface OpcionesServidor {
   archivoAjustes: string; // dónde se guardan los ajustes (fuera de la carpeta de datos)
@@ -39,6 +40,7 @@ export async function crearServidor(op: OpcionesServidor) {
   const dirTrabajos = op.dirTrabajos ?? path.join(path.dirname(op.archivoAjustes), 'trabajos');
   bloquear(dirTrabajos);
   const cola = new Cola(ajustes.maxSimultaneos, dirTrabajos);
+  const contador = new Contador(path.join(path.dirname(op.archivoAjustes), 'tokens.json'));
   const dirBin = op.dirBin ?? '';
 
   // Estado de los motores (se refresca al consultarlo desde la interfaz)
@@ -83,6 +85,10 @@ export async function crearServidor(op: OpcionesServidor) {
   cola.on('trabajo', (trabajo) => difundir({ tipo: 'trabajo', trabajo: { ...trabajo, eventos: [] } }));
   cola.on('evento', (id, evento) => difundir({ tipo: 'evento', id, evento }));
   cola.on('uso', (uso) => difundir({ tipo: 'uso', uso }));
+  cola.on('tokens', (motor, tokens) => {
+    contador.sumar(motor, tokens);
+    difundir({ tipo: 'tokens', contador: contador.leer() });
+  });
 
   app.get('/ws', { websocket: true }, (socket) => {
     clientes.add(socket);
@@ -294,6 +300,13 @@ export async function crearServidor(op: OpcionesServidor) {
   });
 
   app.get('/api/uso', async () => cola.uso);
+  app.get('/api/tokens', async () => contador.leer());
+  app.delete('/api/tokens', async () => {
+    contador.reiniciar();
+    const c = contador.leer();
+    difundir({ tipo: 'tokens', contador: c });
+    return c;
+  });
 
   // ---------- Flujo de trabajo del documento ----------
   const D = '/api/asignaturas/:a/documentos/:d';

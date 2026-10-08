@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { useEstado } from '../lib/estado';
 import { renderizar } from '../lib/markdown';
 import { BotonIcono, Insignia, cx } from './ui';
+import { ParTokens } from './ContadorTokens';
 
 const SUGERENCIAS = [
   '¿Qué le falta a este documento para estar completo?',
@@ -220,6 +221,11 @@ function TarjetaTrabajo({ t }: { t: Trabajo }) {
           <div className="mt-1 flex items-center gap-1.5 text-[11.5px] text-texto-3">
             <span>{t.nombreAgente}</span>·<span>{t.motor === 'claude' ? 'Claude' : 'Codex'}</span>
             {tiempo && <>· <span className="tabular-nums">{tiempo}</span></>}
+            {t.tokens && (
+              <>
+                · <ParTokens t={t.tokens} />
+              </>
+            )}
           </div>
           {activo && ultima && !abierto && <div className="mt-1 truncate text-[11.5px] text-acento">{ultima.texto}</div>}
         </div>

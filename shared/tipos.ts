@@ -50,6 +50,19 @@ export interface Fuente {
   modificado: string;
 }
 
+/** Tokens consumidos. `entrada` incluye los leídos de caché (`cache`), que cuestan menos. */
+export interface Tokens {
+  entrada: number;
+  salida: number;
+  cache: number;
+}
+
+export interface ContadorTokens {
+  desde: string; // fecha desde la que se cuenta (o desde que se puso a cero)
+  total: Record<Motor, Tokens>;
+  hoy: { fecha: string; porMotor: Record<Motor, Tokens> };
+}
+
 export type EstadoTrabajo = 'en-cola' | 'ejecutando' | 'ok' | 'error' | 'cancelado';
 
 export interface EventoTrabajo {
@@ -75,6 +88,7 @@ export interface Trabajo {
   seccion?: string; // sección sobre la que trabaja (archivo)
   ref?: string; // elemento relacionado (p. ej. id de una propuesta visual)
   sesion?: string; // id de la sesión del motor, para poder continuar la conversación
+  tokens?: Tokens; // consumo acumulado (incluidas las respuestas del usuario)
   eventos: EventoTrabajo[];
 }
 
@@ -233,4 +247,5 @@ export type MensajeWS =
   | { tipo: 'evento'; id: string; evento: EventoTrabajo }
   | { tipo: 'uso'; uso: UsoSuscripcion }
   | { tipo: 'archivos'; asignatura: string; documento?: string; ruta: string }
-  | { tipo: 'actualizacion'; estado: 'disponible' | 'descargada'; version: string };
+  | { tipo: 'actualizacion'; estado: 'disponible' | 'descargada'; version: string }
+  | { tipo: 'tokens'; contador: ContadorTokens };

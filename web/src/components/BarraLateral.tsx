@@ -6,6 +6,7 @@ import { BotonIcono, cx } from './ui';
 import { ModalNuevaAsignatura, ModalNuevoDocumento } from './Modales';
 import { ModalAjustes } from './ModalAjustes';
 import { NavegacionDocumento } from './flujo/NavegacionDocumento';
+import { ContadorTokensPie } from './ContadorTokens';
 import { useFlujoActual } from './flujo/pasos';
 
 export function BarraLateral() {
@@ -182,6 +183,7 @@ function PieBarra({ onAjustes }: { onAjustes: () => void }) {
           </div>
         </div>
       )}
+      <ContadorTokensPie />
       <div className="flex items-center gap-1">
         <div className="flex flex-1 items-center gap-3 text-[11.5px] text-texto-3">
           {!conectado && <span className="text-error">Sin conexión</span>}

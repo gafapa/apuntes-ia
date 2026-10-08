@@ -1,6 +1,6 @@
 // Estado global de la interfaz y conexión WebSocket con el servidor.
 import { create } from 'zustand';
-import type { Ajustes, EstadoMotor, MensajeWS, Trabajo, UsoSuscripcion } from '../../../shared/tipos';
+import type { Ajustes, ContadorTokens, EstadoMotor, MensajeWS, Trabajo, UsoSuscripcion } from '../../../shared/tipos';
 import { api, type AsignaturaResumen } from './api';
 
 export interface Aviso {
@@ -19,6 +19,7 @@ interface Estado {
   seleccion: Seleccion;
   trabajos: Record<string, Trabajo>;
   uso?: UsoSuscripcion;
+  tokens?: ContadorTokens;
   motores?: EstadoMotor[];
   ajustes?: Ajustes;
   /** Contador por "asignatura/documento" que aumenta cuando cambian sus archivos en disco. */
@@ -116,6 +117,7 @@ function conectar() {
     e.cargarAsignaturas();
     e.cargarAjustes().catch(() => {});
     e.cargarMotores().catch(() => {});
+    api.tokens().then((tokens) => useEstado.setState({ tokens })).catch(() => {});
     const lista = await api.trabajos().catch(() => [] as Trabajo[]);
     useEstado.setState({ trabajos: Object.fromEntries(lista.map((t) => [t.id, t])) });
   };
@@ -146,6 +148,9 @@ function conectar() {
       }
       case 'actualizacion':
         useEstado.setState({ actualizacion: { estado: msg.estado, version: msg.version } });
+        break;
+      case 'tokens':
+        useEstado.setState({ tokens: msg.contador });
         break;
       case 'uso':
         useEstado.setState({ uso: msg.uso });

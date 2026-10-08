@@ -1,5 +1,6 @@
 import type {
   Ajustes,
+  ContadorTokens,
   EstadoFlujo,
   Exportado,
   Indice,
@@ -45,6 +46,8 @@ export const api = {
   abrirCarpeta: (asignatura?: string, documento?: string, sub?: string) =>
     pedir('POST', '/api/abrir-carpeta', { asignatura, documento, sub }),
   uso: () => pedir<UsoSuscripcion>('GET', '/api/uso'),
+  tokens: () => pedir<ContadorTokens>('GET', '/api/tokens'),
+  reiniciarTokens: () => pedir<ContadorTokens>('DELETE', '/api/tokens'),
 
   asignaturas: () => pedir<AsignaturaResumen[]>('GET', '/api/asignaturas'),
   asignatura: (a: string) => pedir<AsignaturaDetalle>('GET', asig(a)),

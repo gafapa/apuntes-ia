@@ -12,7 +12,9 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import type { ChildProcess } from 'node:child_process';
 import treeKill from 'tree-kill';
-import type { EventoTrabajo, Motor, PasoFlujo, Trabajo, UsoSuscripcion } from '../../shared/tipos';
+import type { EventoTrabajo, Motor, PasoFlujo, Tokens, Trabajo, UsoSuscripcion } from '../../shared/tipos';
+
+type Traduccion = { mensaje?: string; resultado?: string; error?: string; final?: 'ok' | 'error'; tokens?: Tokens };
 import { lanzar, rutaMotor } from './motores';
 
 /**
@@ -446,6 +448,12 @@ export class Cola extends EventEmitter {
     if (r?.mensaje) s.ultimoMensaje = r.mensaje;
     if (r?.resultado !== undefined) t.resultado = r.resultado;
     if (r?.final) s.final = r.final;
+    if (r?.tokens && (r.tokens.entrada || r.tokens.salida)) {
+      const previo = t.tokens ?? { entrada: 0, salida: 0, cache: 0 };
+      t.tokens = { entrada: previo.entrada + r.tokens.entrada, salida: previo.salida + r.tokens.salida, cache: previo.cache + r.tokens.cache };
+      this.emit('tokens', motor, r.tokens);
+      this.emitir(t);
+    }
     if (r?.error) {
       s.errorReportado = true;
       this.evento(t, 'error', r.error, silencioso);
@@ -496,7 +504,7 @@ export class Cola extends EventEmitter {
   // ---------------------------------------------------------------------------
   // Traducción de la salida de cada motor
 
-  private traducirClaude(t: Trabajo, ev: any, sil: boolean): { mensaje?: string; resultado?: string; error?: string; final?: 'ok' | 'error' } | void {
+  private traducirClaude(t: Trabajo, ev: any, sil: boolean): Traduccion | void {
     switch (ev.type) {
       case 'system':
         if (ev.subtype === 'init') {
@@ -527,13 +535,21 @@ export class Cola extends EventEmitter {
         if (!sil) this.emit('uso', this.uso);
         return;
       }
-      case 'result':
-        if (ev.is_error) return { error: String(ev.result ?? 'Error del agente'), final: 'error' };
-        return { resultado: typeof ev.result === 'string' ? ev.result : undefined, final: 'ok' };
+      case 'result': {
+        const u = ev.usage ?? {};
+        const cache = Number(u.cache_read_input_tokens ?? 0);
+        const tokens: Tokens = {
+          entrada: Number(u.input_tokens ?? 0) + Number(u.cache_creation_input_tokens ?? 0) + cache,
+          salida: Number(u.output_tokens ?? 0),
+          cache,
+        };
+        if (ev.is_error) return { error: String(ev.result ?? 'Error del agente'), final: 'error', tokens };
+        return { resultado: typeof ev.result === 'string' ? ev.result : undefined, final: 'ok', tokens };
+      }
     }
   }
 
-  private traducirCodex(t: Trabajo, ev: any, sil: boolean): { mensaje?: string; resultado?: string; error?: string; final?: 'ok' | 'error' } | void {
+  private traducirCodex(t: Trabajo, ev: any, sil: boolean): Traduccion | void {
     const item = ev.item;
     switch (ev.type) {
       case 'thread.started':
@@ -558,8 +574,14 @@ export class Cola extends EventEmitter {
           return { error: item.message ?? 'Error de Codex' };
         }
         return;
-      case 'turn.completed':
-        return { final: 'ok' };
+      case 'turn.completed': {
+        // En Codex, input_tokens ya incluye los leídos de caché (cached_input_tokens)
+        const u = ev.usage ?? {};
+        return {
+          final: 'ok',
+          tokens: { entrada: Number(u.input_tokens ?? 0), salida: Number(u.output_tokens ?? 0), cache: Number(u.cached_input_tokens ?? 0) },
+        };
+      }
       case 'turn.failed':
       case 'error':
         return { error: ev.error?.message ?? ev.message ?? 'Error de Codex', final: 'error' };
