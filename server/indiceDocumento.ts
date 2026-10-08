@@ -121,8 +121,10 @@ export async function retocar(
         );
       }
     }
-    // Tablas centradas
-    doc = doc.replace(/<w:tblPr>/g, '<w:tblPr><w:jc w:val="center"/>');
+    // Tablas centradas y con bordes finos (el estilo de Pandoc solo raya bajo la cabecera)
+    const borde = (lado: string) => `<w:${lado} w:val="single" w:sz="4" w:space="0" w:color="A6A6A6"/>`;
+    const bordes = `<w:tblBorders>${['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(borde).join('')}</w:tblBorders>`;
+    doc = doc.replace(/<w:tblPr>/g, `<w:tblPr><w:jc w:val="center"/>${op.plantillaPropia ? '' : bordes}`);
     // Imágenes sin pie (párrafos normales con un dibujo): también centradas
     doc = doc.replace(/<w:p>((?:(?!<\/w:p>)[\s\S])*?<w:drawing>[\s\S]*?<\/w:p>)/g, (p) =>
       /<w:jc /.test(p)
@@ -142,6 +144,12 @@ export async function retocar(
         return cuerpo + cierre;
       });
     }
+    // Cabecera de las tablas: negrita y fondo gris claro (formato condicional de la primera fila)
+    if (!op.plantillaPropia)
+      estilos = estilos.replace(
+      /(<w:style [^>]*w:styleId="Table"[^>]*>[\s\S]*?)<w:tblStylePr w:type="firstRow">[\s\S]*?<\/w:tblStylePr>/,
+      '$1<w:tblStylePr w:type="firstRow"><w:rPr><w:b/></w:rPr><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="F2F2F2"/><w:vAlign w:val="center"/></w:tcPr></w:tblStylePr>',
+    );
     zip.file('word/styles.xml', estilos);
     if (op.indice) {
       // Que Word actualice el índice (números de página) al abrir el documento
@@ -172,6 +180,12 @@ export async function retocar(
     cont = cont.replace(
       /<text:p text:style-name="[^"]*">(\s*<draw:frame[\s\S]*?<\/draw:frame>\s*)<\/text:p>/g,
       '<text:p text:style-name="Figure">$1</text:p>',
+    );
+    // Celdas con bordes finos (Pandoc los pone a «none») y cabecera con fondo gris claro
+    cont = cont.replace(
+      /(<style:style style:name="(TableHeaderRowCell|TableRowCell)" style:family="table-cell">\s*<style:table-cell-properties) fo:border="none"/g,
+      (_m, ini: string, nombre: string) =>
+        `${ini} fo:border="0.5pt solid #a6a6a6" fo:padding="0.1cm"${nombre === 'TableHeaderRowCell' ? ' fo:background-color="#f2f2f2"' : ''}`,
     );
     // Tablas centradas
     cont = cont.replace(/<style:table-properties ([^>]*?)(\/?)>/g, (_m, attrs: string, vacio: string) =>

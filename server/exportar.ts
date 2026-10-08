@@ -250,7 +250,7 @@ function plantillaTypst(color: string, op: OpcionesExportacion): string {
   show quote: it => block(
     fill: acento.lighten(92%), stroke: (left: 3pt + acento), inset: (x: 12pt, y: 9pt), radius: (right: 4pt), width: 100%, it.body,
   )
-  set table(stroke: 0.5pt + luma(200), inset: 6pt)
+  set table(stroke: 0.5pt + luma(150), inset: 6pt, fill: (_, y) => if y == 0 { acento.lighten(88%) })
   // Figuras, tablas y sus pies, centrados
   show figure: set align(center)
   show table: it => align(center, it)
