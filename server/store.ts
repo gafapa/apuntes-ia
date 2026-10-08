@@ -2,7 +2,8 @@
 import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import type { Asignatura, AsignaturaDetalle, Documento, Exportado, Fuente, Recurso, Seccion } from '../shared/tipos';
+import type { Asignatura, AsignaturaDetalle, Documento, Exportado, Fuente, Permisos, Recurso, Seccion } from '../shared/tipos';
+import { PERMISOS } from '../shared/tipos';
 
 const COLORES = ['#7c5cff', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#8b5cf6'];
 
@@ -136,6 +137,7 @@ export class Almacen {
     const campos = ['nombre', 'nivel', 'destinatarios', 'idioma', 'estilo', 'color', 'etapa', 'curso', 'modalidad', 'familia', 'titulo'] as const;
     const nuevo: Asignatura = { ...actual, id, actualizado: ahora() };
     for (const c of campos) if (typeof datos[c] === 'string') nuevo[c] = datos[c]!;
+    if (datos.permisos && typeof datos.permisos === 'object') nuevo.permisos = limpiarPermisos(datos.permisos);
     await escribirJson(path.join(dir, 'asignatura.json'), nuevo);
     if (typeof datos.contexto === 'string') {
       await fs.writeFile(path.join(dir, 'contexto.md'), datos.contexto, 'utf8');
@@ -204,6 +206,7 @@ export class Almacen {
     const campos = ['titulo', 'objetivo', 'destinatarios', 'extension'] as const;
     const nuevo: Documento = { ...actual, actualizado: ahora() };
     for (const c of campos) if (typeof datos[c] === 'string') nuevo[c] = datos[c]!;
+    if (datos.permisos && typeof datos.permisos === 'object') nuevo.permisos = limpiarPermisos(datos.permisos);
     await escribirJson(path.join(this.dirDocumento(asig, id), 'documento.json'), nuevo);
     return nuevo;
   }
@@ -410,4 +413,11 @@ export class Almacen {
       odt: existsSync(this.rutaPlantilla(asig, 'odt')),
     };
   }
+}
+
+/** Solo los permisos conocidos y con valor sí/no (lo que falta se hereda o está permitido). */
+function limpiarPermisos(p: Permisos): Permisos {
+  const r: Permisos = {};
+  for (const { id } of PERMISOS) if (typeof p[id] === 'boolean') r[id] = p[id];
+  return r;
 }

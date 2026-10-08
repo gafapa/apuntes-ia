@@ -9,6 +9,7 @@ import { GestorFuentes } from './GestorFuentes';
 import { ModalNuevoDocumento } from './Modales';
 import { PestanaGlosario, PestanaPlantillas } from './PestanasAsignatura';
 import { SelectorEnsenanza, type ValorEnsenanza } from './SelectorEnsenanza';
+import { EditorPermisos } from './EditorPermisos';
 import { describirNivel, type Etapa } from '../../../shared/catalogo/educacion';
 
 /** Las asignaturas antiguas guardaban «español»; ahora el idioma es «Castellano». */
@@ -160,7 +161,7 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
 
 function FormContexto({ a, onGuardado }: { a: AsignaturaDetalle; onGuardado: (a: AsignaturaDetalle) => void }) {
   const { avisar } = useEstado();
-  const inicial = { destinatarios: a.destinatarios, estilo: a.estilo, color: a.color, contexto: a.contexto };
+  const inicial = { destinatarios: a.destinatarios, estilo: a.estilo, color: a.color, contexto: a.contexto, permisos: a.permisos ?? {} };
   const ensenanzaInicial: ValorEnsenanza = {
     etapa: (a.etapa as Etapa) ?? (a.nivel ? 'libre' : undefined),
     curso: a.curso,
@@ -230,6 +231,12 @@ function FormContexto({ a, onGuardado }: { a: AsignaturaDetalle; onGuardado: (a:
           onChange={(e) => setF({ ...f, estilo: e.target.value })}
           placeholder="Claro y directo, con ejemplos cotidianos y un resumen al final de cada sección"
         />
+      </Campo>
+      <Campo
+        etiqueta="Qué pueden usar los agentes"
+        ayuda="Por defecto, todo. Lo que desmarques no lo propondrán ni lo usarán en ningún documento de la asignatura (cada documento puede cambiarlo en su ficha)."
+      >
+        <EditorPermisos valor={f.permisos} onCambio={(permisos) => setF({ ...f, permisos })} />
       </Campo>
       <Campo etiqueta="Contexto de la asignatura" ayuda="Temario, enfoque, criterios de evaluación, qué se da por sabido… Todo lo que deban tener en cuenta los agentes. Admite Markdown.">
         <AreaTexto rows={10} className="font-mono text-[13px]" value={f.contexto} onChange={(e) => setF({ ...f, contexto: e.target.value })} />

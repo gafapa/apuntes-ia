@@ -16,8 +16,43 @@ export interface Asignatura {
   idioma: string;
   estilo: string; // tono y forma de escribir
   color: string;
+  /** Qué pueden usar los agentes (lo que falta está permitido). */
+  permisos?: Permisos;
   creado: string;
   actualizado: string;
+}
+
+/**
+ * Recursos y herramientas que pueden usar los agentes. Se fijan en la asignatura y cada documento
+ * puede cambiarlos; lo que no se indica está permitido.
+ */
+export interface Permisos {
+  imagenesWeb?: boolean; // imágenes reales (museos, bibliotecas, webs)
+  imagenesIA?: boolean; // imágenes generadas con IA
+  diagramas?: boolean; // esquemas y diagramas (Mermaid)
+  moleculas?: boolean; // estructuras de moléculas
+  busquedaWeb?: boolean; // buscar y consultar páginas web
+  busquedaImagenes?: boolean; // herramienta de búsqueda en museos y bibliotecas
+  fuentes?: boolean; // búsqueda en el material aportado
+}
+
+export const PERMISOS: { id: keyof Permisos; nombre: string; ayuda: string }[] = [
+  { id: 'imagenesWeb', nombre: 'Imágenes reales', ayuda: 'Fotografías, obras, documentos… de museos, bibliotecas y webs' },
+  { id: 'imagenesIA', nombre: 'Imágenes generadas con IA', ayuda: 'Ilustraciones creadas con Codex' },
+  { id: 'diagramas', nombre: 'Esquemas y diagramas', ayuda: 'Mapas conceptuales, flujos, cronologías…' },
+  { id: 'moleculas', nombre: 'Estructuras de moléculas', ayuda: 'Fórmulas estructurales a partir de PubChem' },
+  { id: 'busquedaWeb', nombre: 'Búsqueda web', ayuda: 'Buscar y consultar páginas web' },
+  { id: 'busquedaImagenes', nombre: 'Búsqueda en museos y bibliotecas', ayuda: 'Europeana, Met, Commons… con licencia comprobada' },
+  { id: 'fuentes', nombre: 'Búsqueda en tus fuentes', ayuda: 'El material que aportas, indexado' },
+];
+
+/** Permisos efectivos de un documento: todo permitido, salvo lo que diga la asignatura o el documento. */
+export function permisosEfectivos(asignatura?: Permisos, documento?: Permisos): Required<Permisos> {
+  const r = Object.fromEntries(PERMISOS.map((p) => [p.id, true])) as Required<Permisos>;
+  for (const fuente of [asignatura, documento]) {
+    for (const p of PERMISOS) if (typeof fuente?.[p.id] === 'boolean') r[p.id] = fuente[p.id]!;
+  }
+  return r;
 }
 
 export interface AsignaturaDetalle extends Asignatura {
@@ -32,6 +67,8 @@ export interface Documento {
   objetivo: string;
   destinatarios: string; // vacío = hereda de la asignatura
   extension: string; // p. ej. "10-15 páginas"
+  /** Cambios sobre los permisos de la asignatura (lo que falta se hereda). */
+  permisos?: Permisos;
   creado: string;
   actualizado: string;
 }

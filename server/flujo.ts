@@ -31,7 +31,7 @@ import type {
   TipoVisual,
   Trabajo,
 } from '../shared/tipos';
-import { ARCHIVO_AUTOEVALUACION } from '../shared/tipos';
+import { ARCHIVO_AUTOEVALUACION, permisosEfectivos, type Permisos } from '../shared/tipos';
 import { Almacen, ErrorUsuario, slug } from './store';
 import type { Cola, Postproceso } from './agents/cola';
 import { PedirAlAgente } from './agents/cola';
@@ -153,6 +153,13 @@ export class Flujo {
       );
   }
 
+  /** Permisos efectivos de un documento (ficha de la asignatura y, encima, la del documento). */
+  async permisos(asig: string, doc?: string) {
+    const a = await this.almacen.obtenerAsignatura(asig);
+    const d = doc ? await this.almacen.obtenerDocumento(asig, doc) : undefined;
+    return permisosEfectivos(a.permisos, d?.permisos);
+  }
+
   private async lanzar(l: Lanzamiento): Promise<Trabajo> {
     const asignatura = await this.almacen.obtenerAsignatura(l.asignatura);
     const documento = l.documento ? await this.almacen.obtenerDocumento(l.asignatura, l.documento) : undefined;
@@ -164,14 +171,17 @@ export class Flujo {
     const referencia = await this.contenidoReferencia(asignatura.id, documento?.id, l.incluir);
     // Con fuentes indexadas, el agente recibe la herramienta de búsqueda en lugar de leer documentos enteros
     const carpetas = this.carpetasFuentes(asignatura.id, documento?.id);
-    const conIndice = l.fuentes !== false && !!this.dep.mcpFuentes && (await hayIndice(carpetas).catch(() => false));
+    // Lo que la ficha de la asignatura (y la del documento) permite usar a los agentes
+    const permisos = permisosEfectivos(asignatura.permisos, documento?.permisos);
+    const imagenes = !!l.imagenes && permisos.busquedaImagenes;
+    const conIndice = l.fuentes !== false && permisos.fuentes && !!this.dep.mcpFuentes && (await hayIndice(carpetas).catch(() => false));
     const avisoFuentes = conIndice
       ? '\n\n## Material aportado\nEstá indexado. Para consultarlo usa las herramientas `buscar_en_fuentes` (fragmentos relevantes con archivo y página), `listar_fuentes` y `leer_pagina`. No leas los PDF ni documentos largos enteros: busca lo que necesites. Cita la fuente (archivo y página) cuando uses un dato.'
       : '';
     const { sistema, prompt } = construirPrompt(
       this.instrucciones(l.agente),
       { asignatura, documento, secciones, seccionActiva: l.seccionActiva },
-      l.tarea + avisoFuentes + referencia,
+      l.tarea + avisoFuentes + textoRestricciones(permisos) + referencia,
       l.indicaciones,
     );
     const personal = this.dep.ajustes().agentes[l.agente] ?? {};
@@ -187,21 +197,21 @@ export class Flujo {
       ref: l.ref,
       prompt,
       sistema,
-      web: l.web ?? AGENTES[l.agente].web,
+      web: (l.web ?? AGENTES[l.agente].web) && permisos.busquedaWeb,
       esfuerzo: l.esfuerzo ?? personal.esfuerzo ?? AGENTES[l.agente].esfuerzo,
       // El modelo elegido es del motor configurado; si se usa el otro motor, su modelo por defecto
       modelo: motor === (personal.motor ?? AGENTES[l.agente].motor) ? personal.modelo : undefined,
       mcp:
-        this.dep.mcpFuentes && (conIndice || l.imagenes)
+        this.dep.mcpFuentes && (conIndice || imagenes)
           ? {
               ...this.dep.mcpFuentes,
               args: [
                 ...this.dep.mcpFuentes.args,
-                ...(l.imagenes ? ['--imagenes'] : []),
-                ...(l.imagenes && l.guardarImagenes ? [`--recursos=${path.join(cwd, 'recursos')}`] : []),
+                ...(imagenes ? ['--imagenes'] : []),
+                ...(imagenes && l.guardarImagenes ? [`--recursos=${path.join(cwd, 'recursos')}`] : []),
                 ...(conIndice ? Object.entries(carpetas).map(([k, v]) => `${k}=${v}`) : []),
               ],
-              env: { ...this.dep.mcpFuentes.env, ...(l.imagenes ? { APUNTES_CLAVES_IMAGENES: JSON.stringify(this.dep.ajustes().claves ?? {}) } : {}) },
+              env: { ...this.dep.mcpFuentes.env, ...(imagenes ? { APUNTES_CLAVES_IMAGENES: JSON.stringify(this.dep.ajustes().claves ?? {}) } : {}) },
             }
           : undefined,
       cwd,
@@ -783,6 +793,8 @@ Si el usuario te responde pidiendo cambios, vuelve a escribir el archivo complet
     );
     if (!secciones.length) throw new ErrorUsuario('No hay secciones');
     const conCodex = this.dep.motoresListos().has('codex');
+    const tipos = tiposVisualesPermitidos(await this.permisos(asig, doc), conCodex);
+    if (!tipos.length) throw new ErrorUsuario('La ficha de la asignatura o del documento no permite ningún tipo de visual');
     const salida = this.salida('visuales');
     return this.lanzar({
       agente: 'director-visual',
@@ -797,7 +809,7 @@ Si el usuario te responde pidiendo cambios, vuelve a escribir el archivo complet
 ${secciones.map((s) => `- secciones/${s.archivo} (${s.titulo})`).join('\n')}
 
 Ten en cuenta los que ya existen (imágenes \`![...]\` y bloques \`\`\`mermaid) y no los dupliques.
-Tipos permitidos: "diagrama", "molecula"${conCodex ? ', "imagen-web" e "imagen-ia"' : ' e "imagen-web" (la generación de imágenes con IA no está disponible)'}.
+Tipos permitidos (no propongas otros): ${tipos.map((t) => `"${t}"`).join(', ')}.
 En las de tipo "molecula", añade "molecula": el nombre del compuesto en inglés tal como figura en PubChem (p. ej. "aspirin") o su SMILES.
 
 NO modifiques las secciones. Escribe tus propuestas en \`${salida}\` con este JSON exacto:
@@ -822,7 +834,7 @@ ${
   }[mezcla] ?? ''
 }
 Como máximo 2 o 3 por sección, y solo donde aporten. Si el usuario te responde pidiendo cambios, vuelve a escribir el archivo completo.`,
-      post: { tipo: 'visuales', datos: { salida, conCodex, archivos: secciones.map((s) => s.archivo) } },
+      post: { tipo: 'visuales', datos: { salida, conCodex, tipos, archivos: secciones.map((s) => s.archivo) } },
     });
   }
 
@@ -839,7 +851,7 @@ Como máximo 2 o 3 por sección, y solo donde aporten. Si el usuario te responde
 
   async editarPropuesta(asig: string, doc: string, id: string, cambios: Partial<PropuestaVisual>) {
     const permitidos: Partial<PropuestaVisual> = {};
-    if (cambios.tipo && ['diagrama', 'molecula', 'imagen-ia', 'imagen-web'].includes(cambios.tipo)) permitidos.tipo = cambios.tipo;
+    if (cambios.tipo && tiposVisualesPermitidos(await this.permisos(asig, doc), true).includes(cambios.tipo)) permitidos.tipo = cambios.tipo;
     if (typeof cambios.molecula === 'string') permitidos.molecula = cambios.molecula.trim();
     if (typeof cambios.titulo === 'string') permitidos.titulo = cambios.titulo;
     if (typeof cambios.descripcion === 'string') permitidos.descripcion = cambios.descripcion;
@@ -869,6 +881,9 @@ Como máximo 2 o 3 por sección, y solo donde aporten. Si el usuario te responde
     const p = lista.find((x) => x.id === id);
     if (!p) throw new ErrorUsuario('Propuesta no encontrada', 404);
     if (p.estado === 'generando') throw new ErrorUsuario('Ya se está generando');
+    if (!tiposVisualesPermitidos(await this.permisos(asig, doc), true).includes(p.tipo)) {
+      throw new ErrorUsuario('La ficha de la asignatura o del documento no permite este tipo de visual. Cámbialo de tipo o cambia la ficha.');
+    }
     await this.cambiarPropuesta(asig, doc, id, { estado: 'generando', error: undefined });
     const comun = {
       agente: 'ilustrador',
@@ -1430,7 +1445,7 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
     const conCodex = !!datos.conCodex;
     const secciones = (datos.archivos as string[]).map((archivo) => ({ archivo }));
     const r = await this.leerSalida<{ propuestas?: Partial<PropuestaVisual>[] }>(asig, doc, salida);
-    const tipos: TipoVisual[] = conCodex ? ['diagrama', 'molecula', 'imagen-web', 'imagen-ia'] : ['diagrama', 'molecula', 'imagen-web'];
+    const tipos: TipoVisual[] = (datos.tipos as TipoVisual[] | undefined) ?? (conCodex ? ['diagrama', 'molecula', 'imagen-web', 'imagen-ia'] : ['diagrama', 'molecula', 'imagen-web']);
     return this.conCandado(`${asig}/${doc}/visuales`, async () => {
       const actuales = await this.almacen.leerJsonDoc<PropuestaVisual[]>(asig, doc, 'visuales.json', []);
       const nombres = new Set(secciones.map((s) => s.archivo));
@@ -1442,7 +1457,7 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
           id: randomUUID().slice(0, 10),
           seccion,
           ancla: String(p.ancla ?? ''),
-          tipo: tipos.includes(p.tipo as TipoVisual) ? (p.tipo as TipoVisual) : 'diagrama',
+          tipo: tipos.includes(p.tipo as TipoVisual) ? (p.tipo as TipoVisual) : tipos[0],
           titulo: String(p.titulo ?? '').trim() || 'Figura',
           descripcion: String(p.descripcion),
           ...(p.molecula ? { molecula: String(p.molecula).trim() } : {}),
@@ -1617,3 +1632,24 @@ function respuestaEnDossier(dossier: string, pregunta: string): string | undefin
   return undefined;
 }
 
+
+/** Lo que la ficha no permite, dicho al agente (el resto se controla quitándole la herramienta). */
+function textoRestricciones(p: Required<Permisos>): string {
+  const no = [
+    !p.diagramas && 'esquemas ni diagramas (bloques ```mermaid)',
+    !p.moleculas && 'estructuras de moléculas (bloques ```molecula)',
+    !p.imagenesWeb && !p.imagenesIA && 'imágenes',
+    p.imagenesWeb !== p.imagenesIA && (p.imagenesWeb ? 'imágenes generadas con IA' : 'imágenes reales de internet, museos o bibliotecas'),
+  ].filter(Boolean);
+  return no.length ? `\n\n## Restricciones de esta asignatura\nNo incluyas ni propongas ${no.join(', ni ')}.` : '';
+}
+
+/** Tipos de visual que se pueden proponer o generar según la ficha (y si Codex está disponible). */
+export function tiposVisualesPermitidos(p: Required<Permisos>, conCodex: boolean): TipoVisual[] {
+  return [
+    p.diagramas && 'diagrama',
+    p.moleculas && 'molecula',
+    p.imagenesWeb && 'imagen-web',
+    p.imagenesIA && conCodex && 'imagen-ia',
+  ].filter((t): t is TipoVisual => !!t);
+}

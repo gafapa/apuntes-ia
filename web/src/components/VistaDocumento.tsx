@@ -15,7 +15,9 @@ import {
   Trash2,
   TriangleAlert,
 } from 'lucide-react';
-import type { Documento, Seccion } from '../../../shared/tipos';
+import type { Documento, Permisos, Seccion } from '../../../shared/tipos';
+import { permisosEfectivos } from '../../../shared/tipos';
+import { EditorPermisos } from './EditorPermisos';
 import { api, urlDatos } from '../lib/api';
 import { useEstado } from '../lib/estado';
 import { AreaTexto, Boton, BotonIcono, Campo, Entrada, Insignia, Vacio, confirmar, cx } from './ui';
@@ -102,6 +104,7 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
           <FichaDocumento
             doc={doc}
             destinatariosAsignatura={asig.destinatarios}
+            permisosAsignatura={asig.permisos}
             onGuardado={(d) => {
               setDoc(d);
               cargarAsignaturas();
@@ -461,14 +464,16 @@ function Apuntes({ asignatura, documento }: { asignatura: string; documento: str
 function FichaDocumento({
   doc,
   destinatariosAsignatura,
+  permisosAsignatura,
   onGuardado,
 }: {
   doc: Documento;
   destinatariosAsignatura: string;
+  permisosAsignatura?: Permisos;
   onGuardado: (d: Documento) => void;
 }) {
   const { avisar, seleccionar, cargarAsignaturas } = useEstado();
-  const inicial = { titulo: doc.titulo, objetivo: doc.objetivo, destinatarios: doc.destinatarios, extension: doc.extension };
+  const inicial = { titulo: doc.titulo, objetivo: doc.objetivo, destinatarios: doc.destinatarios, extension: doc.extension, permisos: doc.permisos ?? {} };
   const [f, setF] = useState(inicial);
   const [guardando, setGuardando] = useState(false);
   const cambiado = JSON.stringify(f) !== JSON.stringify(inicial);
@@ -517,6 +522,9 @@ function FichaDocumento({
       </Campo>
       <Campo etiqueta="Extensión orientativa">
         <Entrada value={f.extension} onChange={(e) => setF({ ...f, extension: e.target.value })} placeholder="10-15 páginas" />
+      </Campo>
+      <Campo etiqueta="Qué pueden usar los agentes" ayuda="Por defecto, lo mismo que la asignatura. Cambia solo lo que este documento necesite distinto.">
+        <EditorPermisos valor={f.permisos} onCambio={(permisos) => setF({ ...f, permisos })} heredados={permisosEfectivos(permisosAsignatura)} />
       </Campo>
       <div className="flex justify-end gap-2">
         {cambiado && (

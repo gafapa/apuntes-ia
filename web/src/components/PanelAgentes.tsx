@@ -4,6 +4,7 @@ import type { HerramientasChat, Motor, Trabajo } from '../../../shared/tipos';
 import { api } from '../lib/api';
 import { useEstado } from '../lib/estado';
 import { renderizar } from '../lib/markdown';
+import { usePermisos } from '../lib/permisos';
 import { BotonIcono, Insignia, cx } from './ui';
 import { ParTokens } from './ContadorTokens';
 
@@ -38,6 +39,10 @@ export function PanelAgentes() {
   const [enviando, setEnviando] = useState(false);
   const [soloEste, setSoloEste] = useState(true);
   const [herramientas, setHerramientas] = useState(leerHerramientas);
+  // Lo que la ficha no permite no se puede activar
+  const permisos = usePermisos(seleccion.asignatura, seleccion.documento);
+  const permitida: Record<keyof HerramientasChat, boolean> = { web: permisos.busquedaWeb, imagenes: permisos.busquedaImagenes, fuentes: permisos.fuentes };
+  const activa = (id: keyof HerramientasChat) => !!herramientas[id] && permitida[id];
   const [menuHerramientas, setMenuHerramientas] = useState(false);
   const cajaHerramientas = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -193,7 +198,7 @@ export function PanelAgentes() {
                 )}
               >
                 <Wrench className="size-3.5" />
-                {HERRAMIENTAS.filter((h) => herramientas[h.id]).map((h) => (
+                {HERRAMIENTAS.filter((h) => activa(h.id)).map((h) => (
                   <h.icono key={h.id} className="size-3.5 text-acento" aria-label={h.corto} />
                 ))}
               </button>
@@ -203,21 +208,24 @@ export function PanelAgentes() {
                   {HERRAMIENTAS.map((h) => (
                     <button
                       key={h.id}
+                      disabled={!permitida[h.id]}
                       onClick={() => alternarHerramienta(h.id)}
-                      className="flex w-full items-start gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-panel-2 cursor-pointer"
+                      className="flex w-full items-start gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-panel-2 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
                     >
-                      <h.icono className={cx('mt-0.5 size-4 shrink-0', herramientas[h.id] ? 'text-acento' : 'text-texto-3')} />
+                      <h.icono className={cx('mt-0.5 size-4 shrink-0', activa(h.id) ? 'text-acento' : 'text-texto-3')} />
                       <span className="min-w-0 flex-1">
                         <span className="block text-[13px]">{h.nombre}</span>
-                        <span className="block text-[11.5px] leading-snug text-texto-3">{h.ayuda}</span>
+                        <span className="block text-[11.5px] leading-snug text-texto-3">
+                          {permitida[h.id] ? h.ayuda : 'Desactivada en la ficha de la asignatura o del documento'}
+                        </span>
                       </span>
                       <span
                         className={cx(
                           'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border',
-                          herramientas[h.id] ? 'border-acento bg-acento text-white' : 'border-borde',
+                          activa(h.id) ? 'border-acento bg-acento text-white' : 'border-borde',
                         )}
                       >
-                        {herramientas[h.id] && <Check className="size-3" />}
+                        {activa(h.id) && <Check className="size-3" />}
                       </span>
                     </button>
                   ))}

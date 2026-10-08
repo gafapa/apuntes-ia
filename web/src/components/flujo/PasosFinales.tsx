@@ -24,6 +24,7 @@ import { exportarDocumento } from '../../lib/exportacion';
 import { AreaTexto, Boton, Entrada, Insignia, cx } from '../ui';
 import { ActividadAgente, BotonAgente, Paso, fechaCorta, trabajosDe } from './comun';
 import { irASeccion } from './PasosEscritura';
+import { usePermisos } from '../../lib/permisos';
 
 interface Props {
   a: string;
@@ -182,6 +183,13 @@ function TarjetaPropuesta({
   recargar: () => void;
 }) {
   const { avisar } = useEstado();
+  const permisos = usePermisos(a, d);
+  const tipoPermitido: Record<TipoVisual, boolean> = {
+    diagrama: permisos.diagramas,
+    molecula: permisos.moleculas,
+    'imagen-web': permisos.imagenesWeb,
+    'imagen-ia': permisos.imagenesIA,
+  };
   const [titulo, setTitulo] = useState(p.titulo);
   const [descripcion, setDescripcion] = useState(p.descripcion);
   const [molecula, setMolecula] = useState(p.molecula ?? '');
@@ -210,12 +218,12 @@ function TarjetaPropuesta({
         </button>
         <div className="ml-auto flex shrink-0 gap-0.5 rounded-lg bg-panel-2 p-0.5">
           {TIPOS.map((t) => {
-            const deshabilitado = generando || (t.id === 'imagen-ia' && !conCodex);
+            const deshabilitado = generando || (t.id === 'imagen-ia' && !conCodex) || !tipoPermitido[t.id];
             return (
               <button
                 key={t.id}
                 disabled={deshabilitado}
-                title={t.id === 'imagen-ia' && !conCodex ? 'Necesita Codex' : t.ayuda}
+                title={!tipoPermitido[t.id] ? 'No permitido en la ficha de la asignatura o del documento' : t.id === 'imagen-ia' && !conCodex ? 'Necesita Codex' : t.ayuda}
                 onClick={() => guardar({ tipo: t.id })}
                 className={cx(
                   'flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-0.5 text-[11.5px] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40',
