@@ -280,9 +280,9 @@ export function PanelExportar({ a, d, estado, recargar }: { a: string; d: string
   const { avisar } = useEstado();
   const [op, setOp] = useState<OpcionesExportacion>(() => {
     try {
-      return { formato: 'pdf', portada: true, indice: true, numerar: true, autoevaluacion: true, saltoSeccion: false, ...JSON.parse(localStorage.getItem('opcionesExportar') ?? '{}') };
+      return { formato: 'pdf', portada: true, indice: true, numerar: true, autoevaluacion: true, saltoSeccion: false, pies: true, ...JSON.parse(localStorage.getItem('opcionesExportar') ?? '{}') };
     } catch {
-      return { formato: 'pdf', portada: true, indice: true, numerar: true, autoevaluacion: true, saltoSeccion: false };
+      return { formato: 'pdf', portada: true, indice: true, numerar: true, autoevaluacion: true, saltoSeccion: false, pies: true };
     }
   });
   const [exportando, setExportando] = useState(false);
@@ -322,6 +322,7 @@ export function PanelExportar({ a, d, estado, recargar }: { a: string; d: string
     ['indice', 'Índice'],
     ['numerar', 'Numerar apartados'],
     ['saltoSeccion', 'Cada sección en página nueva'],
+    ['pies', 'Pies de figura y tabla'],
     ...(estado?.autoevaluacion ? ([['autoevaluacion', 'Incluir autoevaluación']] as [keyof OpcionesExportacion, string][]) : []),
   ];
 
@@ -359,7 +360,7 @@ export function PanelExportar({ a, d, estado, recargar }: { a: string; d: string
           Carpeta
         </Boton>
       </div>
-      {sinPie.length > 0 && (
+      {op.pies !== false && sinPie.length > 0 && (
         <div className="flex items-center gap-3 rounded-lg border border-aviso/40 bg-aviso/10 px-3 py-2 text-[12.5px]">
           <AlertCircle className="size-4 shrink-0 text-aviso" />
           <span className="flex-1">

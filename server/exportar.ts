@@ -97,7 +97,7 @@ export async function exportar(
     );
     const salto = op.saltoSeccion ? SALTO[op.formato] : '';
     // Todas las imágenes, esquemas y tablas con pie (numerado en Word/ODT)
-    let md = prepararPies(partes.map((p) => p.trim()).join(`\n\n${salto}\n\n`), op.formato, textos);
+    let md = prepararPies(partes.map((p) => p.trim()).join(`\n\n${salto}\n\n`), op.formato, textos, op.pies !== false);
     if (op.formato === 'docx' || op.formato === 'odt') {
       // Índice ya relleno y numerado (el de Pandoc es un campo vacío hasta actualizarlo a mano)
       const r = prepararEncabezados(md, op.numerar);

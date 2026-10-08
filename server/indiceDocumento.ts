@@ -123,6 +123,14 @@ export async function retocar(
     }
     // Tablas centradas
     doc = doc.replace(/<w:tblPr>/g, '<w:tblPr><w:jc w:val="center"/>');
+    // Imágenes sin pie (párrafos normales con un dibujo): también centradas
+    doc = doc.replace(/<w:p>((?:(?!<\/w:p>)[\s\S])*?<w:drawing>[\s\S]*?<\/w:p>)/g, (p) =>
+      /<w:jc /.test(p)
+        ? p
+        : p.includes('<w:pPr>')
+          ? p.replace('<w:pPr>', '<w:pPr><w:jc w:val="center"/>')
+          : p.replace('<w:p>', '<w:p><w:pPr><w:jc w:val="center"/></w:pPr>'),
+    );
     zip.file('word/document.xml', doc);
     // Figuras y pies centrados (estilos de Pandoc)
     let estilos = await zip.file('word/styles.xml')!.async('string');
@@ -160,6 +168,11 @@ export async function retocar(
     }
     zip.file('styles.xml', estilos);
     let cont = await zip.file('content.xml')!.async('string');
+    // Imágenes sin pie: el párrafo que solo contiene la imagen pasa al estilo centrado «Figure»
+    cont = cont.replace(
+      /<text:p text:style-name="[^"]*">(\s*<draw:frame[\s\S]*?<\/draw:frame>\s*)<\/text:p>/g,
+      '<text:p text:style-name="Figure">$1</text:p>',
+    );
     // Tablas centradas
     cont = cont.replace(/<style:table-properties ([^>]*?)(\/?)>/g, (_m, attrs: string, vacio: string) =>
       `<style:table-properties ${attrs.replace(/\s*table:align="[^"]*"/, '')} table:align="center"${vacio}>`,

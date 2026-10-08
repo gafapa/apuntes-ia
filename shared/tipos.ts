@@ -266,6 +266,7 @@ export interface OpcionesExportacion {
   numerar: boolean;
   autoevaluacion: boolean;
   saltoSeccion: boolean; // cada sección empieza en página nueva
+  pies?: boolean; // pies de figura y de tabla (por defecto, sí)
 }
 
 export type MensajeWS =

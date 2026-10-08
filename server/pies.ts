@@ -58,7 +58,7 @@ function pieDeTabla(lineas: string[], inicio: number, fin: number): { linea: num
  * Prepara pies para la exportación: todos los elementos con pie, numerados en Word/ODT.
  * `diagrama(codigo)` devuelve la ruta de la imagen del diagrama o undefined si no se pudo dibujar.
  */
-export function prepararPies(md: string, formato: 'docx' | 'odt' | 'pdf', textos: { figura: string; tabla: string }) {
+export function prepararPies(md: string, formato: 'docx' | 'odt' | 'pdf', textos: { figura: string; tabla: string }, conPies = true) {
   const numerar = formato !== 'pdf'; // Typst ya numera («Figura 3:»)
   let nFig = 0;
   let nTab = 0;
@@ -88,11 +88,19 @@ export function prepararPies(md: string, formato: 'docx' | 'odt' | 'pdf', textos
       let j = i + 1;
       while (j < lineas.length && !lineas[j].trim()) j++;
       const fuente = lineas[j]?.trim().match(/^\*(Fuente:[^*]+)\*$/);
-      if (fuente) {
+      if (fuente && conPies) {
         texto = `${texto.replace(/\.?\s*$/, '')}. ${fuente[1]}`;
         quitar.add(j);
       }
-      res.push(`![${pie('fig', texto)}](${img[2]})${img[3] ?? ''}`);
+      if (conPies) {
+        res.push(`![${pie('fig', texto)}](${img[2]})${img[3] ?? ''}`);
+      } else if (formato === 'pdf') {
+        // Sin pie, Pandoc la trataría como imagen en línea (alineada a la izquierda): se centra a mano
+        const ancho = img[3]?.match(/width=([\d.]+cm)/)?.[1];
+        res.push('```{=typst}', `#align(center, image("${img[2].replace(/"/g, '')}"${ancho ? `, width: ${ancho}` : ''}))`, '```');
+      } else {
+        res.push(`![](${img[2]})${img[3] ?? ''}`); // se centra al retocar el Word/ODT
+      }
       continue;
     }
     if (esFilaTabla(l) && esSeparadorTabla(lineas[i + 1] ?? '') && !esFilaTabla(lineas[i - 1] ?? '')) {
@@ -107,7 +115,7 @@ export function prepararPies(md: string, formato: 'docx' | 'odt' | 'pdf', textos
           if (k >= 0) res.splice(k, 1);
         }
       }
-      res.push(...lineas.slice(i, fin), '', `: ${pie('tab', p?.texto ?? '')}`);
+      res.push(...lineas.slice(i, fin), ...(conPies ? ['', `: ${pie('tab', p?.texto ?? '')}`] : []));
       i = fin - 1;
       continue;
     }
