@@ -21,13 +21,13 @@ function IconoArchivo({ nombre }: { nombre: string }) {
 
 /** Material aportado (opcional) para una asignatura o un documento. */
 export function GestorFuentes({ asignatura, documento, descripcion }: { asignatura: string; documento?: string; descripcion: string }) {
-  const { avisar, versiones } = useEstado();
+  const { avisar, versiones, reconexion } = useEstado();
   const [fuentes, setFuentes] = useState<Fuente[]>([]);
   const [arrastrando, setArrastrando] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
   const [filtro, setFiltro] = useState('');
   const input = useRef<HTMLInputElement>(null);
-  const version = versiones[`${asignatura}/${documento ?? ''}`];
+  const version = `${versiones[`${asignatura}/${documento ?? ''}`] ?? 0}-${reconexion}`; // también al reconectar con el servidor
 
   const [indice, setIndice] = useState<Record<string, { fragmentos: number; paginas?: number; estado: string }>>({});
   const cargar = useCallback(() => {

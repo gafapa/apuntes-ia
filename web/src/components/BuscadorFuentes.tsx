@@ -17,13 +17,13 @@ const ICONOS: Record<ResultadoBusqueda['tipo'], typeof Globe> = { pdf: FileText,
 
 /** Buscador de fuentes con IA: propone recursos fiables y los descarga a la carpeta de fuentes. */
 export function BuscadorFuentes({ asignatura, documento, onAnadida }: { asignatura: string; documento?: string; onAnadida: () => void }) {
-  const { avisar, versiones, trabajos } = useEstado();
+  const { avisar, versiones, reconexion, trabajos } = useEstado();
   const [consulta, setConsulta] = useState('');
   const [tipo, setTipo] = useState<TipoBusqueda>('cualquiera');
   const [resultados, setResultados] = useState<ResultadoBusqueda[]>([]);
   const [ocupados, setOcupados] = useState<Set<string>>(new Set());
   const [lanzando, setLanzando] = useState(false);
-  const version = versiones[`${asignatura}/${documento ?? ''}`];
+  const version = `${versiones[`${asignatura}/${documento ?? ''}`] ?? 0}-${reconexion}`; // también al reconectar con el servidor
   const activos = Object.values(trabajos).filter(
     (t) => t.paso === 'fuentes' && t.asignatura === asignatura && (t.documento ?? '') === (documento ?? '') && (t.estado === 'ejecutando' || t.estado === 'en-cola'),
   );

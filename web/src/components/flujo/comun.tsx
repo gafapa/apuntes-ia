@@ -7,7 +7,7 @@ import { AreaTexto, Boton, Insignia, cx } from '../ui';
 
 /** Estado del flujo de un documento, que se recarga cuando cambian sus archivos o sus trabajos. */
 export function useFlujo(asignatura: string, documento: string) {
-  const version = useEstado((s) => s.versiones[`${asignatura}/${documento}`] ?? 0);
+  const version = useEstado((s) => `${s.versiones[`${asignatura}/${documento}`] ?? 0}-${s.reconexion}`); // también al reconectar
   const todos = useEstado((s) => s.trabajos);
   const trabajos = useMemo(
     () => Object.values(todos).filter((t) => t.asignatura === asignatura && t.documento === documento),

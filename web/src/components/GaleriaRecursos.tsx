@@ -9,8 +9,8 @@ import { BuscadorImagenes } from './BuscadorImagenes';
 
 /** Imágenes de los apuntes: las que crean o descargan los agentes y aparecen en el documento. */
 export function GaleriaRecursos({ a, d }: { a: string; d: string }) {
-  const { avisar, versiones } = useEstado();
-  const version = versiones[`${a}/${d}`];
+  const { avisar, versiones, reconexion } = useEstado();
+  const version = `${versiones[`${a}/${d}`] ?? 0}-${reconexion}`; // también al reconectar con el servidor
   const [recursos, setRecursos] = useState<Recurso[]>([]);
   const [ampliada, setAmpliada] = useState<string>();
 

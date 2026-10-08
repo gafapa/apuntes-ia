@@ -127,8 +127,8 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
 // ---------------------------------------------------------------------------
 
 function Apuntes({ asignatura, documento }: { asignatura: string; documento: string }) {
-  const { avisar, versiones } = useEstado();
-  const version = versiones[`${asignatura}/${documento}`] ?? 0;
+  const { avisar, versiones, reconexion } = useEstado();
+  const version = `${versiones[`${asignatura}/${documento}`] ?? 0}-${reconexion}`; // también al reconectar con el servidor
   const [secciones, setSecciones] = useState<Seccion[]>([]);
   const [activa, setActiva] = useState<string>();
   const [texto, setTexto] = useState('');

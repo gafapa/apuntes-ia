@@ -27,6 +27,8 @@ interface Estado {
   ultimaRuta?: string;
   avisos: Aviso[];
   conectado: boolean;
+  /** Aumenta cada vez que se recupera la conexión con el servidor: las vistas vuelven a cargar sus datos. */
+  reconexion: number;
   /** Sección abierta en el editor (se envía como contexto a los agentes). */
   seccionActiva?: string;
   /** Petición de abrir una sección en el editor (desde el flujo). */
@@ -58,6 +60,7 @@ export const useEstado = create<Estado>((set, get) => ({
   versiones: {},
   avisos: [],
   conectado: false,
+  reconexion: 0,
   vistas: {},
 
   elegirVista(clave, vista) {
@@ -111,7 +114,9 @@ let recargaAsignaturas: ReturnType<typeof setTimeout> | undefined;
 function conectar() {
   const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
   ws.onopen = async () => {
-    useEstado.setState({ conectado: true });
+    // Si el servidor se reinició (p. ej. en el modo en vivo), lo que se cargó mientras estaba caído
+    // falló: las vistas lo vuelven a pedir
+    useEstado.setState((s) => ({ conectado: true, reconexion: s.reconexion + 1 }));
     // Al (re)conectar se recupera todo: el servidor puede haberse reiniciado
     const e = useEstado.getState();
     e.cargarAsignaturas();

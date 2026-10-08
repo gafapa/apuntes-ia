@@ -8,8 +8,8 @@ import { ActividadAgente, BotonAgente } from './flujo/comun';
 
 /** Glosario común de la asignatura: lo mantiene un agente y se puede editar a mano. */
 export function PestanaGlosario({ a }: { a: string }) {
-  const { avisar, versiones, trabajos } = useEstado();
-  const version = versiones[`${a}/`];
+  const { avisar, versiones, reconexion, trabajos } = useEstado();
+  const version = `${versiones[`${a}/`] ?? 0}-${reconexion}`; // también al reconectar con el servidor
   const [texto, setTexto] = useState('');
   const [editando, setEditando] = useState(false);
   const activos = Object.values(trabajos).filter((t) => t.asignatura === a && t.paso === 'glosario' && (t.estado === 'ejecutando' || t.estado === 'en-cola'));

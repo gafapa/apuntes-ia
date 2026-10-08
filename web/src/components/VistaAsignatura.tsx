@@ -19,11 +19,11 @@ const COLORES = ['#7c5cff', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899
 type Pestana = 'documentos' | 'contexto' | 'material' | 'glosario' | 'plantillas';
 
 export function VistaAsignatura({ asignatura }: { asignatura: string }) {
-  const { seleccionar, cargarAsignaturas, avisar, versiones } = useEstado();
+  const { seleccionar, cargarAsignaturas, avisar, versiones, reconexion } = useEstado();
   const [a, setA] = useState<AsignaturaDetalle>();
   const [pestana, setPestana] = useState<Pestana>('documentos');
   const [nuevoDoc, setNuevoDoc] = useState(false);
-  const version = versiones[`${asignatura}/`];
+  const version = `${versiones[`${asignatura}/`] ?? 0}-${reconexion}`; // también al reconectar con el servidor
 
   useEffect(() => {
     api.asignatura(asignatura).then(setA).catch((e) => avisar(e.message, 'error'));
