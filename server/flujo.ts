@@ -10,12 +10,14 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type {
   Ajustes,
+  Apartado,
   EntradaIndice,
   EstadoFlujo,
   Indice,
   Motor,
   PasoFlujo,
   PreguntaInvestigacion,
+  Profundidad,
   PropuestaVisual,
   Sugerencia,
   TipoRevision,
@@ -52,7 +54,27 @@ interface Lanzamiento {
   post?: Postproceso;
 }
 
-const INDICE_VACIO: Indice = { entradas: [], notas: '', aprobado: false, actualizado: '' };
+const INDICE_VACIO: Indice = { profundidad: 1, entradas: [], notas: '', aprobado: false, actualizado: '' };
+
+const profundidadValida = (p: unknown): Profundidad => (p === 2 || p === 3 ? p : 1);
+
+/** Normaliza el árbol de apartados (de la IA o del usuario) hasta la profundidad indicada. */
+function limpiarApartados(lista: unknown, niveles: number): Apartado[] {
+  if (niveles <= 0 || !Array.isArray(lista)) return [];
+  return lista
+    .map((x) => (typeof x === 'string' ? { titulo: x } : (x as Partial<Apartado>)))
+    .filter((x) => x && String(x.titulo ?? '').trim())
+    .map((x) => ({
+      id: x.id || randomUUID().slice(0, 8),
+      titulo: String(x.titulo).trim(),
+      apartados: limpiarApartados(x.apartados, niveles - 1),
+    }));
+}
+
+/** Estructura de apartados como lista de encabezados Markdown, para el redactor. */
+function estructuraMarkdown(apartados: Apartado[], nivel = 2): string[] {
+  return apartados.flatMap((a) => [`${'  '.repeat(nivel - 2)}- ${'#'.repeat(nivel)} ${a.titulo}`, ...estructuraMarkdown(a.apartados, nivel + 1)]);
+}
 
 export class Flujo {
   private candados = new Map<string, Promise<unknown>>();
@@ -304,19 +326,58 @@ Marca con «(material aportado)» las ideas que procedan del material del profes
   // ---------------------------------------------------------------------------
   // 2. Índice
 
-  async proponerIndice(asig: string, doc: string, indicaciones?: string) {
+  async proponerIndice(asig: string, doc: string, indicaciones?: string, profundidadPedida?: number, soloApartados = false) {
     if (this.ocupado('indice', asig, doc)) throw new ErrorUsuario('Ya se está proponiendo un índice');
     await this.prepararFuentes(asig, doc);
     const salida = this.salida('indice');
     const actual = await this.almacen.leerJsonDoc<Indice | null>(asig, doc, 'indice.json', null);
+    const profundidad = profundidadValida(profundidadPedida ?? actual?.profundidad);
+    if (soloApartados && !actual?.entradas.length) throw new ErrorUsuario('Primero hace falta un índice con secciones');
+    const ejemploApartados =
+      profundidad === 1
+        ? ''
+        : profundidad === 2
+          ? `,
+      "apartados": [ { "titulo": "Apartado 1" }, { "titulo": "Apartado 2" } ]`
+          : `,
+      "apartados": [
+        { "titulo": "Apartado 1", "apartados": [ { "titulo": "Subapartado 1.1" }, { "titulo": "Subapartado 1.2" } ] },
+        { "titulo": "Apartado 2", "apartados": [] }
+      ]`;
+    const reglaProfundidad =
+      profundidad === 1
+        ? 'Profundidad: solo secciones (no incluyas apartados).'
+        : profundidad === 2
+          ? 'Profundidad: secciones con sus apartados (2-6 por sección). Sin subapartados.'
+          : 'Profundidad: secciones, apartados (2-6 por sección) y subapartados donde aporten claridad (no hace falta que todos los apartados los tengan).';
     return this.lanzar({
       agente: 'arquitecto',
       asignatura: asig,
       documento: doc,
-      titulo: actual ? 'Rehacer el índice' : 'Proponer el índice',
+      titulo: soloApartados ? 'Desarrollar los apartados del índice' : actual ? 'Rehacer el índice' : 'Proponer el índice',
       paso: 'indice',
       indicaciones,
-      tarea: `Diseña el índice director del documento a partir del dossier (\`investigacion.md\`, si existe), del material aportado y del objetivo.
+      tarea: soloApartados
+        ? `Desarrolla los apartados del índice director (\`indice.json\`) hasta la profundidad pedida. Mantén EXACTAMENTE las mismas secciones, con sus títulos, su orden y el resto de sus campos; solo añade o mejora sus apartados. Usa el dossier (\`investigacion.md\`) y el material aportado si existen.
+${reglaProfundidad}
+
+NO crees ni modifiques secciones. Escribe el índice completo en el archivo \`${salida}\` con este JSON exacto (sin comentarios):
+
+{
+  "notas": "breve justificación",
+  "entradas": [
+    {
+      "titulo": "Título de la sección (igual que ahora)",
+      "objetivo": "…",
+      "contenidos": ["…"],
+      "extension": "…",
+      "visuales": "…"${ejemploApartados}
+    }
+  ]
+}
+
+Si el usuario te pide cambios después, vuelve a escribir el archivo completo.`
+        : `Diseña el índice director del documento a partir del dossier (\`investigacion.md\`, si existe), del material aportado y del objetivo.
 ${actual ? 'Ya existe un índice en `indice.json`: tenlo en cuenta y mejóralo según las indicaciones.\n' : ''}
 NO crees ni modifiques secciones. Escribe tu propuesta en el archivo \`${salida}\` con este JSON exacto (sin comentarios):
 
@@ -328,20 +389,23 @@ NO crees ni modifiques secciones. Escribe tu propuesta en el archivo \`${salida}
       "objetivo": "Qué debe entender o saber hacer quien la estudie",
       "contenidos": ["punto 1", "punto 2", "..."],
       "extension": "p. ej. 500-700 palabras",
-      "visuales": "apoyos visuales recomendados o cadena vacía"
+      "visuales": "apoyos visuales recomendados o cadena vacía"${ejemploApartados}
     }
   ]
 }
 
+${reglaProfundidad}
 Entre 3 y 12 secciones, según la extensión pedida. La primera puede ser una introducción breve y la última un resumen o síntesis; no incluyas una sección de autoevaluación (hay un agente para eso).
 Si el usuario te pide cambios después, vuelve a escribir el archivo completo con la versión corregida.`,
-      post: { tipo: 'indice', datos: { salida } },
+      post: { tipo: 'indice', datos: { salida, profundidad } },
     });
   }
 
   async guardarIndice(asig: string, doc: string, indice: Indice) {
     if (!Array.isArray(indice?.entradas)) throw new ErrorUsuario('Índice no válido');
+    const profundidad = profundidadValida(indice.profundidad);
     const limpio: Indice = {
+      profundidad,
       notas: String(indice.notas ?? ''),
       aprobado: !!indice.aprobado,
       actualizado: new Date().toISOString(),
@@ -352,6 +416,7 @@ Si el usuario te pide cambios después, vuelve a escribir el archivo completo co
           titulo: e.titulo.trim(),
           objetivo: String(e.objetivo ?? ''),
           contenidos: (e.contenidos ?? []).map(String).filter((c) => c.trim()),
+          apartados: limpiarApartados(e.apartados, profundidad - 1),
           extension: String(e.extension ?? ''),
           visuales: String(e.visuales ?? ''),
           archivo: e.archivo,
@@ -410,6 +475,8 @@ Si el usuario te pide cambios después, vuelve a escribir el archivo completo co
             entrada.contenidos.length && `- Contenidos:\n${entrada.contenidos.map((c) => `  - ${c}`).join('\n')}`,
             entrada.extension && `- Extensión: ${entrada.extension}`,
             entrada.visuales && `- Apoyos visuales sugeridos: ${entrada.visuales}`,
+            entrada.apartados?.length &&
+              `- Estructura de apartados (OBLIGATORIA: usa exactamente estos encabezados, en este orden; puedes añadir párrafos, listas y tablas dentro de cada uno, pero no otros encabezados del mismo nivel):\n${estructuraMarkdown(entrada.apartados).map((l) => `  ${l}`).join('\n')}`,
           ]
             .filter(Boolean)
             .join('\n')
@@ -812,7 +879,9 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
     const entradas = (r.entradas ?? []).filter((e) => e?.titulo?.trim());
     if (!entradas.length) throw new Error('El índice propuesto está vacío. Respóndele para que lo complete.');
     const previas = actual?.entradas ?? [];
+    const profundidad = profundidadValida(datos.profundidad);
     const indice: Indice = {
+      profundidad,
       notas: String(r.notas ?? ''),
       aprobado: false,
       actualizado: new Date().toISOString(),
@@ -824,6 +893,7 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
           titulo: e.titulo!.trim(),
           objetivo: String(e.objetivo ?? ''),
           contenidos: Array.isArray(e.contenidos) ? e.contenidos.map(String) : [],
+          apartados: limpiarApartados(e.apartados, profundidad - 1),
           extension: String(e.extension ?? ''),
           visuales: String(e.visuales ?? ''),
           archivo: previa?.archivo,

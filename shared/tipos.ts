@@ -125,17 +125,29 @@ export type PasoFlujo =
   | 'autoevaluacion'
   | 'glosario';
 
+/** Apartado o subapartado de una sección del índice. */
+export interface Apartado {
+  id: string;
+  titulo: string;
+  apartados: Apartado[]; // subapartados (solo con profundidad 3)
+}
+
+/** Niveles del índice: 1 = solo secciones; 2 = con apartados; 3 = con apartados y subapartados. */
+export type Profundidad = 1 | 2 | 3;
+
 export interface EntradaIndice {
   id: string;
   titulo: string;
   objetivo: string;
   contenidos: string[];
+  apartados: Apartado[];
   extension: string; // p. ej. "600-800 palabras"
   visuales: string; // ideas de apoyo visual
   archivo?: string; // sección creada a partir de esta entrada
 }
 
 export interface Indice {
+  profundidad: Profundidad;
   entradas: EntradaIndice[];
   notas: string;
   aprobado: boolean;

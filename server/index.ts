@@ -312,7 +312,10 @@ export async function crearServidor(op: OpcionesServidor) {
     await flujo.eliminarPregunta(params(req).a, params(req).d, (req.params as { id: string }).id);
     return { ok: true };
   });
-  app.post(`${D}/flujo/indice`, async (req) => flujo.proponerIndice(params(req).a, params(req).d, cuerpo(req).indicaciones));
+  app.post(`${D}/flujo/indice`, async (req) => {
+    const b = (req.body ?? {}) as { indicaciones?: string; profundidad?: number; soloApartados?: boolean };
+    return flujo.proponerIndice(params(req).a, params(req).d, b.indicaciones, b.profundidad, !!b.soloApartados);
+  });
   app.put(`${D}/flujo/indice`, async (req) => flujo.guardarIndice(params(req).a, params(req).d, req.body as Indice));
   app.post(`${D}/flujo/indice/aprobar`, async (req) => flujo.aprobarIndice(params(req).a, params(req).d));
   app.post(`${D}/flujo/redactar`, async (req) =>
