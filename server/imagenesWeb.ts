@@ -372,6 +372,45 @@ export async function miniatura(url: string): Promise<{ tipo: string; datos: Buf
   return { tipo, datos };
 }
 
+/**
+ * Referencia de una imagen ajena según APA 7 (nota de derechos de autor para figuras
+ * reproducidas, con la licencia Creative Commons cuando la hay):
+ * «Tomado de *Título*, por Autor, fecha, Institución (URL). CC BY 4.0.»
+ * Sin autor se omite «por…»; sin fecha, «s. f.».
+ */
+export function referenciaApa(r: { titulo?: string; autor?: string; fecha?: string; institucion?: string; licencia?: string; pagina?: string }): string {
+  const titulo = r.titulo?.replace(/[*_[\]]/g, '').replace(/\s+/g, ' ').trim();
+  // APA solo pide el nombre: fuera nacionalidad y fechas que añaden algunos museos («(Italian, 1528–1588)»)
+  const autor = r.autor
+    ?.replace(/\s*\([^)]*\d{3,4}[^)]*\)/g, '')
+    .replace(/[*_[\]]/g, '')
+    .trim();
+  let s = `Tomado de ${titulo ? `*${titulo}*` : 'una imagen'}`;
+  if (autor) s += `, por ${autor}`;
+  s += `, ${r.fecha?.trim() || 's. f.'}`;
+  if (r.institucion) s += `, ${r.institucion.trim()}`;
+  if (r.pagina) {
+    let visible = r.pagina;
+    try {
+      visible = decodeURI(r.pagina);
+    } catch {}
+    s += ` ([${visible.replace(/[[\]]/g, '')}](${r.pagina.replace(/\(/g, '%28').replace(/\)/g, '%29')}))`;
+  }
+  s += '.';
+  const licencia = r.licencia?.trim() === 'CC0' ? 'CC0 1.0' : r.licencia?.trim();
+  if (licencia) s += ` ${licencia}.`;
+  return s;
+}
+
+/** Nombre del sitio de una URL (p. ej. «commons.wikimedia.org»), para referencias sin institución conocida. */
+export function sitioWeb(url?: string): string | undefined {
+  try {
+    return url ? new URL(url).hostname.replace(/^www\./, '') : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Crédito al estilo de los museos: «Autor, Título, fecha. Institución · licencia». */
 export function credito(r: Pick<ResultadoImagen, 'titulo' | 'autor' | 'fecha' | 'institucion' | 'licencia'>): string {
   const obra = [r.autor, r.titulo && `«${r.titulo.replace(/[*_]/g, '')}»`, r.fecha].filter(Boolean).join(', ');

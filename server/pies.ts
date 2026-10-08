@@ -88,13 +88,14 @@ export function prepararPies(md: string, formato: 'docx' | 'odt' | 'pdf', textos
     }
     const img = l.trim().match(IMAGEN_SOLA);
     if (img) {
-      // La línea «*Fuente: …*» de las imágenes de internet pasa a formar parte del pie
+      // La referencia de las imágenes ajenas (APA: «Tomado de *Título*, por…», o la antigua
+      // «*Fuente: …*») pasa a formar parte del pie
       let texto = img[1];
       let j = i + 1;
       while (j < lineas.length && !lineas[j].trim()) j++;
-      const fuente = lineas[j]?.trim().match(/^\*(Fuente:[^*]+)\*$/);
+      const fuente = lineas[j]?.trim().match(/^\*(Fuente:[^*]+)\*$|^((?:Tomado|Adaptado) de .+)$/);
       if (fuente && conPies) {
-        texto = `${texto.replace(/\.?\s*$/, '')}. ${fuente[1]}`;
+        texto = `${texto.replace(/\.?\s*$/, '')}. ${fuente[1] ?? fuente[2]}`;
         quitar.add(j);
       }
       if (conPies) {

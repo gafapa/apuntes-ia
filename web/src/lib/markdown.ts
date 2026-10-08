@@ -53,6 +53,8 @@ export function renderizar(texto: string, base?: string): string {
       // Pies de diagramas («*Figura: …*») y de tablas («Tabla: …»)
       .replace(/<p>(<em>(?:Figura|Esquema|Diagrama)[^<]*<\/em>)<\/p>/g, '<p class="pie">$1</p>')
       .replace(/<p>((?:Tabla|Table)\s*\d*\s*[:.][^<]*)<\/p>/g, '<p class="pie">$1</p>')
+      // Referencias de imágenes ajenas (APA: «Tomado de …»; antes «*Fuente: …*»), bajo la figura
+      .replace(/<p>((?:Tomado|Adaptado) de |<em>Fuente:)/g, '<p class="pie referencia">$1')
   );
 }
 

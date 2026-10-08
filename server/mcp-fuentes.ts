@@ -4,7 +4,7 @@
 // Lo lanzan Claude Code y Codex como proceso hijo. Argumentos: [--imagenes] etiqueta=carpeta_de_fuentes ...
 // Las claves de las colecciones que las piden llegan en APUNTES_CLAVES_IMAGENES (JSON).
 import { buscar, formatear, leerPagina, listar } from './rag';
-import { buscarImagenes, credito, descargarImagen, type ClavesImagenes } from './imagenesWeb';
+import { buscarImagenes, credito, descargarImagen, referenciaApa, type ClavesImagenes } from './imagenesWeb';
 
 const carpetas: Record<string, string> = {};
 let conImagenes = false;
@@ -44,7 +44,7 @@ const HERRAMIENTA_GUARDAR = {
   name: 'guardar_imagen',
   description:
     'Descarga una imagen (la URL «imagen:» de un resultado de buscar_imagenes) a la carpeta recursos/ del documento y devuelve ' +
-    'la ruta para enlazarla en el Markdown: ![pie](recursos/archivo.jpg) y, debajo, la línea *Fuente: crédito ([origen](ficha))*.',
+    'la ruta para enlazarla en el Markdown: ![pie](recursos/archivo.jpg) y, debajo, en su propio párrafo, la línea «referencia» (APA 7) que acompaña al resultado.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -108,7 +108,7 @@ async function llamar(nombre: string, args: Record<string, unknown>): Promise<st
         .slice(0, 50) || 'imagen';
     try {
       const archivo = await descargarImagen(String(args.url ?? ''), dirRecursos, base);
-      return `Guardada en recursos/${archivo}. Enlázala como ![pie](recursos/${archivo}) seguida de la línea *Fuente: … ([origen](…))*.`;
+      return `Guardada en recursos/${archivo}. Enlázala como ![pie](recursos/${archivo}) y, debajo, en su propio párrafo, copia tal cual la «referencia» del resultado (Tomado de …).`;
     } catch (e) {
       return `No se pudo descargar: ${(e as Error).message} Prueba con otra imagen.`;
     }
@@ -120,7 +120,7 @@ async function llamar(nombre: string, args: Record<string, unknown>): Promise<st
       .slice(0, 30)
       .map(
         (x) =>
-          `- [${x.id}] ${credito(x)}${x.ancho ? ` (${x.ancho}×${x.alto} px)` : ''}\n  imagen: ${x.imagen}\n  ficha: ${x.pagina}`,
+          `- [${x.id}] ${credito(x)}${x.ancho ? ` (${x.ancho}×${x.alto} px)` : ''}\n  imagen: ${x.imagen}\n  ficha: ${x.pagina}\n  referencia: ${referenciaApa(x)}`,
       )
       .join('\n');
   }

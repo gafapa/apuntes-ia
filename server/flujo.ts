@@ -36,7 +36,7 @@ import type { Cola, Postproceso } from './agents/cola';
 import { PedirAlAgente } from './agents/cola';
 import { dimensiones } from './imagenes';
 import type { Moleculas } from './moleculas';
-import { credito as creditoObra, descargarImagen, type ResultadoImagen } from './imagenesWeb';
+import { descargarImagen, referenciaApa, sitioWeb, type ResultadoImagen } from './imagenesWeb';
 import { hashTexto } from '../shared/hash';
 import { AGENTES, construirPrompt } from './agents/agentes';
 import { extraerJson, insertarTrasAncla, sustituirFragmento, buscarFragmento, contarPalabras } from './texto';
@@ -1091,7 +1091,7 @@ No descargues nada ni modifiques otros archivos. Escribe los resultados en \`${s
       });
     }
     const rel = `recursos/${nombre}`;
-    const markdown = `![${(pie || r.titulo).replace(/[[\]]/g, '')}](${rel})\n\n*Fuente: ${creditoObra(r)} ([origen](${r.pagina}))*`;
+    const markdown = `![${(pie || r.titulo).replace(/[[\]]/g, '')}](${rel})\n\n${referenciaApa(r)}`;
     if (seccion) {
       await this.conCandado(`${asig}/${doc}/sec/${seccion}`, async () => {
         const texto = await this.almacen.leerSeccion(asig, doc, seccion);
@@ -1156,7 +1156,8 @@ No descargues nada ni modifiques otros archivos. Escribe los resultados en \`${s
                 await this.almacen.guardarSeccion(asig, doc, f.seccion, texto.split(`](${f.ruta})`).join(`](${rel})`));
               });
             } else if (!f.ruta) {
-              const pie = v.credito ? `\n\n*Fuente: ${v.credito}*` : '';
+              // credito guarda la referencia APA («Tomado de…»); las antiguas eran «Fuente: …»
+              const pie = v.credito ? (/^(Tomado|Adaptado) de /.test(v.credito) ? `\n\n${v.credito}` : `\n\n*Fuente: ${v.credito}*`) : '';
               await this.insertarEnSeccion(asig, doc, v, `![${v.titulo}](${rel})${pie}`);
             }
             await this.cambiarPropuesta(asig, doc, v.id, { estado: 'insertada', archivo: rel, error: undefined });
@@ -1508,11 +1509,9 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
       throw otra(`${(e as Error).message.replace(/\.$/, '')}: ${r.url}.`);
     }
     const rel = `recursos/${descargado}`;
-    // Crédito al estilo de los museos si se conoce la institución; si no, autor y licencia
-    const credito = r.institucion && r.licencia
-      ? creditoObra({ titulo: r.titulo ?? '', autor: r.autor, fecha: r.fecha, institucion: r.institucion, licencia: r.licencia })
-      : [r.autor, r.licencia].filter(Boolean).join(' · ');
-    const pie = credito ? `\n\n*Fuente: ${credito}${r.pagina ? ` ([origen](${r.pagina}))` : ''}*` : '';
+    // Referencia APA 7 bajo la imagen (al exportar pasa al pie de figura)
+    const credito = referenciaApa({ ...r, institucion: r.institucion ?? sitioWeb(r.pagina ?? r.url) });
+    const pie = `\n\n${credito}`;
     const encontrado = await this.insertarEnSeccion(asig, doc, p, `![${p.titulo}](${rel})${pie}`);
     await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada', archivo: rel, credito, url: r.url, reemplaza: rel, error: undefined });
     return encontrado ? 'Imagen descargada e insertada' : 'Imagen añadida al final de la sección';
@@ -1530,7 +1529,7 @@ function sustituirImagen(texto: string, ruta: string, bloque: string): { texto: 
   let fin = i + 1;
   let j = i + 1;
   while (j < lineas.length && !lineas[j].trim()) j++;
-  if (/^\s*\*(Fuente:[^*]+|\([^*]+\))\*\s*$/.test(lineas[j] ?? '')) fin = j + 1;
+  if (/^\s*(\*(Fuente:[^*]+|\([^*]+\))\*|(Tomado|Adaptado) de .+)\s*$/.test(lineas[j] ?? '')) fin = j + 1;
   lineas.splice(i, fin - i, bloque);
   return { texto: lineas.join('\n'), encontrado: true };
 }
