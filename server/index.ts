@@ -21,7 +21,6 @@ import { Contador } from './tokens';
 import { plantillaBase } from './plantillaBase';
 import { Moleculas } from './moleculas';
 import { Arasaac } from './arasaac';
-import { vocesInstaladas } from './audio';
 import { rutaPandoc } from './conversion';
 import { ESFUERZOS, PERFILES, modelosDisponibles, preset } from './agents/modelos';
 import { buscarImagenes, miniatura, type ResultadoImagen } from './imagenesWeb';
@@ -308,7 +307,7 @@ export async function crearServidor(op: OpcionesServidor) {
   // ---------- Agentes ----------
   app.get('/api/agentes', async () => Object.values(AGENTES));
   // Modelos de cada motor y, para cada agente, el modelo y esfuerzo que le da el perfil vigente
-  // Requisitos para la pantalla de inicio: conexión, exportación, voces y claves opcionales
+  // Requisitos para la pantalla de inicio: conexión, exportación y claves opcionales
   app.get('/api/requisitos', async () => {
     const conexion = await fetch('https://commons.wikimedia.org/w/api.php?action=query&format=json', { method: 'HEAD', signal: AbortSignal.timeout(6000) })
       .then((r) => r.ok || r.status < 500)
@@ -316,7 +315,6 @@ export async function crearServidor(op: OpcionesServidor) {
     return {
       conexion,
       exportacion: !!dirBin && fs.existsSync(rutaPandoc(dirBin)) && fs.existsSync(path.join(dirBin, process.platform === 'win32' ? 'typst.exe' : 'typst')),
-      voces: await vocesInstaladas(),
       claves: { europeana: !!ajustes.claves?.europeana, smithsonian: !!ajustes.claves?.smithsonian },
     };
   });

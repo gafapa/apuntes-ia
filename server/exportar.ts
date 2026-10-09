@@ -15,7 +15,6 @@ import { prepararPies } from './pies';
 import { ajustarAnchos } from './tablas';
 import { traducirQuimica } from './quimica';
 import { prepararSoluciones } from './soluciones';
-import { procesarAudios } from './audio';
 import { PATRON_MOLECULA, consultaMolecula } from '../shared/quimica';
 import { ANCHO_BLOQUE, NOMBRE_BLOQUE, PATRON_BLOQUE, claveBloque, type TipoBloque } from '../shared/bloques';
 import { Almacen, ErrorUsuario, slug } from './store';
@@ -146,15 +145,12 @@ export async function exportar(
     // Soluciones de los ejercicios: en el texto, en un solucionario al final o sin ellas
     const saltoSolucionario = op.formato === 'pdf' ? '```{=typst}\n#pagebreak()\n```' : op.formato === 'md' ? '' : saltoPagina(op.formato);
     const unido = prepararSoluciones(traducirQuimica(partes.map((p) => p.trim()).join(`\n\n${salto}\n\n`)), op.soluciones ?? 'texto', 'Solucionario', saltoSolucionario);
-    // Audios (idiomas): un WAV por pista en una carpeta junto al documento exportado
-    const carpetaAudios = `${slug(documento.titulo) || 'apuntes'}-audios`;
-    const conAudios = await procesarAudios(unido, almacen.rutaExportado(asig, doc, carpetaAudios), carpetaAudios);
-    let md = prepararPies(ajustarAnchos(conAudios), op.formato === 'md' ? 'docx' : op.formato, textos, op.pies !== false);
-    // Markdown: un .zip con el .md y lo que enlaza (figuras, imágenes, audios), sin pasar por Pandoc
+    let md = prepararPies(ajustarAnchos(unido), op.formato === 'md' ? 'docx' : op.formato, textos, op.pies !== false);
+    // Markdown: un .zip con el .md y lo que enlaza (figuras e imágenes), sin pasar por Pandoc
     if (op.formato === 'md') {
       const fecha = new Date().toLocaleDateString(lang, { day: 'numeric', month: 'long', year: 'numeric' });
       const cabecera = `# ${documento.titulo}\n\n*${[asignatura.nombre, asignatura.nivel].filter(Boolean).join(' · ')} — ${fecha}*`;
-      return await exportarMarkdown(almacen, asig, doc, `${cabecera}\n\n${md}`, slug(documento.titulo) || 'apuntes', carpetaAudios);
+      return await exportarMarkdown(almacen, asig, doc, `${cabecera}\n\n${md}`, slug(documento.titulo) || 'apuntes');
     }
     if (op.formato === 'docx' || op.formato === 'odt') {
       // Índice ya relleno y numerado (el de Pandoc es un campo vacío hasta actualizarlo a mano)
@@ -370,9 +366,9 @@ function plantillaTypst(color: string, op: OpcionesExportacion): string {
 
 /**
  * Exportación a Markdown: el texto queda en Markdown estándar (sin las extensiones de Pandoc) y se
- * empaqueta en un .zip con las figuras dibujadas (PNG), las imágenes de recursos/ y los audios.
+ * empaqueta en un .zip con las figuras dibujadas (PNG), y las imágenes de recursos/.
  */
-async function exportarMarkdown(almacen: Almacen, asig: string, doc: string, md: string, base: string, carpetaAudios: string): Promise<Exportado> {
+async function exportarMarkdown(almacen: Almacen, asig: string, doc: string, md: string, base: string): Promise<Exportado> {
   const dirDoc = almacen.dirDocumento(asig, doc);
   const zip = new JSZip();
   const limpio = md
@@ -384,9 +380,8 @@ async function exportarMarkdown(almacen: Almacen, asig: string, doc: string, md:
     .replace(/^(#{1,6} .*?)\s*\{[^}]*\}\s*$/gm, '$1')
     // Pies de tabla de Pandoc («: Tabla 1. …») como texto en cursiva bajo la tabla
     .replace(/^: (.+)$/gm, '*$1*')
-    // Figuras y audios, en carpetas propias dentro del zip
+    // Figuras, en su propia carpeta dentro del zip
     .replace(/\]\(\.exportacion\/([^)]+)\)/g, '](figuras/$1)')
-    .replace(new RegExp(`«${carpetaAudios}/`, 'g'), '«audios/')
     .replace(/\n{3,}/g, '\n\n');
   zip.file(`${base}.md`, `${limpio.trim()}\n`);
   // Archivos enlazados: figuras (generadas al exportar) e imágenes del documento
@@ -394,10 +389,6 @@ async function exportarMarkdown(almacen: Almacen, asig: string, doc: string, md:
     if (zip.file(ruta)) continue;
     const origen = ruta.startsWith('figuras/') ? path.join(dirDoc, '.exportacion', ruta.slice('figuras/'.length)) : path.join(dirDoc, decodeURIComponent(ruta));
     if (existsSync(origen)) zip.file(ruta, await fs.readFile(origen));
-  }
-  const dirAudios = almacen.rutaExportado(asig, doc, carpetaAudios);
-  if (existsSync(dirAudios)) {
-    for (const f of await fs.readdir(dirAudios)) zip.file(`audios/${f}`, await fs.readFile(path.join(dirAudios, f)));
   }
   const nombre = `${base}-markdown.zip`;
   const destino = almacen.rutaExportado(asig, doc, nombre);

@@ -60,15 +60,6 @@ export function VistaPrevia({ texto, base, seccion }: { texto: string; base: str
   // (o añadirlo a la selección, que abarca desde el primero hasta el último)
   const alPulsar = (e: React.MouseEvent) => {
     const el = e.target as HTMLElement;
-    // Bloques de audio: leerlo en voz alta con las voces del sistema
-    const audio = el.closest<HTMLElement>('[data-hablar]');
-    if (audio) {
-      const voz = new SpeechSynthesisUtterance(decodeURIComponent(audio.dataset.hablar ?? ''));
-      voz.lang = { es: 'es-ES', en: 'en-GB', fr: 'fr-FR', de: 'de-DE', it: 'it-IT', pt: 'pt-PT', ca: 'ca-ES', gl: 'gl-ES', eu: 'eu-ES' }[audio.dataset.idioma ?? 'es'] ?? audio.dataset.idioma!;
-      speechSynthesis.cancel();
-      speechSynthesis.speak(voz);
-      return;
-    }
     if (seccion && (e.ctrlKey || e.metaKey)) {
       const bloque = el.closest('[data-l]');
       const l = bloque && ref.current?.contains(bloque) ? lineasDe(bloque) : undefined;

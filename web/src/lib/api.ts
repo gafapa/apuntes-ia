@@ -108,7 +108,7 @@ export const api = {
 
   agentes: () => pedir<InfoAgente[]>('GET', '/api/agentes'),
   requisitos: () =>
-    pedir<{ conexion: boolean; exportacion: boolean; voces: string[]; claves: { europeana: boolean; smithsonian: boolean } }>('GET', '/api/requisitos'),
+    pedir<{ conexion: boolean; exportacion: boolean; claves: { europeana: boolean; smithsonian: boolean } }>('GET', '/api/requisitos'),
   modelos: () =>
     pedir<ModelosDisponibles & { predeterminados: Record<Motor, Record<string, { modelo: string; esfuerzo: Esfuerzo }>> }>('GET', '/api/modelos'),
   aplicarPerfil: (perfil: PerfilGasto) => pedir<Ajustes>('POST', `/api/ajustes/perfil/${perfil}`),

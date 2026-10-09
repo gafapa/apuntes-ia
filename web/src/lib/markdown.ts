@@ -4,7 +4,6 @@ import MarkdownIt from 'markdown-it';
 import texmath from 'markdown-it-texmath';
 import katex from 'katex';
 import contenedor from 'markdown-it-container';
-import { load as cargarYaml } from 'js-yaml';
 // Notación química de mhchem: $\ce{2H2 + O2 -> 2H2O}$
 import 'katex/contrib/mhchem';
 import { consultaMolecula } from '../../../shared/quimica';
@@ -42,18 +41,6 @@ md.renderer.rules.fence = (tokens, idx, opts, env, self) => {
   const tipo = t.info.trim().split(/\s/)[0] as TipoBloque;
   if ((BLOQUES_DIBUJADOS as readonly string[]).includes(tipo)) {
     return `<div class="bloque-dibujado"${lineas(t)} data-tipo="${tipo}" data-contenido="${encodeURIComponent(t.content)}"${env?.base ? ` data-base="${env.base}"` : ''}></div>`;
-  }
-  // Audio (idiomas): botón para escucharlo con las voces del sistema; al exportar se genera el WAV
-  if (t.info.trim() === 'audio') {
-    try {
-      const a = cargarYaml(t.content) as { titulo?: string; idioma?: string; texto?: string; transcripcion?: boolean };
-      if (!a?.texto) throw new Error('Falta «texto»');
-      const idioma = String(a.idioma ?? 'es').slice(0, 2).toLowerCase();
-      const esc = (s: string) => md.utils.escapeHtml(s);
-      return `<div class="bloque-audio"${lineas(t)}><button type="button" data-hablar="${encodeURIComponent(String(a.texto))}" data-idioma="${idioma}">▶ Escuchar</button><span><strong>${esc(a.titulo ?? 'Audio')}</strong> <span class="idioma">${esc(idioma.toUpperCase())}</span></span><details><summary>Transcripción${a.transcripcion ? '' : ' (no se incluye al exportar)'}</summary>${esc(String(a.texto))}</details></div>`;
-    } catch (e) {
-      return `<div class="mermaid-error"${lineas(t)}>Error en el bloque de audio: ${md.utils.escapeHtml((e as Error).message)}</div>`;
-    }
   }
   if (t.info.trim() === 'molecula') {
     return `<div class="molecula"${lineas(t)} data-consulta="${encodeURIComponent(consultaMolecula(t.content))}"></div>`;

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { AlertCircle, Check, CircleMinus, FileOutput, Globe, KeyRound, RefreshCw, Volume2 } from 'lucide-react';
+import { AlertCircle, Check, CircleMinus, FileOutput, Globe, KeyRound, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
 import { useEstado } from '../lib/estado';
 import { Boton, Modal, cx } from './ui';
@@ -59,8 +59,6 @@ export function PantallaRequisitos() {
   };
 
   const listos = motores?.filter((m) => m.instalado && m.sesion) ?? [];
-  const voces = req?.voces ?? [];
-  const idiomasVoz = [...new Set(voces.map((v) => v.slice(0, 2)))];
 
   return (
     <Modal abierto={abierta} onCerrar={cerrar} ancho="max-w-2xl" titulo="Qué necesita Apuntes IA" descripcion="Lo imprescindible para que funcione y lo que activa funciones concretas. Se comprueba en este equipo.">
@@ -99,16 +97,6 @@ export function PantallaRequisitos() {
             titulo="Exportar a Word, LibreOffice y PDF"
             estado={req ? (req.exportacion ? 'ok' : 'falta') : undefined}
             texto={req?.exportacion ? 'Incluido con la app (Pandoc y Typst). Para abrir los archivos, Word o LibreOffice.' : 'No se encuentran Pandoc o Typst: reinstala la aplicación.'}
-          />
-          <Fila
-            icono={<Volume2 className="size-4" />}
-            titulo="Voces para los audios de idiomas"
-            estado={req ? (voces.length ? 'ok' : 'opcional') : undefined}
-            texto={
-              voces.length
-                ? `Voces instaladas en Windows: ${idiomasVoz.map((i) => i.toUpperCase()).join(', ')}. Para otros idiomas, añádelos en Configuración › Hora e idioma › Voz.`
-                : 'No hay voces de Windows disponibles: los bloques de audio no generarán las pistas. Se añaden en Configuración › Hora e idioma › Voz.'
-            }
           />
           <Fila
             icono={<KeyRound className="size-4" />}
