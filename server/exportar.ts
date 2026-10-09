@@ -13,6 +13,7 @@ import { prepararPies } from './pies';
 import { ajustarAnchos } from './tablas';
 import { traducirQuimica } from './quimica';
 import { PATRON_MOLECULA, consultaMolecula } from '../shared/quimica';
+import { ANCHO_BLOQUE, NOMBRE_BLOQUE, PATRON_BLOQUE, claveBloque, type TipoBloque } from '../shared/bloques';
 import { Almacen, ErrorUsuario, slug } from './store';
 import { ejecutarBinario, rutaPandoc } from './conversion';
 
@@ -95,6 +96,15 @@ export async function exportar(
         const ancho = d ? `{width=${anchoExportacion(d, 96 * ESCALA_DIAGRAMAS)}cm}` : '';
         return `\n![${(pie ?? '').trim()}](${archivo})${ancho}\n`;
       })
+        // Gráficas, mapas, árboles sintácticos, partituras, SVG, pictogramas e imágenes con etiquetas
+        .replace(PATRON_BLOQUE, (_m, tipo: TipoBloque, contenido: string, pie?: string) => {
+          const archivo = `.exportacion/diagrama-${claveBloque(tipo, contenido)}.png`;
+          if (!existsSync(path.join(dirDoc, archivo))) return `\n*[${NOMBRE_BLOQUE[tipo]} no disponible: revisa el bloque en la vista previa]*\n`;
+          const d = dimensiones(path.join(dirDoc, archivo));
+          const ppp = 96 * (tipo === 'pictogramas' || tipo === 'etiquetas' ? 2 : ESCALA_DIAGRAMAS);
+          const ancho = d ? `{width=${Math.min(ANCHO_BLOQUE[tipo], anchoExportacion(d, ppp))}cm}` : '';
+          return `\n![${(pie ?? '').trim()}](${archivo})${ancho}\n`;
+        })
         // Moléculas: la interfaz las ha dibujado como diagramas (clave «m» + hash de la consulta)
         .replace(PATRON_MOLECULA, (_m, contenido: string, pie?: string) => {
           const consulta = consultaMolecula(contenido);

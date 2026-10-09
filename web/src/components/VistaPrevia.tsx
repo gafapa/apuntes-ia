@@ -72,7 +72,7 @@ export function VistaPrevia({ texto, base, seccion }: { texto: string; base: str
     }
     const img = el.closest('img');
     if (img) return setAmpliado({ tipo: 'imagen', src: img.src });
-    const svg = el.closest('.mermaid, .molecula')?.querySelector('svg');
+    const svg = el.closest('.mermaid, .molecula, .bloque-dibujado')?.querySelector('svg');
     if (svg) setAmpliado({ tipo: 'svg', html: svg.outerHTML });
   };
 

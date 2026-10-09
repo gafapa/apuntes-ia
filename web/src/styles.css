@@ -124,6 +124,8 @@ body {
 .apunte .pie.referencia { font-style: normal; font-size: 0.78em; color: var(--texto-3); margin-top: -0.4em; overflow-wrap: anywhere; }
 .apunte table { margin-left: auto; margin-right: auto; width: auto; min-width: 60%; }
 .visor-svg svg { max-width: none !important; width: min(88vw, 1400px); height: auto; max-height: 85vh; }
+.apunte .bloque-dibujado { display: flex; justify-content: center; margin: 1em 0; }
+.apunte .bloque-dibujado svg { max-width: 100%; height: auto; cursor: zoom-in; }
 .apunte .molecula { display: flex; flex-direction: column; align-items: center; margin: 1em 0; color: var(--texto-3); font-size: 0.85em; }
 .apunte .molecula svg { max-width: min(100%, 420px); height: auto; cursor: zoom-in; }
 .apunte .molecula-info { margin-top: 0.15em; font-size: 0.85em; color: var(--texto-3); cursor: help; }

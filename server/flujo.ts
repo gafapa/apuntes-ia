@@ -38,6 +38,7 @@ import { PedirAlAgente } from './agents/cola';
 import { dimensiones } from './imagenes';
 import type { Moleculas } from './moleculas';
 import { descargarImagen, referenciaApa, sitioWeb, type ResultadoImagen } from './imagenesWeb';
+import { dibujarGrafica } from '../web/src/lib/graficas';
 import { hashTexto } from '../shared/hash';
 import { AGENTES, construirPrompt } from './agents/agentes';
 import { ESFUERZOS, modeloDe, motorElegido } from './agents/modelos';
@@ -920,6 +921,26 @@ Identifica el compuesto y escribe en \`${salida}\` SOLO esta línea: su nombre e
           post: { tipo: 'molecula', datos: { salida, id } },
         });
       }
+      if (p.tipo === 'grafica' || p.tipo === 'mapa') {
+        const salida = this.salida(`${p.tipo}-${p.id}`, 'md');
+        return await this.lanzar({
+          ...comun,
+          titulo: `${p.tipo === 'grafica' ? 'Gráfica' : 'Mapa'}: ${p.titulo}`,
+          incluir: { secciones: [p.seccion] },
+          // Los datos (clima, población, coordenadas) pueden necesitar una búsqueda
+          web: true,
+          tarea: `${contexto}
+
+Escribe en \`${salida}\` SOLO el bloque \`\`\`${p.tipo} (YAML, con el formato que indican tus normas), nada más.
+${
+  p.tipo === 'grafica'
+    ? 'Elige el tipo adecuado (funcion, lineas, barras, sectores, dispersion, climograma o piramide). Usa datos reales y fiables: si no están en la sección ni en las fuentes, búscalos en una fuente oficial (INE, AEMET, Eurostat…) y no los inventes. Pon título y nombres de ejes cuando ayuden.'
+    : 'Elige la base (espana, provincias, europa o mundo), colorea solo las regiones relevantes con una leyenda clara y añade puntos o rutas si ayudan. Usa los nombres actuales de comunidades, provincias o países en español.'
+}
+NO modifiques la sección.`,
+          post: { tipo: 'diagrama', datos: { salida, id, bloque: p.tipo } },
+        });
+      }
       if (p.tipo === 'diagrama') {
         const salida = this.salida(`diagrama-${p.id}`, 'md');
         return await this.lanzar({
@@ -1270,7 +1291,7 @@ ${pendientes.map((p) => `- secciones/${p.seccion}: ${p.tipo} «${p.muestra}»`).
 
 Formato del pie:
 - Imagen: el pie va como texto alternativo, \`![Pie](recursos/archivo.png)\`.
-- Diagrama o molécula: una línea \`*Figura: pie*\` justo después del bloque \`\`\`mermaid o \`\`\`molecula (separada por una línea en blanco).
+- Diagrama, molécula u otro bloque dibujado (\`\`\`mermaid, \`\`\`molecula, \`\`\`grafica, \`\`\`mapa, \`\`\`sintaxis, \`\`\`abc, \`\`\`svg, \`\`\`pictogramas, \`\`\`etiquetas): una línea \`*Figura: pie*\` justo después del bloque (separada por una línea en blanco).
 - Tabla: una línea \`Tabla: pie\` justo después de la tabla (separada por una línea en blanco).
 
 Edita solo esos elementos; no cambies nada más del texto. Si alguno ya tiene un pie en otro formato (en cursiva, en negrita, encima de la tabla…), no añadas otro: convierte el que hay al formato indicado. Nunca dejes dos pies para el mismo elemento.`,
@@ -1341,7 +1362,7 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
       await this.marcarPreguntas(t.asignatura, t.documento, (post.datos?.preguntas as string[]) ?? [], 'segun-dossier').catch(() => {});
       return;
     }
-    if (!['diagrama', 'molecula', 'imagen-ia', 'imagen-web'].includes(post.tipo) || !t.documento) return;
+    if (!['diagrama', 'grafica', 'mapa', 'molecula', 'imagen-ia', 'imagen-web'].includes(post.tipo) || !t.documento) return;
     const ultimoError = t.eventos.filter((e) => e.tipo === 'error').at(-1)?.texto;
     await this.cambiarPropuesta(t.asignatura, t.documento, String(post.datos?.id), {
       estado: 'error',
@@ -1481,8 +1502,17 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
     const id = String(datos.id);
     const p = await this.propuesta(asig, doc, id);
     const texto = await fs.readFile(path.join(this.almacen.dirDocumento(asig, doc), salida), 'utf8').catch(() => '');
-    const m = texto.match(/```mermaid\s*\n[\s\S]*?```/);
-    if (!m) throw new Error('El agente no ha escrito un bloque mermaid válido. Respóndele para que lo corrija.');
+    const bloque = String(datos.bloque ?? 'mermaid');
+    const m = texto.match(new RegExp('```' + bloque + '\\s*\\n([\\s\\S]*?)```'));
+    if (!m) throw new PedirAlAgente(`No ha escrito un bloque ${bloque} válido.`, `Escribe en \`${salida}\` SOLO el bloque \`\`\`${bloque}, nada más.`);
+    // Las gráficas se comprueban dibujándolas (igual que lo hará la vista previa)
+    if (bloque === 'grafica') {
+      try {
+        dibujarGrafica(m[1]);
+      } catch (e) {
+        throw new PedirAlAgente(`La gráfica tiene un error: ${(e as Error).message}`, `La gráfica no se puede dibujar: ${(e as Error).message}. Corrige el bloque en \`${salida}\`.`);
+      }
+    }
     const encontrado = await this.insertarEnSeccion(asig, doc, p, `${m[0]}\n\n*Figura: ${p.titulo}*`);
     await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada' });
     return encontrado ? 'Diagrama insertado' : 'Diagrama añadido al final de la sección (no se encontró el párrafo indicado)';
@@ -1650,6 +1680,8 @@ function textoRestricciones(p: Required<Permisos>): string {
 export function tiposVisualesPermitidos(p: Required<Permisos>, conCodex: boolean): TipoVisual[] {
   return [
     p.diagramas && 'diagrama',
+    p.diagramas && 'grafica',
+    p.diagramas && 'mapa',
     p.moleculas && 'molecula',
     p.imagenesWeb && 'imagen-web',
     p.imagenesIA && conCodex && 'imagen-ia',

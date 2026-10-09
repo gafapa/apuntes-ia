@@ -6,6 +6,7 @@
 // se numeran («Figura 3.», «Tabla 1.»), como hace Typst en el PDF.
 import { PATRON_MERMAID } from '../shared/hash';
 import { PATRON_MOLECULA, consultaMolecula } from '../shared/quimica';
+import { NOMBRE_BLOQUE, PATRON_BLOQUE, type TipoBloque } from '../shared/bloques';
 
 export interface ElementoSinPie {
   tipo: 'imagen' | 'diagrama' | 'molecula' | 'tabla';
@@ -23,6 +24,9 @@ export function elementosSinPie(md: string): ElementoSinPie[] {
   const res: ElementoSinPie[] = [];
   for (const m of md.matchAll(PATRON_MERMAID)) {
     if (!m[2]?.trim()) res.push({ tipo: 'diagrama', muestra: m[1].trim().split('\n').slice(0, 2).join(' ').slice(0, 80) });
+  }
+  for (const m of md.matchAll(PATRON_BLOQUE)) {
+    if (!m[3]?.trim()) res.push({ tipo: 'diagrama', muestra: `${NOMBRE_BLOQUE[m[1] as TipoBloque]}: ${m[2].trim().split('\n')[0].slice(0, 70)}` });
   }
   for (const m of md.matchAll(PATRON_MOLECULA)) {
     if (!m[2]?.trim()) res.push({ tipo: 'molecula', muestra: consultaMolecula(m[1]) });

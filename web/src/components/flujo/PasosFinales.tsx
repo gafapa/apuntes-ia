@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   Atom,
+  ChartLine,
+  Map as MapIcon,
   Check,
   ClipboardCheck,
   Download,
@@ -36,6 +38,8 @@ interface Props {
 
 const TIPOS: { id: TipoVisual; nombre: string; icono: typeof Network; ayuda: string }[] = [
   { id: 'diagrama', nombre: 'Diagrama', icono: Network, ayuda: 'Esquema dibujado con Mermaid' },
+  { id: 'grafica', nombre: 'Gráfica', icono: ChartLine, ayuda: 'Funciones, datos, climogramas, pirámides de población' },
+  { id: 'mapa', nombre: 'Mapa', icono: MapIcon, ayuda: 'España, Europa o el mundo con regiones, puntos y rutas' },
   { id: 'molecula', nombre: 'Molécula', icono: Atom, ayuda: 'Fórmula estructural dibujada con los datos de PubChem' },
   { id: 'imagen-web', nombre: 'Imagen web', icono: Globe, ayuda: 'Imagen real con licencia libre' },
   { id: 'imagen-ia', nombre: 'Imagen IA', icono: Sparkles, ayuda: 'Generada con Codex' },
@@ -186,6 +190,8 @@ function TarjetaPropuesta({
   const permisos = usePermisos(a, d);
   const tipoPermitido: Record<TipoVisual, boolean> = {
     diagrama: permisos.diagramas,
+    grafica: permisos.diagramas,
+    mapa: permisos.diagramas,
     molecula: permisos.moleculas,
     'imagen-web': permisos.imagenesWeb,
     'imagen-ia': permisos.imagenesIA,

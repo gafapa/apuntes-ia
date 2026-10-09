@@ -19,6 +19,7 @@ import { exportar } from './exportar';
 import { Contador } from './tokens';
 import { plantillaBase } from './plantillaBase';
 import { Moleculas } from './moleculas';
+import { Arasaac } from './arasaac';
 import { ESFUERZOS, PERFILES, modelosDisponibles, preset } from './agents/modelos';
 import { buscarImagenes, miniatura, type ResultadoImagen } from './imagenesWeb';
 import { buscar as buscarRag, indexar } from './rag';
@@ -56,6 +57,7 @@ export async function crearServidor(op: OpcionesServidor) {
   const motoresListos = () => new Set(motores.filter((m) => m.instalado && m.sesion).map((m) => m.motor));
 
   const moleculas = new Moleculas(path.join(path.dirname(op.archivoAjustes), 'moleculas.json'));
+  const arasaac = new Arasaac(path.join(path.dirname(op.archivoAjustes), 'arasaac'));
   const flujo = new Flujo({ almacen: () => almacen, cola, ajustes: () => ajustes, motoresListos, dirBin, mcpFuentes: op.mcpFuentes, moleculas });
   await cola.cargar(); // retoma los trabajos que seguían en marcha
   contador.sembrar(cola.listar());
@@ -359,6 +361,17 @@ export async function crearServidor(op: OpcionesServidor) {
     const { q, local } = req.query as { q?: string; local?: string };
     if (!q?.trim()) throw new ErrorUsuario('Escribe qué buscar');
     return buscarImagenes(q, { consultaLocal: local, claves: ajustes.claves });
+  });
+  // Pictograma de ARASAAC de una palabra, para los bloques ```pictogramas
+  app.get('/api/arasaac', async (req, reply) => {
+    const { palabra, idioma } = req.query as { palabra?: string; idioma?: string };
+    try {
+      const png = await arasaac.pictograma(String(palabra ?? ''), String(idioma ?? 'es'));
+      reply.header('Content-Type', 'image/png').header('Cache-Control', 'max-age=604800');
+      return png;
+    } catch (e) {
+      throw new ErrorUsuario((e as Error).message, 404);
+    }
   });
   // Estructura de una molécula (nombre o SMILES) para los bloques ```molecula
   app.get('/api/molecula', async (req) => {

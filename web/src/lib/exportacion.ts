@@ -2,9 +2,11 @@
 // (Pandoc no sabe dibujarlos) y los envía al servidor junto con las opciones.
 import { ESCALA_DIAGRAMAS, PATRON_MERMAID, hashTexto } from '../../../shared/hash';
 import type { OpcionesExportacion } from '../../../shared/tipos';
-import { api } from './api';
+import { api, urlDatos } from './api';
 import { PATRON_MOLECULA, consultaMolecula } from '../../../shared/quimica';
 import { dibujarMolecula, resolverMolecula } from './moleculas';
+import { PATRON_BLOQUE, claveBloque, type TipoBloque } from '../../../shared/bloques';
+import { dibujarBloque } from './bloques';
 
 let contador = 0;
 
@@ -111,9 +113,30 @@ export async function moleculasAPng(textos: string[]): Promise<Record<string, st
   return res;
 }
 
+/**
+ * Dibuja en PNG los bloques (gráficas, mapas, árboles sintácticos, partituras, SVG, pictogramas,
+ * imágenes con etiquetas). Los que fallan se omiten: el servidor pone un aviso en su lugar.
+ */
+export async function bloquesAPng(textos: string[], base: string): Promise<Record<string, string>> {
+  const bloques = new Map<string, { tipo: TipoBloque; contenido: string }>();
+  for (const t of textos) {
+    for (const m of t.matchAll(PATRON_BLOQUE)) bloques.set(claveBloque(m[1] as TipoBloque, m[2]), { tipo: m[1] as TipoBloque, contenido: m[2] });
+  }
+  const res: Record<string, string> = {};
+  for (const [clave, b] of bloques) {
+    try {
+      res[clave] = await svgAPng(await dibujarBloque(b.tipo, b.contenido, { oscuro: false, base }), b.tipo === 'pictogramas' || b.tipo === 'etiquetas' ? 2 : ESCALA_DIAGRAMAS);
+    } catch (e) {
+      console.warn(`Bloque «${b.tipo}» no exportable`, e);
+    }
+  }
+  return res;
+}
+
 export async function exportarDocumento(asignatura: string, documento: string, opciones: OpcionesExportacion) {
   const secciones = await api.secciones(asignatura, documento);
   const textos = await Promise.all(secciones.map((s) => api.leerSeccion(asignatura, documento, s.archivo).then((r) => r.contenido)));
-  const diagramas = { ...(await diagramasAPng(textos)), ...(await moleculasAPng(textos)) };
+  const base = urlDatos(asignatura, 'documentos', documento);
+  const diagramas = { ...(await diagramasAPng(textos)), ...(await moleculasAPng(textos)), ...(await bloquesAPng(textos, base)) };
   return api.exportar(asignatura, documento, opciones, diagramas);
 }

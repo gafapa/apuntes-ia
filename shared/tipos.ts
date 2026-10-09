@@ -299,7 +299,7 @@ export interface HerramientasChat {
 /** Reparto entre imágenes reales y esquemas que se pide al director visual. */
 export type MezclaVisuales = 'imagenes' | 'equilibrado' | 'esquemas';
 
-export type TipoVisual = 'diagrama' | 'molecula' | 'imagen-ia' | 'imagen-web';
+export type TipoVisual = 'diagrama' | 'grafica' | 'mapa' | 'molecula' | 'imagen-ia' | 'imagen-web';
 
 export interface PropuestaVisual {
   id: string;

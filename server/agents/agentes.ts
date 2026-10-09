@@ -116,6 +116,10 @@ de verdad a entender o recordar, y eliges el tipo según la naturaleza de lo que
 - diagrama: LO ABSTRACTO: procesos, flujos, ciclos, jerarquías, relaciones causa-efecto, secuencias en el
   tiempo, comparaciones estructurales, mapas conceptuales (se dibujan con Mermaid). No propongas un
   diagrama que solo repita una lista o una tabla que ya está en el texto: tiene que aportar estructura.
+- grafica: datos o funciones: funciones matemáticas (con áreas para integrales), evolución de datos,
+  comparaciones, porcentajes, climogramas, pirámides de población. Exacta: la dibuja la app.
+- mapa: localizar en España (comunidades o provincias), Europa o el mundo: territorios, bandos,
+  rutas, ciudades. En historia y geografía suele ser imprescindible.
 - molecula: la fórmula estructural (2D) de un compuesto químico concreto; la app la dibuja a partir
   de PubChem, así que es exacta. Úsala en lugar de una imagen cuando haya que ver la estructura.
 - imagen-ia: ilustraciones que no existen y que una IA puede generar bien (escenas, ilustraciones
@@ -225,6 +229,10 @@ export function construirPrompt(instrucciones: string, ctx: ContextoPrompt, tare
     '- Ahorra pasos: si el mensaje ya incluye el contenido de un archivo, no vuelvas a leerlo, y no explores carpetas sin necesidad.',
     '- Escribe siempre en el idioma de los apuntes. No inventes datos ni referencias.',
     '- Toda imagen, esquema, diagrama y tabla lleva un pie breve y descriptivo: imagen → `![Pie](recursos/archivo.png)` en su propio párrafo; diagrama o molécula → bloque ```mermaid o ```molecula seguido de la línea `*Figura: pie*`; tabla → línea `Tabla: pie` justo después de la tabla, separada por una línea en blanco. Una imagen ajena (museo, biblioteca, web) lleva además, en el párrafo siguiente, su referencia APA 7: `Tomado de *Título*, por Autor, año, Institución ([URL](URL)). Licencia.` (sin autor se omite «por…»; sin fecha, «s. f.»).',
+    '- Además de ```mermaid y ```molecula, la app dibuja estos bloques (con `*Figura: pie*` debajo). Úsalos cuando aporten y escribe los datos reales, sin inventarlos:',
+    '  · ```grafica (YAML). `tipo: funcion` con `funciones: ["f(x) = x^2", "g(x) = 2x"]`, `x: [-3, 3]`, opcional `y`, `areas: [{funcion: 1, entre: 2, desde: 0, hasta: 2, etiqueta: "A"}]` (integrales), `puntos: [[2, 4, "P"]]`, `verticales: [{x: 1, etiqueta: "x = 1"}]`. `tipo: lineas|barras` con `categorias` y `series: [{nombre, valores}]`; `tipo: sectores` con `datos: {A: 30, B: 70}`; `tipo: dispersion` con `puntos`; `tipo: climograma` con `lugar`, `temperatura` y `precipitacion` (12 valores); `tipo: piramide` con `grupos` (de jóvenes a mayores), `hombres`, `mujeres` y `unidad`. Todos admiten `titulo`, `ejeX`, `ejeY`.',
+    '  · ```mapa (YAML): `mapa: espana|provincias|europa|mundo`, `regiones: {Andalucía: "#c0392b", Francia: "#4f6bed"}` (nombres actuales en español), `leyenda: [{color, texto}]`, `puntos: [{nombre, lat, lon}]`, `rutas: [{puntos: [[lat, lon], …], color}]`, `titulo`. Los límites son los actuales: para épocas pasadas colorea las regiones aproximadas y acláralo en la leyenda.',
+    '  · ```sintaxis: análisis en corchetes, p. ej. `[O [Suj:SN [Det El] [N perro]] [Pred:SV [NV ladra]]]` (se dibuja en cajas; con la línea `estilo: arbol`, como árbol). ```abc: partitura en notación ABC. ```svg: dibujo SVG sencillo (circuitos, figuras geométricas) con viewBox. ```pictogramas: una palabra por línea (pictogramas de ARASAAC; `palabra: texto` para otro rótulo). ```etiquetas (YAML): `imagen: recursos/x.png` y `etiquetas: [{texto, x, y, a: [x, y]}]` en % del ancho y alto de la imagen (x, y: dónde va el rótulo; a: punto señalado).',
     '- Termina con un resumen breve (2-4 líneas) de lo que has hecho.',
   ].join('\n');
   const prompt = [

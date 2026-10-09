@@ -6,6 +6,8 @@ import katex from 'katex';
 // Notación química de mhchem: $\ce{2H2 + O2 -> 2H2O}$
 import 'katex/contrib/mhchem';
 import { consultaMolecula } from '../../../shared/quimica';
+import { BLOQUES_DIBUJADOS, type TipoBloque } from '../../../shared/bloques';
+import { dibujarBloque } from './bloques';
 import { dibujarMolecula, resolverMolecula } from './moleculas';
 
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true });
@@ -26,6 +28,11 @@ md.renderer.rules.fence = (tokens, idx, opts, env, self) => {
   const t = tokens[idx];
   if (t.info.trim() === 'mermaid') {
     return `<div class="mermaid"${lineas(t)} data-codigo="${encodeURIComponent(t.content)}"></div>`;
+  }
+  // Gráficas, mapas, árboles sintácticos, partituras, SVG, pictogramas, imágenes con etiquetas
+  const tipo = t.info.trim().split(/\s/)[0] as TipoBloque;
+  if ((BLOQUES_DIBUJADOS as readonly string[]).includes(tipo)) {
+    return `<div class="bloque-dibujado"${lineas(t)} data-tipo="${tipo}" data-contenido="${encodeURIComponent(t.content)}"${env?.base ? ` data-base="${env.base}"` : ''}></div>`;
   }
   if (t.info.trim() === 'molecula') {
     return `<div class="molecula"${lineas(t)} data-consulta="${encodeURIComponent(consultaMolecula(t.content))}"></div>`;
@@ -95,9 +102,29 @@ async function dibujarMoleculas(contenedor: HTMLElement) {
   }
 }
 
-/** Dibuja los diagramas Mermaid y las moléculas pendientes dentro de un contenedor. */
+/** Dibuja los bloques (gráficas, mapas…) pendientes dentro de un contenedor. */
+async function dibujarBloques(contenedor: HTMLElement) {
+  const oscuro = document.documentElement.classList.contains('dark');
+  for (const nodo of contenedor.querySelectorAll<HTMLElement>('.bloque-dibujado[data-contenido]')) {
+    const tipo = nodo.dataset.tipo as TipoBloque;
+    const contenido = decodeURIComponent(nodo.dataset.contenido ?? '');
+    nodo.removeAttribute('data-contenido');
+    try {
+      nodo.innerHTML = await dibujarBloque(tipo, contenido, { oscuro, base: nodo.dataset.base });
+    } catch (e) {
+      nodo.innerHTML = '';
+      const err = document.createElement('div');
+      err.className = 'mermaid-error';
+      err.textContent = `Error en el bloque «${tipo}»: ${(e as Error).message}`;
+      nodo.appendChild(err);
+    }
+  }
+}
+
+/** Dibuja los diagramas Mermaid, las moléculas y los demás bloques pendientes dentro de un contenedor. */
 export async function dibujarDiagramas(contenedor: HTMLElement) {
   void dibujarMoleculas(contenedor);
+  void dibujarBloques(contenedor);
   const nodos = [...contenedor.querySelectorAll<HTMLElement>('.mermaid[data-codigo]')];
   if (!nodos.length) return;
   mermaidListo ??= import('mermaid').then((m) => m.default);
