@@ -80,7 +80,8 @@ async function iniciar() {
     }
   });
 
-  await ventana.loadURL(urlApp);
+  // «inicio» identifica este arranque: la pantalla de requisitos sale una vez por arranque
+  await ventana.loadURL(`${urlApp}?inicio=${Date.now()}`);
   comprobarActualizaciones();
 }
 

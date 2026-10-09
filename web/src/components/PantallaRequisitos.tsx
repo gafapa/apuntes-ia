@@ -7,17 +7,19 @@ import { TarjetaMotor } from './TarjetaMotor';
 
 type Requisitos = Awaited<ReturnType<typeof api.requisitos>>;
 
+const INICIO = new URLSearchParams(location.search).get('inicio') ?? 'navegador';
+
 /**
  * Pantalla de inicio con lo que necesita la app para funcionar (y su estado en este equipo). Se
  * muestra al abrir la app hasta que se marca «No volver a mostrar»; desde Ajustes se puede abrir.
  */
 export function PantallaRequisitos() {
   const { ajustes, motores, cargarMotores, cargarAjustes, verRequisitos } = useEstado();
-  // Solo al iniciar la app: tras cerrarla no vuelve a salir al recargar la ventana (sessionStorage
-  // dura lo que la ventana de la app; al cerrar la app y abrirla de nuevo, vuelve a mostrarse)
+  // Solo al iniciar la app: Electron conserva sessionStorage entre arranques, así que se guarda el
+  // identificador del arranque (?inicio=…, lo pone la ventana); recargar la ventana no la vuelve a mostrar
   const [cerrada, setCerrada] = useState(() => {
     try {
-      return sessionStorage.getItem('requisitosVistos') === '1';
+      return localStorage.getItem('requisitosVistos') === INICIO;
     } catch {
       return false;
     }
@@ -47,7 +49,7 @@ export function PantallaRequisitos() {
   const cerrar = async () => {
     setCerrada(true);
     try {
-      sessionStorage.setItem('requisitosVistos', '1');
+      localStorage.setItem('requisitosVistos', INICIO);
     } catch {}
     useEstado.setState({ verRequisitos: false });
     if (noMostrar !== !!ajustes?.ocultarRequisitos) {
