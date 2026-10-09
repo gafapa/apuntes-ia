@@ -30,11 +30,12 @@ export interface ValorEnsenanza {
 const claseSelect =
   'h-9 w-full appearance-none rounded-lg border border-borde bg-panel pr-8 pl-3 text-sm text-texto outline-none focus:border-acento focus:ring-3 focus:ring-acento/15 cursor-pointer';
 
-function Select({ valor, onCambio, opciones, vacio }: { valor?: string; onCambio: (v: string) => void; opciones: { id: string; nombre: string }[]; vacio: string }) {
+/** Desplegable; `vacio` es el texto de la opción sin valor (sin él, no hay opción vacía). */
+function Select({ valor, onCambio, opciones, vacio }: { valor?: string; onCambio: (v: string) => void; opciones: { id: string; nombre: string }[]; vacio?: string }) {
   return (
     <div className="relative">
       <select className={claseSelect} value={valor ?? ''} onChange={(e) => onCambio(e.target.value)}>
-        <option value="">{vacio}</option>
+        {vacio !== undefined && <option value="">{vacio}</option>}
         {opciones.map((o) => (
           <option key={o.id} value={o.id}>
             {o.nombre}
@@ -239,10 +240,9 @@ export function SelectorEnsenanza({ valor, onCambio }: { valor: ValorEnsenanza; 
       <Campo etiqueta="Idioma de los apuntes">
         <div className={cx('grid gap-2', otroIdioma && 'grid-cols-2')}>
           <Select
-            valor={otroIdioma ? '__otro' : v.idioma}
+            valor={otroIdioma ? '__otro' : v.idioma || 'Castellano'}
             onCambio={(x) => set({ idioma: x === '__otro' ? '' : x || 'Castellano' })}
             opciones={[...IDIOMAS.map((i) => ({ id: i, nombre: i })), { id: '__otro', nombre: 'Otro…' }]}
-            vacio="Castellano"
           />
           {otroIdioma && <Entrada autoFocus value={v.idioma} onChange={(e) => set({ idioma: e.target.value })} placeholder="Inglés, francés…" />}
         </div>
