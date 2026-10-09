@@ -1,14 +1,7 @@
-// Autoevaluación en formato GIFT, el que importan Moodle y las plataformas basadas en él (Aules,
-// EducaMadrid, Educamos…): Banco de preguntas › Importar › Formato GIFT.
-
-export interface PreguntaAutoevaluacion {
-  tipo: 'test' | 'vf' | 'corta' | 'desarrollo';
-  enunciado: string;
-  opciones?: string[]; // test
-  correcta?: number | boolean; // test: índice (desde 0); vf: true/false
-  respuestas?: string[]; // corta: respuestas aceptadas
-  explicacion?: string; // retroalimentación o respuesta modelo
-}
+// Actividades en formato GIFT, el que importan Moodle y las plataformas basadas en él (Aules,
+// EducaMadrid, Educamos…): Banco de preguntas › Importar › Formato GIFT. Cada bloque va en su
+// propia subcategoría.
+import { tipoDe, type BloqueActividad, type PreguntaActividad, type TipoActividad } from '../shared/actividades';
 
 /** Escapa los caracteres especiales de GIFT y pasa las fórmulas $…$ a la notación de MathJax de Moodle. */
 function texto(s: string): string {
@@ -20,27 +13,50 @@ function texto(s: string): string {
     .trim();
 }
 
-export function generarGift(preguntas: PreguntaAutoevaluacion[], titulo: string): string {
-  const lineas: string[] = [`// Autoevaluación: ${titulo}`, `// Generado por Apuntes IA`, '', `$CATEGORY: $course$/top/${titulo.replace(/[/\n]/g, ' ')}`, ''];
-  preguntas.forEach((p, i) => {
-    // El nombre (lo que se ve en el banco de preguntas) va sin fórmulas ni formato
-    const plano = p.enunciado.replace(/\$+([^$]+)\$+/g, '$1').replace(/[*_`\\]/g, '').replace(/\s+/g, ' ').slice(0, 60);
-    const nombre = `::${String(i + 1).padStart(2, '0')}. ${plano.replace(/([~=#{}:])/g, '\\$1')}::[markdown]${texto(p.enunciado)}`;
-    const fb = p.explicacion ? `#${texto(p.explicacion)}` : '';
-    if (p.tipo === 'test' && p.opciones?.length) {
-      const correcta = typeof p.correcta === 'number' ? p.correcta : 0;
-      lineas.push(`${nombre} {`);
-      p.opciones.forEach((o, k) => lineas.push(`  ${k === correcta ? '=' : '~'}${texto(o)}${k === correcta ? fb : ''}`));
-      lineas.push('}');
-    } else if (p.tipo === 'vf') {
-      lineas.push(`${nombre} {${p.correcta === false ? 'FALSE' : 'TRUE'}${fb}}`);
-    } else if (p.tipo === 'corta' && p.respuestas?.length) {
-      lineas.push(`${nombre} {`, ...p.respuestas.map((r) => `  =${texto(r)}${fb}`), '}');
-    } else {
-      // Desarrollo (o corta sin respuestas cerradas): pregunta abierta, con la respuesta modelo como comentario
-      lineas.push(`${nombre} {${fb ? `####${texto(p.explicacion!)}` : ''}}`);
+/** Nombre de la pregunta en el banco: sin fórmulas ni formato. */
+const plano = (s: string) =>
+  s
+    .replace(/\$+([^$]+)\$+/g, '$1')
+    .replace(/[*_`\\]/g, '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 60)
+    .replace(/([~=#{}:])/g, '\\$1');
+
+function pregunta(tipo: TipoActividad, p: PreguntaActividad, n: number): string {
+  const cabecera = `::${String(n).padStart(2, '0')}. ${plano(p.enunciado || 'Relaciona')}::[markdown]`;
+  const fb = p.explicacion ? `#${texto(p.explicacion)}` : '';
+  switch (tipo) {
+    case 'test': {
+      const c = typeof p.correcta === 'number' ? p.correcta : 0;
+      return [`${cabecera}${texto(p.enunciado)} {`, ...(p.opciones ?? []).map((o, k) => `  ${k === c ? '=' : '~'}${texto(o)}${k === c ? fb : ''}`), '}'].join('\n');
     }
-    lineas.push('');
-  });
+    case 'vf':
+      return `${cabecera}${texto(p.enunciado)} {${p.correcta === false ? 'FALSE' : 'TRUE'}${fb}}`;
+    case 'corta':
+      return [`${cabecera}${texto(p.enunciado)} {`, ...(p.respuestas ?? []).map((r) => `  =${texto(r)}${fb}`), '}'].join('\n');
+    case 'huecos': {
+      // Palabra que falta: el hueco se sustituye por las respuestas aceptadas
+      const [antes, ...resto] = p.enunciado.split(/_{3,}/);
+      const respuestas = (p.respuestas ?? []).map((r) => `=${texto(r)}`).join(' ');
+      return resto.length ? `${cabecera}${texto(antes)} {${respuestas}${fb}} ${texto(resto.join('___'))}` : `${cabecera}${texto(p.enunciado)} {${respuestas}${fb}}`;
+    }
+    case 'emparejar':
+      return [`${cabecera}${texto(p.enunciado || 'Relaciona cada elemento con su pareja.')} {`, ...(p.pares ?? []).map(([a, b]) => `  =${texto(a)} -> ${texto(b)}`), '}'].join('\n');
+    default:
+      // Desarrollo y ejercicios: pregunta abierta, con la solución modelo como comentario general
+      return `${cabecera}${texto(p.enunciado)} {${p.explicacion ? `####${texto(p.explicacion)}` : ''}}`;
+  }
+}
+
+export function generarGift(bloques: BloqueActividad[], titulo: string): string {
+  const raiz = titulo.replace(/[/\n]/g, ' ');
+  const lineas: string[] = [`// Autoevaluación: ${titulo}`, '// Generado por Apuntes IA', ''];
+  let n = 0;
+  for (const b of bloques) {
+    lineas.push(`$CATEGORY: $course$/top/${raiz}/${b.titulo.replace(/[/\n]/g, ' ')}`, '');
+    for (const p of b.preguntas) {
+      lineas.push(pregunta(tipoDe(p, b), p, ++n), '');
+    }
+  }
   return lineas.join('\n');
 }

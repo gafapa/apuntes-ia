@@ -30,6 +30,7 @@ import type {
   Trabajo,
   UsoSuscripcion,
 } from '../../../shared/tipos';
+import type { BloqueActividad, OpcionesActividad } from '../../../shared/actividades';
 
 async function pedir<T>(metodo: string, url: string, cuerpo?: unknown): Promise<T> {
   const r = await fetch(url, {
@@ -137,7 +138,12 @@ export const api = {
   generarVisual: (a: string, d: string, id: string, indicaciones?: string) =>
     pedir<Trabajo>('POST', `${doc(a, d)}/flujo/visuales/${e(id)}/generar`, { indicaciones }),
   limpiarVisuales: (a: string, d: string) => pedir('DELETE', `${doc(a, d)}/flujo/visuales`),
-  autoevaluacion: (a: string, d: string, indicaciones?: string) => pedir<Trabajo>('POST', `${doc(a, d)}/flujo/autoevaluacion`, { indicaciones }),
+  generarActividad: (a: string, d: string, op: Partial<OpcionesActividad>) => pedir<BloqueActividad>('POST', `${doc(a, d)}/actividades`, op),
+  rehacerActividad: (a: string, d: string, id: string, op: Partial<OpcionesActividad>) =>
+    pedir<BloqueActividad>('POST', `${doc(a, d)}/actividades/${e(id)}/rehacer`, op),
+  editarActividad: (a: string, d: string, id: string, cambios: { incluir?: boolean; titulo?: string }) =>
+    pedir<BloqueActividad>('PUT', `${doc(a, d)}/actividades/${e(id)}`, cambios),
+  eliminarActividad: (a: string, d: string, id: string) => pedir('DELETE', `${doc(a, d)}/actividades/${e(id)}`),
   leerArchivo: (a: string, d: string, nombre: string) => pedir<{ contenido: string }>('GET', `${doc(a, d)}/archivo/${e(nombre)}`),
   guardarArchivo: (a: string, d: string, nombre: string, contenido: string) => pedir('PUT', `${doc(a, d)}/archivo/${e(nombre)}`, { contenido }),
 

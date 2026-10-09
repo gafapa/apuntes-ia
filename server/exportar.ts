@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { Exportado, OpcionesExportacion } from '../shared/tipos';
 import { ARCHIVO_AUTOEVALUACION } from '../shared/tipos';
+import { actividadesAMarkdown, type BloqueActividad } from '../shared/actividades';
 import { ESCALA_DIAGRAMAS, PATRON_MERMAID, hashTexto } from '../shared/hash';
 import { anchoExportacion, dimensiones } from './imagenes';
 import { bloqueIndice, prepararEncabezados, retocar, saltoPagina } from './indiceDocumento';
@@ -89,6 +90,12 @@ export async function exportar(
     // 2. Unir las secciones
     let secciones = await almacen.textoCompleto(asig, doc);
     if (!op.autoevaluacion) secciones = secciones.filter((s) => !ARCHIVO_AUTOEVALUACION.test(s.archivo));
+    else {
+      // Bloques de actividades marcados para incluir, como última sección
+      const bloques = await almacen.leerJsonDoc<BloqueActividad[]>(asig, doc, 'actividades.json', []);
+      const md = actividadesAMarkdown(bloques);
+      if (md) secciones = [...secciones, { archivo: 'zz-actividades.md', texto: md }];
+    }
     if (!secciones.length) throw new ErrorUsuario('El documento no tiene secciones');
     const partes = secciones.map((s) =>
       s.texto.replace(PATRON_MERMAID, (_m, codigo: string, pie?: string) => {

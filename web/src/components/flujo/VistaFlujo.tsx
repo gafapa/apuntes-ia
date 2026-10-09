@@ -3,7 +3,8 @@ import type { EstadoFlujo, Trabajo } from '../../../../shared/tipos';
 import { Boton } from '../ui';
 import { PasoIndice, PasoInvestigacion } from './PasosPreparacion';
 import { PasoRedaccion, PasoRevision } from './PasosEscritura';
-import { PasoAutoevaluacion, PasoExportar, PasoVisuales } from './PasosFinales';
+import { PasoExportar, PasoVisuales } from './PasosFinales';
+import { PasoActividades } from './Actividades';
 import { PasoSolo } from './comun';
 import { PASOS, type IdPaso, type IdVista } from './pasos';
 
@@ -13,7 +14,7 @@ const COMPONENTES = {
   redaccion: PasoRedaccion,
   revision: PasoRevision,
   visuales: PasoVisuales,
-  autoevaluacion: PasoAutoevaluacion,
+  autoevaluacion: PasoActividades,
   exportar: PasoExportar,
 } satisfies Record<IdPaso, unknown>;
 

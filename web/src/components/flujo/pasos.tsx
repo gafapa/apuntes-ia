@@ -81,8 +81,13 @@ export function estadoPaso(id: IdPaso, e: EstadoFlujo | undefined, trabajos: Tra
       };
     }
     case 'autoevaluacion': {
-      const s = e.secciones.find((x) => x.archivo === e.autoevaluacion);
-      return { hecho: !!s && s.palabras > 30, trabajando: enCurso('autoevaluacion') };
+      const bloques = e.actividades ?? [];
+      const incluidos = bloques.filter((b) => b.incluir && b.estado === 'lista').length;
+      return {
+        hecho: incluidos > 0,
+        trabajando: enCurso('autoevaluacion'),
+        aviso: bloques.length ? `${incluidos} de ${bloques.length} bloques` : undefined,
+      };
     }
     case 'exportar':
       return { hecho: e.exportados.length > 0, trabajando: false };

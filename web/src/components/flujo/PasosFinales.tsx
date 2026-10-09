@@ -5,7 +5,6 @@ import {
   ChartLine,
   Map as MapIcon,
   Check,
-  ClipboardCheck,
   Download,
   ExternalLink,
   FileText,
@@ -293,65 +292,6 @@ function TarjetaPropuesta({
 }
 
 // ---------------------------------------------------------------------------
-
-export function PasoAutoevaluacion({ a, d, estado, trabajos }: Props) {
-  const activos = trabajosDe(trabajos, 'autoevaluacion');
-  const archivo = estado.autoevaluacion;
-  const palabras = estado.secciones.find((s) => s.archivo === archivo)?.palabras ?? 0;
-  const hecha = !!archivo && palabras > 30;
-  return (
-    <Paso
-      numero={6}
-      titulo="Autoevaluación"
-      opcional
-      hecho={hecha && !activos.length}
-      trabajando={activos.length > 0}
-      descripcion="Preguntas tipo test, de respuesta corta y ejercicios, con sus soluciones explicadas. Se añade como última sección."
-      acciones={
-        <>
-          {hecha && (
-            <Boton icono={<ExternalLink className="size-4" />} onClick={() => irASeccion(archivo!)}>
-              Ver
-            </Boton>
-          )}
-          {hecha && (
-            <Boton
-              icono={<Download className="size-4" />}
-              title="Archivo GIFT para importar en el banco de preguntas de Moodle (también Aules, EducaMadrid…)"
-              onClick={async () => {
-                try {
-                  const r = await api.exportarMoodle(a, d);
-                  useEstado.getState().avisar(`Exportada para Moodle: ${r.nombre}. En Moodle: Banco de preguntas › Importar › Formato GIFT.`, 'ok');
-                  await api.abrirCarpeta(a, d, 'exportados');
-                } catch (e) {
-                  useEstado.getState().avisar((e as Error).message, 'error');
-                }
-              }}
-            >
-              Moodle
-            </Boton>
-          )}
-          <BotonAgente
-            texto={hecha ? 'Rehacer' : 'Generar'}
-            variante={hecha ? 'secundario' : 'primario'}
-            icono={<ClipboardCheck className="size-4" />}
-            disabled={activos.length > 0 || !estado.secciones.some((s) => s.palabras > 40)}
-            onLanzar={(ind) => api.autoevaluacion(a, d, ind)}
-            ayudaIndicaciones="Por ejemplo: 15 preguntas tipo test estilo PAU, sin ejercicios de desarrollo…"
-          />
-        </>
-      }
-    >
-      {activos.length > 0 && (
-        <div className="space-y-2">
-          {activos.map((t) => (
-            <ActividadAgente key={t.id} t={t} />
-          ))}
-        </div>
-      )}
-    </Paso>
-  );
-}
 
 // ---------------------------------------------------------------------------
 

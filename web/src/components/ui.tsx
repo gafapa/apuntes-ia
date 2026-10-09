@@ -133,8 +133,9 @@ export function Modal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[2px]"
       onMouseDown={(e) => !sinCerrar && e.target === e.currentTarget && onCerrar()}
     >
-      <div role="dialog" aria-modal="true" className={cx('aparecer w-full rounded-2xl border border-borde bg-panel shadow-2xl', ancho)}>
-        <div className="flex items-start justify-between gap-4 px-6 pt-5">
+      {/* Nunca más alto que la ventana: si no cabe, se desplaza el contenido y la cabecera queda fija */}
+      <div role="dialog" aria-modal="true" className={cx('aparecer flex max-h-[calc(100vh-2rem)] w-full flex-col rounded-2xl border border-borde bg-panel shadow-2xl', ancho)}>
+        <div className="flex shrink-0 items-start justify-between gap-4 px-6 pt-5">
           <div>
             <h2 className="text-lg font-semibold tracking-tight">{titulo}</h2>
             {descripcion && <p className="mt-1 text-sm text-texto-2">{descripcion}</p>}
@@ -145,7 +146,7 @@ export function Modal({
             </BotonIcono>
           )}
         </div>
-        <div className="px-6 pt-4 pb-6">{children}</div>
+        <div className="min-h-0 overflow-y-auto px-6 pt-4 pb-6">{children}</div>
       </div>
     </div>
   );

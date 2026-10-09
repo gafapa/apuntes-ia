@@ -1,4 +1,5 @@
 // Tipos compartidos entre el servidor y la interfaz.
+import type { BloqueActividad } from './actividades';
 
 export type Motor = 'claude' | 'codex';
 
@@ -362,7 +363,8 @@ export interface EstadoFlujo {
   secciones: Seccion[];
   sugerencias: Sugerencia[];
   visuales: PropuestaVisual[];
-  autoevaluacion?: string; // archivo de la sección de autoevaluación
+  autoevaluacion?: string; // archivo de la antigua sección de autoevaluación
+  actividades: BloqueActividad[]; // bloques de actividades de autoevaluación
   exportados: Exportado[];
 }
 

@@ -15,6 +15,7 @@ import { AGENTES } from './agents/agentes';
 import { abrirArchivo, abrirCarpeta, abrirTerminal, comandoInstalacion, comandoSesion, comprobarMotor } from './agents/motores';
 import { cargarAjustes, guardarAjustes } from './ajustes';
 import { Flujo, type TipoVersion } from './flujo';
+import type { OpcionesActividad } from '../shared/actividades';
 import { exportar } from './exportar';
 import { Contador } from './tokens';
 import { plantillaBase } from './plantillaBase';
@@ -450,7 +451,15 @@ export async function crearServidor(op: OpcionesServidor) {
   app.get(`${D}/imagenes-faltan`, async (req) => flujo.imagenesQueFaltan(params(req).a, params(req).d));
   app.post(`${D}/imagenes-faltan`, async (req) => flujo.repararImagenes(params(req).a, params(req).d));
   app.post(`${D}/pies`, async (req) => flujo.anadirPies(params(req).a, params(req).d));
-  app.post(`${D}/flujo/autoevaluacion`, async (req) => flujo.autoevaluacion(params(req).a, params(req).d, cuerpo(req).indicaciones));
+  // Bloques de actividades de autoevaluación
+  app.post(`${D}/actividades`, async (req) => flujo.generarActividad(params(req).a, params(req).d, req.body as Partial<OpcionesActividad>));
+  app.post(`${D}/actividades/:id/rehacer`, async (req) =>
+    flujo.generarActividad(params(req).a, params(req).d, req.body as Partial<OpcionesActividad>, (req.params as { id: string }).id),
+  );
+  app.put(`${D}/actividades/:id`, async (req) =>
+    flujo.editarActividad(params(req).a, params(req).d, (req.params as { id: string }).id, req.body as { incluir?: boolean; titulo?: string }),
+  );
+  app.delete(`${D}/actividades/:id`, async (req) => flujo.eliminarActividad(params(req).a, params(req).d, (req.params as { id: string }).id));
 
 
   // Índice de las fuentes (RAG): estado y búsqueda para el usuario
