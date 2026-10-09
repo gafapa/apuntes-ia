@@ -13,7 +13,15 @@ type Requisitos = Awaited<ReturnType<typeof api.requisitos>>;
  */
 export function PantallaRequisitos() {
   const { ajustes, motores, cargarMotores, cargarAjustes, verRequisitos } = useEstado();
-  const [cerrada, setCerrada] = useState(false);
+  // Solo al iniciar la app: tras cerrarla no vuelve a salir al recargar la ventana (sessionStorage
+  // dura lo que la ventana de la app; al cerrar la app y abrirla de nuevo, vuelve a mostrarse)
+  const [cerrada, setCerrada] = useState(() => {
+    try {
+      return sessionStorage.getItem('requisitosVistos') === '1';
+    } catch {
+      return false;
+    }
+  });
   const [noMostrar, setNoMostrar] = useState(false);
   const [req, setReq] = useState<Requisitos>();
   const [comprobando, setComprobando] = useState(false);
@@ -38,6 +46,9 @@ export function PantallaRequisitos() {
 
   const cerrar = async () => {
     setCerrada(true);
+    try {
+      sessionStorage.setItem('requisitosVistos', '1');
+    } catch {}
     useEstado.setState({ verRequisitos: false });
     if (noMostrar !== !!ajustes?.ocultarRequisitos) {
       await api.guardarAjustes({ ocultarRequisitos: noMostrar }).catch(() => {});
