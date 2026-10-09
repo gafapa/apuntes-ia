@@ -13,6 +13,7 @@ import { prepararPies } from './pies';
 import { ajustarAnchos } from './tablas';
 import { traducirQuimica } from './quimica';
 import { prepararSoluciones } from './soluciones';
+import { procesarAudios } from './audio';
 import { PATRON_MOLECULA, consultaMolecula } from '../shared/quimica';
 import { ANCHO_BLOQUE, NOMBRE_BLOQUE, PATRON_BLOQUE, claveBloque, type TipoBloque } from '../shared/bloques';
 import { Almacen, ErrorUsuario, slug } from './store';
@@ -136,7 +137,10 @@ export async function exportar(
     // Soluciones de los ejercicios: en el texto, en un solucionario al final o sin ellas
     const saltoSolucionario = op.formato === 'pdf' ? '```{=typst}\n#pagebreak()\n```' : saltoPagina(op.formato);
     const unido = prepararSoluciones(traducirQuimica(partes.map((p) => p.trim()).join(`\n\n${salto}\n\n`)), op.soluciones ?? 'texto', 'Solucionario', saltoSolucionario);
-    let md = prepararPies(ajustarAnchos(unido), op.formato, textos, op.pies !== false);
+    // Audios (idiomas): un WAV por pista en una carpeta junto al documento exportado
+    const carpetaAudios = `${slug(documento.titulo) || 'apuntes'}-audios`;
+    const conAudios = await procesarAudios(unido, almacen.rutaExportado(asig, doc, carpetaAudios), carpetaAudios);
+    let md = prepararPies(ajustarAnchos(conAudios), op.formato, textos, op.pies !== false);
     if (op.formato === 'docx' || op.formato === 'odt') {
       // Índice ya relleno y numerado (el de Pandoc es un campo vacío hasta actualizarlo a mano)
       const r = prepararEncabezados(md, op.numerar);
