@@ -7,6 +7,14 @@ import { crearServidor } from '../server/index';
 let ventana: BrowserWindow | null = null;
 let servidor: Awaited<ReturnType<typeof crearServidor>> | null = null;
 
+/**
+ * Versión portable (npm run dist:portable): un único .exe que no se instala. Ajustes, apuntes y
+ * datos de la ventana van en «Apuntes IA datos», junto al .exe, para llevarla en una memoria USB.
+ * Tiene que decidirse antes de pedir el bloqueo de instancia única, que usa la carpeta userData.
+ */
+const DIR_PORTABLE = process.env.PORTABLE_EXECUTABLE_DIR ? path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'Apuntes IA datos') : undefined;
+if (DIR_PORTABLE) app.setPath('userData', path.join(DIR_PORTABLE, '.electron'));
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
@@ -33,8 +41,8 @@ if (URL_EN_VIVO) app.commandLine.appendSwitch('remote-debugging-port', '9333');
 async function iniciar() {
   Menu.setApplicationMenu(null);
   if (!URL_EN_VIVO) servidor = await crearServidor({
-    archivoAjustes: path.join(app.getPath('userData'), 'ajustes.json'),
-    carpetaDatosPorDefecto: path.join(app.getPath('documents'), 'Apuntes IA'),
+    archivoAjustes: DIR_PORTABLE ? path.join(DIR_PORTABLE, 'ajustes.json') : path.join(app.getPath('userData'), 'ajustes.json'),
+    carpetaDatosPorDefecto: DIR_PORTABLE ? path.join(DIR_PORTABLE, 'apuntes') : path.join(app.getPath('documents'), 'Apuntes IA'),
     dirEstatico: path.join(__dirname, '..', 'dist-web'),
     dirBin: app.isPackaged
       ? path.join(process.resourcesPath, 'bin')
@@ -87,7 +95,8 @@ async function iniciar() {
 
 /** Busca versiones nuevas en GitHub Releases y las descarga en segundo plano. */
 function comprobarActualizaciones() {
-  if (!app.isPackaged) return;
+  // La portable no se actualiza sola (no hay instalador que sustituir): se descarga la nueva
+  if (!app.isPackaged || DIR_PORTABLE) return;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.on('update-available', (i) => servidor?.avisarActualizacion('disponible', i.version));

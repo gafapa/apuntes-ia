@@ -19,6 +19,7 @@
     "fetch-bin": "node scripts/fetch-bin.mjs",
     "dist": "npm run build && npm run fetch-bin && electron-builder",
     "start": "npm run build && electron .",
+    "dist:portable": "npm run build && npm run fetch-bin -- win && electron-builder --win portable",
     "dist:publicar": "npm run build && npm run fetch-bin && electron-builder --publish always",
     "app": "node scripts/app-en-vivo.mjs",
     "catalogo:fp": "node scripts/catalogo-fp.mjs"

@@ -22,9 +22,13 @@ extraResources:
 asar: true
 
 win:
-  target: nsis
+  # Instalador y versión portable (un .exe que no se instala; los datos van junto a él)
+  target: [nsis, portable]
   icon: build/icon.ico
   artifactName: Apuntes-IA-Setup.${ext}
+
+portable:
+  artifactName: Apuntes-IA-portable.${ext}
 
 nsis:
   oneClick: true

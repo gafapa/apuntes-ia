@@ -76,6 +76,19 @@ npm run dist         # → release/Apuntes-IA-Setup.exe (o .dmg / .AppImage seg�
 `resources-bin/`) y genera el instalador con electron-builder. El instalador no pide
 permisos de administrador y los apuntes quedan en `Documentos/Apuntes IA`.
 
+### Versión portable (Windows)
+
+```bash
+npm run dist:portable   # → release/Apuntes-IA-portable.exe
+```
+
+Un único `.exe` que no se instala: se puede llevar en una memoria USB. Ajustes, apuntes y
+datos de la ventana se guardan en `Apuntes IA datos/`, junto al `.exe` (con rutas relativas,
+así que siguen funcionando aunque cambie la letra de la unidad). No se actualiza sola: para
+una versión nueva se descarga el `.exe` de nuevo y se pone en el mismo sitio. `npm run dist` y
+las *releases* generan el instalador y la portable. Claude Code o Codex siguen haciendo falta
+en cada equipo donde se use.
+
 ## Publicar una versión
 
 1. Sube la versión: `npm version 0.4.0 && git push && git push --tags`.

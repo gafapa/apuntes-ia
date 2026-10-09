@@ -12,7 +12,9 @@ export async function cargarAjustes(archivo: string, carpetaPorDefecto: string):
     agentes: {},
   };
   try {
-    return { ...base, ...JSON.parse(await fs.readFile(archivo, 'utf8')) };
+    const leidos: Ajustes = { ...base, ...JSON.parse(await fs.readFile(archivo, 'utf8')) };
+    // Ruta relativa (versión portable): se resuelve junto al archivo de ajustes
+    return { ...leidos, carpetaDatos: path.resolve(path.dirname(archivo), leidos.carpetaDatos) };
   } catch {
     return base;
   }
@@ -20,5 +22,9 @@ export async function cargarAjustes(archivo: string, carpetaPorDefecto: string):
 
 export async function guardarAjustes(archivo: string, ajustes: Ajustes) {
   await fs.mkdir(path.dirname(archivo), { recursive: true });
-  await fs.writeFile(archivo, JSON.stringify(ajustes, null, 2), 'utf8');
+  // Si los datos están junto a los ajustes (versión portable), se guarda la ruta relativa: así
+  // siguen funcionando aunque la memoria USB cambie de letra o la carpeta se mueva
+  const relativa = path.relative(path.dirname(archivo), ajustes.carpetaDatos);
+  const carpetaDatos = relativa && !relativa.startsWith('..') && !path.isAbsolute(relativa) ? relativa : ajustes.carpetaDatos;
+  await fs.writeFile(archivo, JSON.stringify({ ...ajustes, carpetaDatos }, null, 2), 'utf8');
 }
