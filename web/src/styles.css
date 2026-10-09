@@ -132,6 +132,10 @@ body {
 .apunte .mermaid-error { color: var(--error); font-size: 0.85em; white-space: pre-wrap; }
 /* Bloques seleccionados en la vista previa (el chat actúa solo sobre ellos) */
 .apunte .seleccionado { background: color-mix(in srgb, var(--acento) 9%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--acento) 9%, transparent), -6px 0 0 0 var(--acento); border-radius: 2px; }
+/* Soluciones de los ejercicios (::: solucion), plegadas */
+.apunte details.solucion { margin: 0.8em 0; border: 1px solid var(--borde); border-left: 3px solid var(--ok, #16a34a); border-radius: 8px; padding: 0.4em 0.9em; background: var(--panel-2); }
+.apunte details.solucion > summary { cursor: pointer; font-weight: 600; color: var(--texto-2); }
+.apunte details.solucion[open] > summary { margin-bottom: 0.4em; }
 .apunte .katex-display { overflow-x: auto; overflow-y: hidden; }
 
 /* ---------- CodeMirror ---------- */

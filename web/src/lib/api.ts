@@ -146,6 +146,7 @@ export const api = {
 
   exportar: (a: string, d: string, opciones: OpcionesExportacion, diagramas: Record<string, string>) =>
     pedir<Exportado>('POST', `${doc(a, d)}/exportar`, { opciones, diagramas }),
+  exportarMoodle: (a: string, d: string) => pedir<Exportado>('POST', `${doc(a, d)}/exportar/moodle`),
   abrirExportado: (a: string, d: string, nombre: string) => pedir('POST', `${doc(a, d)}/exportados/${e(nombre)}/abrir`),
 
   glosario: (a: string) => pedir<{ contenido: string }>('GET', `${asig(a)}/glosario`),

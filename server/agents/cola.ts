@@ -51,7 +51,7 @@ export interface PeticionTrabajo {
   mcp?: { comando: string; args: string[]; env?: Record<string, string> };
 }
 
-const HERRAMIENTAS_MCP = ['buscar_en_fuentes', 'listar_fuentes', 'leer_pagina', 'buscar_imagenes', 'guardar_imagen'];
+const HERRAMIENTAS_MCP = ['buscar_en_fuentes', 'listar_fuentes', 'leer_pagina', 'buscar_imagenes', 'guardar_imagen', 'calcular'];
 
 /** Valor de cadena para TOML (comillas literales: sin escapes, válidas para rutas de Windows). */
 const toml = (s: string) => (s.includes("'") ? JSON.stringify(s) : `'${s}'`);
@@ -712,6 +712,8 @@ function describirHerramienta(nombre: string, input: any): string {
       return `Buscando en tus fuentes: ${recortar(input.consulta, 90)}`;
     case 'mcp__fuentes__buscar_imagenes':
       return `Buscando imágenes en museos y bibliotecas: ${recortar(input.consulta, 80)}`;
+    case 'mcp__fuentes__calcular':
+      return `Calculando: ${recortar((input.expresiones ?? []).join(' · '), 90)}`;
     case 'mcp__fuentes__guardar_imagen':
       return `Descargando la imagen ${recortar(input.nombre, 60)}`;
     case 'mcp__fuentes__listar_fuentes':

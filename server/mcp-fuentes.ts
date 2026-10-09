@@ -5,12 +5,49 @@
 // Las claves de las colecciones que las piden llegan en APUNTES_CLAVES_IMAGENES (JSON).
 import { buscar, formatear, leerPagina, listar } from './rag';
 import { buscarImagenes, credito, descargarImagen, referenciaApa, type ClavesImagenes } from './imagenesWeb';
+import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
+import Algebrite from 'algebrite';
+
+// Hilo de cálculo: Algebrite puede tardar mucho con alguna expresión, así que cada cálculo va en
+// un hilo aparte que se corta si se pasa de tiempo (ver calcular()).
+if (!isMainThread) {
+  const resultados = (workerData as string[]).map((e) => {
+    try {
+      const r = String(Algebrite.run(e));
+      return /Stop:/.test(r) ? `Error: ${r.replace(/[\s\S]*Stop:\s*/, '').trim()}` : r;
+    } catch (err) {
+      return `Error: ${(err as Error).message}`;
+    }
+  });
+  parentPort!.postMessage(resultados);
+}
+
+function calcular(expresiones: string[]): Promise<string[]> {
+  return new Promise((ok) => {
+    const hilo = new Worker(__filename, { workerData: expresiones });
+    const limite = setTimeout(() => {
+      hilo.terminate();
+      ok(expresiones.map(() => 'Error: el cálculo ha tardado demasiado; simplifícalo o divídelo'));
+    }, 10_000);
+    hilo.once('message', (r: string[]) => {
+      clearTimeout(limite);
+      hilo.terminate();
+      ok(r);
+    });
+    hilo.once('error', (e: Error) => {
+      clearTimeout(limite);
+      ok(expresiones.map(() => `Error: ${e.message}`));
+    });
+  });
+}
 
 const carpetas: Record<string, string> = {};
 let conImagenes = false;
+let conCalculo = false;
 let dirRecursos: string | undefined; // --recursos=<carpeta>: permite guardar imágenes en el documento
 for (const a of process.argv.slice(2)) {
   if (a === '--imagenes') conImagenes = true;
+  if (a === '--calculo') conCalculo = true;
   if (a.startsWith('--recursos=')) {
     dirRecursos = a.slice('--recursos='.length);
     continue;
@@ -55,6 +92,19 @@ const HERRAMIENTA_GUARDAR = {
   },
 };
 
+const HERRAMIENTA_CALCULO = {
+  name: 'calcular',
+  description:
+    'Calculadora simbólica y numérica (Algebrite) para COMPROBAR resultados de ejercicios y datos: derivadas d(f,x), primitivas integral(f,x), ' +
+    'integrales definidas defint(f,x,a,b), raíces roots(p) y aproximadas nroots(p), simplify, factor, expand, valores numéricos con float(...). ' +
+    'Multiplica con * cuando haya dudas (2*x, no 2x) y usa ^ para potencias. Ejemplos: "float(defint(x^2,x,0,2))", "d(x^3*sin(x),x)", "roots(x^2-5*x+6)", "float(0.082*298/1.5)".',
+  inputSchema: {
+    type: 'object',
+    properties: { expresiones: { type: 'array', items: { type: 'string' }, description: 'Una o varias expresiones a calcular' } },
+    required: ['expresiones'],
+  },
+};
+
 const HERRAMIENTAS_FUENTES = [
   {
     name: 'buscar_en_fuentes',
@@ -94,9 +144,16 @@ const HERRAMIENTAS = [
   ...(Object.keys(carpetas).length ? HERRAMIENTAS_FUENTES : []),
   ...(conImagenes ? [HERRAMIENTA_IMAGENES] : []),
   ...(conImagenes && dirRecursos ? [HERRAMIENTA_GUARDAR] : []),
+  ...(conCalculo ? [HERRAMIENTA_CALCULO] : []),
 ];
 
 async function llamar(nombre: string, args: Record<string, unknown>): Promise<string> {
+  if (nombre === 'calcular') {
+    const lista = (Array.isArray(args.expresiones) ? args.expresiones : [args.expresiones ?? args.expresion]).map(String).filter(Boolean).slice(0, 20);
+    if (!lista.length) return 'Indica al menos una expresión.';
+    const r = await calcular(lista);
+    return lista.map((e, i) => `${e}  =>  ${r[i]}`).join('\n');
+  }
   if (nombre === 'guardar_imagen' && dirRecursos) {
     const base =
       String(args.nombre ?? 'imagen')
@@ -146,6 +203,7 @@ function responder(id: unknown, result?: unknown, error?: { code: number; messag
   process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, ...(error ? { error } : { result }) }) + '\n');
 }
 
+if (isMainThread) {
 let resto = '';
 let pendientes = 0;
 let finEntrada = false;
@@ -200,3 +258,4 @@ process.stdin.on('end', () => {
   finEntrada = true;
   quizasSalir();
 });
+}

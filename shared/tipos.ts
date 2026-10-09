@@ -374,6 +374,7 @@ export interface OpcionesExportacion {
   autoevaluacion: boolean;
   saltoSeccion: boolean; // cada sección empieza en página nueva
   pies?: boolean; // pies de figura y de tabla (por defecto, sí)
+  soluciones?: 'texto' | 'final' | 'ninguna'; // soluciones de los ejercicios (por defecto, en el texto)
 }
 
 export type MensajeWS =

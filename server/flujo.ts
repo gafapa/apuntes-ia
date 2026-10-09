@@ -24,6 +24,7 @@ import type {
   PropuestaVisual,
   MezclaVisuales,
   HerramientasChat,
+  Exportado,
   SeleccionTexto,
   ImagenFallida,
   Sugerencia,
@@ -39,6 +40,7 @@ import { dimensiones } from './imagenes';
 import type { Moleculas } from './moleculas';
 import { descargarImagen, referenciaApa, sitioWeb, type ResultadoImagen } from './imagenesWeb';
 import { dibujarGrafica } from '../web/src/lib/graficas';
+import { generarGift, type PreguntaAutoevaluacion } from './moodle';
 import { hashTexto } from '../shared/hash';
 import { AGENTES, construirPrompt } from './agents/agentes';
 import { ESFUERZOS, modeloDe, motorElegido } from './agents/modelos';
@@ -176,6 +178,8 @@ export class Flujo {
     // Lo que la ficha de la asignatura (y la del documento) permite usar a los agentes
     const permisos = permisosEfectivos(asignatura.permisos, documento?.permisos);
     const imagenes = !!l.imagenes && permisos.busquedaImagenes;
+    // Calculadora para comprobar ejercicios y datos numéricos (agentes que escriben o revisan contenido)
+    const calculo = ['redactor', 'calidad', 'autoevaluacion', 'orquestador', 'fuentes'].includes(l.agente);
     const conIndice = l.fuentes !== false && permisos.fuentes && !!this.dep.mcpFuentes && (await hayIndice(carpetas).catch(() => false));
     const avisoFuentes = conIndice
       ? '\n\n## Material aportado\nEstá indexado. Para consultarlo usa las herramientas `buscar_en_fuentes` (fragmentos relevantes con archivo y página), `listar_fuentes` y `leer_pagina`. No leas los PDF ni documentos largos enteros: busca lo que necesites. Cita la fuente (archivo y página) cuando uses un dato.'
@@ -205,12 +209,13 @@ export class Flujo {
       esfuerzo: l.esfuerzo && elegido.esfuerzo ? menorEsfuerzo(l.esfuerzo, elegido.esfuerzo) : elegido.esfuerzo,
       modelo: elegido.modelo,
       mcp:
-        this.dep.mcpFuentes && (conIndice || imagenes)
+        this.dep.mcpFuentes && (conIndice || imagenes || calculo)
           ? {
               ...this.dep.mcpFuentes,
               args: [
                 ...this.dep.mcpFuentes.args,
                 ...(imagenes ? ['--imagenes'] : []),
+                ...(calculo ? ['--calculo'] : []),
                 ...(imagenes && l.guardarImagenes ? [`--recursos=${path.join(cwd, 'recursos')}`] : []),
                 ...(conIndice ? Object.entries(carpetas).map(([k, v]) => `${k}=${v}`) : []),
               ],
@@ -1059,7 +1064,16 @@ Escríbelas en \`secciones/${archivo}\` (sustituye lo que haya), con esta estruc
 - \`## Preguntas de respuesta corta\` (5-6)
 - \`## Ejercicios o preguntas de desarrollo\` (2-3, de aplicación o relación de conceptos)
 - \`## Soluciones\`: todas las respuestas explicadas brevemente, numeradas igual.
-Ajusta el número y la dificultad a los destinatarios si las indicaciones del usuario no dicen otra cosa. Solo escribe en ese archivo.`,
+Ajusta el número y la dificultad a los destinatarios si las indicaciones del usuario no dicen otra cosa.
+
+Escribe además las mismas preguntas en \`autoevaluacion.json\` (para exportarlas a Moodle), con este JSON exacto:
+{"preguntas": [
+  {"tipo": "test", "enunciado": "…", "opciones": ["…", "…", "…", "…"], "correcta": 0, "explicacion": "…"},
+  {"tipo": "corta", "enunciado": "…", "respuestas": ["respuesta aceptada", "otra forma válida"], "explicacion": "…"},
+  {"tipo": "desarrollo", "enunciado": "…", "explicacion": "respuesta modelo"}
+]}
+(«correcta» es el índice de la opción correcta, empezando en 0; en las de respuesta corta, pon en «respuestas» solo respuestas breves y cerradas). Solo escribe en esos dos archivos.`,
+      post: { tipo: 'autoevaluacion', datos: {} },
     });
   }
 
@@ -1400,6 +1414,8 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
         return this.postImagenIa(t, datos);
       case 'molecula':
         return this.postMolecula(t, datos);
+      case 'autoevaluacion':
+        return this.postAutoevaluacion(t);
       case 'curriculo':
         return this.almacen.leerCurriculo(t.asignatura).then((c) => {
           if (!c.trim()) throw new Error('El agente no ha escrito curriculo.md. Respóndele para que lo haga.');
@@ -1582,6 +1598,28 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
     const encontrado = await this.insertarEnSeccion(asig, doc, p, bloque);
     await this.cambiarPropuesta(asig, doc, p.id, { estado: 'insertada', molecula: consulta, error: undefined });
     return encontrado;
+  }
+
+  /** Comprueba que la autoevaluación tiene su versión para Moodle (autoevaluacion.json). */
+  private async postAutoevaluacion(t: Trabajo): Promise<string | void> {
+    const d = await this.almacen.leerJsonDoc<{ preguntas?: PreguntaAutoevaluacion[] } | null>(t.asignatura, t.documento!, 'autoevaluacion.json', null);
+    if (!d?.preguntas?.length) {
+      throw new PedirAlAgente('Falta la versión para Moodle (autoevaluacion.json).', 'Escribe también `autoevaluacion.json` con las preguntas, en el formato JSON indicado.');
+    }
+    return `Autoevaluación preparada (${d.preguntas.length} preguntas, exportable a Moodle)`;
+  }
+
+  /** Exporta la autoevaluación en formato GIFT (Moodle, Aules, EducaMadrid…). */
+  async exportarMoodle(asig: string, doc: string): Promise<Exportado> {
+    const d = await this.almacen.leerJsonDoc<{ preguntas?: PreguntaAutoevaluacion[] } | null>(asig, doc, 'autoevaluacion.json', null);
+    if (!d?.preguntas?.length) throw new ErrorUsuario('Vuelve a preparar la autoevaluación para poder exportarla a Moodle (las anteriores no tienen la versión para Moodle).');
+    const documento = await this.almacen.obtenerDocumento(asig, doc);
+    const nombre = `${slug(documento.titulo) || 'autoevaluacion'}-moodle.gift`;
+    const ruta = this.almacen.rutaExportado(asig, doc, nombre);
+    await fs.mkdir(path.dirname(ruta), { recursive: true });
+    await fs.writeFile(ruta, generarGift(d.preguntas, documento.titulo), 'utf8');
+    const st = await fs.stat(ruta);
+    return { nombre, formato: 'gift', tamano: st.size, modificado: st.mtime.toISOString() };
   }
 
   /** Petición sobre una selección: si el agente ha escrito el fragmento nuevo, sustituye al seleccionado. */

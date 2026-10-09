@@ -3,6 +3,7 @@ import MarkdownIt from 'markdown-it';
 // @ts-expect-error: el paquete no incluye tipos
 import texmath from 'markdown-it-texmath';
 import katex from 'katex';
+import contenedor from 'markdown-it-container';
 // Notación química de mhchem: $\ce{2H2 + O2 -> 2H2O}$
 import 'katex/contrib/mhchem';
 import { consultaMolecula } from '../../../shared/quimica';
@@ -13,6 +14,12 @@ import { dibujarMolecula, resolverMolecula } from './moleculas';
 
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true });
 md.use(texmath, { engine: katex, delimiters: ['dollars', 'brackets'], katexOptions: { throwOnError: false } });
+// Soluciones de los ejercicios («::: solucion … :::»): plegadas, para que el alumno lo intente antes
+md.use(contenedor, 'solucion', {
+  validate: (params: string) => /^\s*soluci[oó]n(es)?\s*$/i.test(params),
+  render: (tokens: { nesting: number }[], idx: number) =>
+    tokens[idx].nesting === 1 ? '<details class="solucion"><summary>Solución</summary>\n' : '</details>\n',
+});
 
 // Cada bloque de primer nivel lleva las líneas del Markdown de las que sale (data-l="desde-hasta",
 // desde 0 y sin incluir «hasta»): así una selección en la vista previa se traduce a su fragmento

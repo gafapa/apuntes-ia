@@ -12,6 +12,7 @@ import { bloqueIndice, prepararEncabezados, retocar, saltoPagina } from './indic
 import { prepararPies } from './pies';
 import { ajustarAnchos } from './tablas';
 import { traducirQuimica } from './quimica';
+import { prepararSoluciones } from './soluciones';
 import { PATRON_MOLECULA, consultaMolecula } from '../shared/quimica';
 import { ANCHO_BLOQUE, NOMBRE_BLOQUE, PATRON_BLOQUE, claveBloque, type TipoBloque } from '../shared/bloques';
 import { Almacen, ErrorUsuario, slug } from './store';
@@ -132,7 +133,9 @@ export async function exportar(
     const salto = op.saltoSeccion ? SALTO[op.formato] : '';
     // Todas las imágenes, esquemas y tablas con pie (numerado en Word/ODT)
     // Química (\ce{…}) traducida a LaTeX que entiende Pandoc
-    const unido = traducirQuimica(partes.map((p) => p.trim()).join(`\n\n${salto}\n\n`));
+    // Soluciones de los ejercicios: en el texto, en un solucionario al final o sin ellas
+    const saltoSolucionario = op.formato === 'pdf' ? '```{=typst}\n#pagebreak()\n```' : saltoPagina(op.formato);
+    const unido = prepararSoluciones(traducirQuimica(partes.map((p) => p.trim()).join(`\n\n${salto}\n\n`)), op.soluciones ?? 'texto', 'Solucionario', saltoSolucionario);
     let md = prepararPies(ajustarAnchos(unido), op.formato, textos, op.pies !== false);
     if (op.formato === 'docx' || op.formato === 'odt') {
       // Índice ya relleno y numerado (el de Pandoc es un campo vacío hasta actualizarlo a mano)

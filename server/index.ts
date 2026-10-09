@@ -519,6 +519,7 @@ export async function crearServidor(op: OpcionesServidor) {
   });
 
   // Exportación
+  app.post(`${D}/exportar/moodle`, async (req) => flujo.exportarMoodle(params(req).a, params(req).d));
   app.post(`${D}/exportar`, async (req) => {
     const b = req.body as { opciones: OpcionesExportacion; diagramas?: Record<string, string> };
     if (!['docx', 'odt', 'pdf'].includes(b?.opciones?.formato)) throw new ErrorUsuario('Formato no válido');

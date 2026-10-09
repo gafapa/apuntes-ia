@@ -314,6 +314,23 @@ export function PasoAutoevaluacion({ a, d, estado, trabajos }: Props) {
               Ver
             </Boton>
           )}
+          {hecha && (
+            <Boton
+              icono={<Download className="size-4" />}
+              title="Archivo GIFT para importar en el banco de preguntas de Moodle (también Aules, EducaMadrid…)"
+              onClick={async () => {
+                try {
+                  const r = await api.exportarMoodle(a, d);
+                  useEstado.getState().avisar(`Exportada para Moodle: ${r.nombre}. En Moodle: Banco de preguntas › Importar › Formato GIFT.`, 'ok');
+                  await api.abrirCarpeta(a, d, 'exportados');
+                } catch (e) {
+                  useEstado.getState().avisar((e as Error).message, 'error');
+                }
+              }}
+            >
+              Moodle
+            </Boton>
+          )}
           <BotonAgente
             texto={hecha ? 'Rehacer' : 'Generar'}
             variante={hecha ? 'secundario' : 'primario'}
@@ -475,6 +492,19 @@ export function PanelExportar({ a, d, estado, recargar }: { a: string; d: string
           </label>
         ))}
       </div>
+      <label className="flex items-center gap-2 text-[13px]">
+        Soluciones de los ejercicios
+        <select
+          value={op.soluciones ?? 'texto'}
+          onChange={(e) => cambiar({ soluciones: e.target.value as OpcionesExportacion['soluciones'] })}
+          className="h-8 rounded-lg border border-borde bg-panel px-2 text-[13px] outline-none focus:border-acento cursor-pointer"
+          title="Las soluciones van en bloques «::: solucion» tras cada ejercicio"
+        >
+          <option value="texto">En el texto, tras cada ejercicio</option>
+          <option value="final">En un solucionario al final</option>
+          <option value="ninguna">Sin soluciones (versión para el alumnado)</option>
+        </select>
+      </label>
       <div className="flex items-center gap-2">
         <Boton variante="primario" icono={<Download className="size-4" />} cargando={exportando} disabled={!estado?.secciones.length} onClick={exportar}>
           {exportando ? 'Exportando…' : `Exportar a ${FORMATOS.find((f) => f.id === op.formato)!.nombre}`}
