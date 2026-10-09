@@ -4,6 +4,34 @@ Aplicación de escritorio para crear apuntes con varios agentes de IA trabajando
 paralelo. Usa **Claude Code** y/o **Codex CLI** instalados en el equipo, con la
 suscripción del usuario (sin claves de API). Ver el plan completo en [PLAN.md](PLAN.md).
 
+**Descarga:** [última versión](https://github.com/gafapa/apuntes-ia/releases/latest) para
+Windows, macOS y Linux. Las apps instaladas se actualizan solas.
+
+## Qué hace
+
+- **Flujo guiado por fases** (investigación, índice, redacción en paralelo, revisión, visuales,
+  autoevaluación y exportación), con aprobación del usuario donde importa.
+- **Asignaturas con contexto**: enseñanza y curso del catálogo oficial, destinatarios, idioma,
+  fuentes propias (PDF, Word, webs) indexadas para que los agentes las consulten, glosario,
+  plantillas y **currículo oficial** (BOE) para alinear el índice y revisar la cobertura.
+- **Visuales**: imágenes libres de Wikimedia y de museos, bibliotecas y archivos (Europeana,
+  Smithsonian, Art Institute of Chicago…), con su referencia APA en el pie; diagramas Mermaid;
+  gráficas de funciones, mapas, moléculas (PubChem), química con `\ce{}`, árboles sintácticos,
+  partituras, pictogramas de ARASAAC e imágenes generadas con Codex. Se comprueba que cada
+  imagen se ha descargado y, si falla, se reintenta o se busca otra.
+- **Actividades**: bloques independientes de autoevaluación que se piden con un diálogo
+  (varios tipos de pregunta en un mismo bloque, dificultad, soluciones) y se incluyen o no en
+  los apuntes; cada bloque se exporta a **Moodle** (GIFT).
+- **Versiones adaptadas**: lectura fácil, refuerzo y ampliación.
+- **Chat lateral** que actúa solo sobre la pestaña abierta o sobre el texto seleccionado en la
+  vista previa, con herramientas (web, imágenes, calculadora) según los permisos.
+- **Permisos por asignatura y documento** (imágenes, diagramas, búsqueda web…; todo permitido
+  por defecto) y **modelo y esfuerzo por agente** con perfiles de gasto.
+- **Consumo de tokens** por asignatura y por documento.
+- **Exportación** a Word, LibreOffice, PDF y Markdown (zip con las figuras), con índice, pies
+  numerados y solucionario opcional al final.
+- Pantalla de inicio con lo que necesita la app y su estado en el equipo.
+
 ## Modo «app en vivo»: cambiar la app mientras la usas
 
 ```bash
@@ -50,12 +78,10 @@ permisos de administrador y los apuntes quedan en `Documentos/Apuntes IA`.
 
 ## Publicar una versión
 
-1. Crea el repositorio en GitHub y sustituye `TU_USUARIO` en `electron-builder.yml`,
-   `package.json` (`repository`) y `docs/index.html`.
-2. Sube la versión: `npm version 0.3.0 && git push && git push --tags`.
-3. GitHub Actions (`.github/workflows/publicar.yml`) compila Windows, macOS y Linux y crea
+1. Sube la versión: `npm version 0.4.0 && git push && git push --tags`.
+2. GitHub Actions (`.github/workflows/publicar.yml`) compila Windows, macOS y Linux y crea
    la *release*. Las apps instaladas la detectan, la descargan solas y ofrecen reiniciar.
-4. Página de descarga: activa GitHub Pages con la carpeta `docs/`.
+3. Página de descarga: GitHub Pages con la carpeta `docs/`.
 
 ## Flujo de un documento
 
@@ -65,9 +91,9 @@ permisos de administrador y los apuntes quedan en `Documentos/Apuntes IA`.
 | 2. Índice | Arquitecto | `indice.json`: secciones con objetivo, contenidos y extensión; el usuario lo edita y aprueba |
 | 3. Redacción | Redactor (uno por sección, en paralelo) | `secciones/NN-*.md` |
 | 4. Revisión (opcional) | Estilo, calidad, fuentes | `sugerencias.json`: cambios que el usuario acepta o rechaza |
-| 5. Visuales (opcional) | Director visual + ilustrador | `visuales.json` y, al aprobar, diagramas Mermaid, imágenes de Wikimedia o generadas con Codex |
-| 6. Autoevaluación (opcional) | Autoevaluación | última sección con preguntas y soluciones |
-| 7. Exportar | (Pandoc + Typst) | `exportados/*.docx / .odt / .pdf` |
+| 5. Visuales (opcional) | Director visual + ilustrador | `visuales.json` y, al aprobar, imágenes (Wikimedia, museos y bibliotecas, o generadas con Codex), diagramas y bloques dibujados; la mezcla se elige al pedirlos |
+| 6. Autoevaluación (opcional) | Actividades | bloques independientes de preguntas (varios tipos por bloque) que se incluyen o no; exportables a Moodle |
+| 7. Exportar | (Pandoc + Typst) | `exportados/*.docx / .odt / .pdf` o un `.zip` con Markdown y figuras |
 
 Además: orquestador (chat libre, conoce el estado del flujo) y glosario de la asignatura.
 Los agentes que proponen cosas escriben un JSON en `.agentes/` y es el servidor quien lo

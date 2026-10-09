@@ -44,9 +44,9 @@ linux:
   artifactName: Apuntes-IA-linux.${ext}
 
 # Actualizaciones automáticas: las versiones se publican en GitHub Releases.
-# Cambia owner/repo por los de tu repositorio.
+
 publish:
   provider: github
-  owner: TU_USUARIO
+  owner: gafapa
   repo: apuntes-ia
   releaseType: release
