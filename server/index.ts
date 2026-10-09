@@ -535,7 +535,7 @@ export async function crearServidor(op: OpcionesServidor) {
   app.post(`${D}/exportar/moodle`, async (req) => flujo.exportarMoodle(params(req).a, params(req).d));
   app.post(`${D}/exportar`, async (req) => {
     const b = req.body as { opciones: OpcionesExportacion; diagramas?: Record<string, string> };
-    if (!['docx', 'odt', 'pdf'].includes(b?.opciones?.formato)) throw new ErrorUsuario('Formato no válido');
+    if (!['docx', 'odt', 'pdf', 'md'].includes(b?.opciones?.formato)) throw new ErrorUsuario('Formato no válido');
     if (!dirBin) throw new ErrorUsuario('La exportación no está disponible en este modo');
     return exportar(almacen, dirBin, params(req).a, params(req).d, b.opciones, b.diagramas ?? {});
   });

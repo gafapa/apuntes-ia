@@ -369,7 +369,7 @@ export interface EstadoFlujo {
 }
 
 export interface OpcionesExportacion {
-  formato: 'docx' | 'odt' | 'pdf';
+  formato: 'docx' | 'odt' | 'pdf' | 'md';
   portada: boolean;
   indice: boolean;
   numerar: boolean;

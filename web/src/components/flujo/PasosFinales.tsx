@@ -299,6 +299,7 @@ const FORMATOS: { id: OpcionesExportacion['formato']; nombre: string; detalle: s
   { id: 'docx', nombre: 'Word', detalle: '.docx' },
   { id: 'odt', nombre: 'LibreOffice', detalle: '.odt' },
   { id: 'pdf', nombre: 'PDF', detalle: 'listo para imprimir' },
+  { id: 'md', nombre: 'Markdown', detalle: '.md con imágenes (.zip)' },
 ];
 
 /**
@@ -408,7 +409,7 @@ export function PanelExportar({ a, d, estado, recargar }: { a: string; d: string
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {FORMATOS.map((f) => (
           <button
             key={f.id}
