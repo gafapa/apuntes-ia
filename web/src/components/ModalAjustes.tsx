@@ -148,17 +148,29 @@ export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar
         )}
 
         <div className="flex items-center justify-between pt-2">
-          <Boton
-            variante="fantasma"
-            tam="sm"
-            onClick={async () => {
-              await api.guardarAjustes({ asistenteCompletado: false });
-              await cargarAjustes();
-              onCerrar();
-            }}
-          >
-            Repetir asistente inicial
-          </Boton>
+          <div className="flex gap-1">
+            <Boton
+              variante="fantasma"
+              tam="sm"
+              onClick={async () => {
+                await api.guardarAjustes({ asistenteCompletado: false });
+                await cargarAjustes();
+                onCerrar();
+              }}
+            >
+              Repetir asistente inicial
+            </Boton>
+            <Boton
+              variante="fantasma"
+              tam="sm"
+              onClick={() => {
+                useEstado.setState({ verRequisitos: true });
+                onCerrar();
+              }}
+            >
+              Ver requisitos
+            </Boton>
+          </div>
           {pestana === 'agentes' ? (
             // Los agentes se guardan solos al cambiarlos
             <Boton variante="primario" onClick={onCerrar}>

@@ -27,6 +27,8 @@ interface Estado {
   ultimaRuta?: string;
   avisos: Aviso[];
   conectado: boolean;
+  /** Abrir la pantalla de requisitos (desde Ajustes, aunque esté oculta). */
+  verRequisitos?: boolean;
   /** Aumenta cada vez que se recupera la conexión con el servidor: las vistas vuelven a cargar sus datos. */
   reconexion: number;
   /** Fragmento seleccionado en la vista previa: el chat de la derecha actúa solo sobre él. */

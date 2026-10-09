@@ -83,3 +83,24 @@ export async function procesarAudios(md: string, carpeta: string, nombreCarpeta:
   let k = 0;
   return md.replace(PATRON_AUDIO, () => sustituciones[k++]);
 }
+
+let voces: Promise<string[]> | undefined;
+
+/** Idiomas de las voces instaladas en Windows (p. ej. «es-ES», «en-US»). Se consulta una vez. */
+export function vocesInstaladas(): Promise<string[]> {
+  if (process.platform !== 'win32') return Promise.resolve([]);
+  voces ??= new Promise((ok) =>
+    execFile(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        'Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.GetInstalledVoices() | Where-Object { $_.Enabled } | ForEach-Object { $_.VoiceInfo.Culture.Name }; $s.Dispose()',
+      ],
+      { timeout: 20_000, windowsHide: true },
+      (error, salida) => ok(error ? [] : [...new Set(String(salida).split(/\r?\n/).map((l) => l.trim()).filter(Boolean))]),
+    ),
+  );
+  return voces;
+}

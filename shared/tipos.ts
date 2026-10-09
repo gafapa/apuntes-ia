@@ -163,6 +163,8 @@ export interface Ajustes {
   maxSimultaneos: number;
   motorPorDefecto: Motor;
   asistenteCompletado: boolean;
+  /** No mostrar la pantalla de requisitos al abrir la app. */
+  ocultarRequisitos?: boolean;
   /** Personalización por agente: motor, instrucciones, esfuerzo y modelo propios. */
   agentes: Record<string, { motor?: Motor; instrucciones?: string; esfuerzo?: Esfuerzo; modelo?: string }>;
   /** Motor de los agentes: uno para todos o «ambos» (cada agente con el suyo, en agentes[id].motor). */

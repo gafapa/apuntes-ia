@@ -8,6 +8,7 @@ import { VistaAsignatura } from './components/VistaAsignatura';
 import { VistaDocumento } from './components/VistaDocumento';
 import { PanelAgentes } from './components/PanelAgentes';
 import { AsistenteInicio } from './components/AsistenteInicio';
+import { PantallaRequisitos } from './components/PantallaRequisitos';
 import { Confirmador, cx } from './components/ui';
 import { ProveedorFlujo } from './components/flujo/pasos';
 
@@ -39,6 +40,7 @@ export default function App() {
       <Avisos />
       <Confirmador />
       <AsistenteInicio />
+      <PantallaRequisitos />
     </div>
   );
 
