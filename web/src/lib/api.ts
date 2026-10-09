@@ -146,6 +146,8 @@ export const api = {
 
   exportar: (a: string, d: string, opciones: OpcionesExportacion, diagramas: Record<string, string>) =>
     pedir<Exportado>('POST', `${doc(a, d)}/exportar`, { opciones, diagramas }),
+  crearVersion: (a: string, d: string, tipo: 'lectura-facil' | 'refuerzo' | 'ampliacion', indicaciones?: string) =>
+    pedir<{ documento: Documento; trabajos: number }>('POST', `${doc(a, d)}/version`, { tipo, indicaciones }),
   exportarMoodle: (a: string, d: string) => pedir<Exportado>('POST', `${doc(a, d)}/exportar/moodle`),
   abrirExportado: (a: string, d: string, nombre: string) => pedir('POST', `${doc(a, d)}/exportados/${e(nombre)}/abrir`),
 

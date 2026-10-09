@@ -194,6 +194,7 @@ export class Almacen {
       objetivo: datos.objetivo ?? '',
       destinatarios: datos.destinatarios ?? '',
       extension: datos.extension ?? '',
+      ...(datos.permisos ? { permisos: limpiarPermisos(datos.permisos) } : {}),
       creado: ahora(),
       actualizado: ahora(),
     };

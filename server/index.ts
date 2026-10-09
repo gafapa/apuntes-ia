@@ -14,7 +14,7 @@ import { Cola } from './agents/cola';
 import { AGENTES } from './agents/agentes';
 import { abrirArchivo, abrirCarpeta, abrirTerminal, comandoInstalacion, comandoSesion, comprobarMotor } from './agents/motores';
 import { cargarAjustes, guardarAjustes } from './ajustes';
-import { Flujo } from './flujo';
+import { Flujo, type TipoVersion } from './flujo';
 import { exportar } from './exportar';
 import { Contador } from './tokens';
 import { plantillaBase } from './plantillaBase';
@@ -519,6 +519,10 @@ export async function crearServidor(op: OpcionesServidor) {
   });
 
   // Exportación
+  app.post(`${D}/version`, async (req) => {
+    const b = req.body as { tipo?: TipoVersion; indicaciones?: string };
+    return flujo.crearVersion(params(req).a, params(req).d, b.tipo as TipoVersion, b.indicaciones);
+  });
   app.post(`${D}/exportar/moodle`, async (req) => flujo.exportarMoodle(params(req).a, params(req).d));
   app.post(`${D}/exportar`, async (req) => {
     const b = req.body as { opciones: OpcionesExportacion; diagramas?: Record<string, string> };

@@ -6,6 +6,7 @@ import {
   Check,
   ChevronRight,
   Columns2,
+  Copy,
   Download,
   Eye,
   FileText,
@@ -18,6 +19,7 @@ import {
 import type { Documento, Permisos, Seccion } from '../../../shared/tipos';
 import { permisosEfectivos } from '../../../shared/tipos';
 import { EditorPermisos } from './EditorPermisos';
+import { BotonAgente } from './flujo/comun';
 import { api, urlDatos } from '../lib/api';
 import { useEstado } from '../lib/estado';
 import { AreaTexto, Boton, BotonIcono, Campo, Entrada, Insignia, Vacio, confirmar, cx } from './ui';
@@ -536,7 +538,37 @@ function FichaDocumento({
           Guardar cambios
         </Boton>
       </div>
-      <div className="mt-10 flex items-center justify-between rounded-xl border border-error/30 px-5 py-4">
+      <div className="mt-10 rounded-xl border border-borde px-5 py-4">
+        <div className="text-sm font-medium">Versiones adaptadas</div>
+        <p className="mt-0.5 text-[12.5px] text-texto-3">
+          Atención a la diversidad: crea una copia del documento (con sus imágenes y su índice) y un redactor adapta cada sección. El original no cambia.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {(
+            [
+              ['lectura-facil', 'Lectura fácil', 'Frases cortas, vocabulario sencillo, lo esencial (pautas UNE 153101 EX)'],
+              ['refuerzo', 'Refuerzo', 'Lo básico paso a paso, más ejemplos guiados y preguntas de comprobación'],
+              ['ampliacion', 'Ampliación', 'Más profundidad, conexiones y retos de mayor dificultad'],
+            ] as const
+          ).map(([tipo, nombre, ayuda]) => (
+            <span key={tipo} title={ayuda}>
+              <BotonAgente
+                texto={nombre}
+                variante="secundario"
+                icono={<Copy className="size-4" />}
+                onLanzar={async (ind) => {
+                  const r = await api.crearVersion(doc.asignatura, doc.id, tipo, ind);
+                  await cargarAsignaturas();
+                  avisar(`Creado «${r.documento.titulo}»: los agentes están adaptando ${r.trabajos} secciones.`, 'ok');
+                  seleccionar({ asignatura: doc.asignatura, documento: r.documento.id });
+                }}
+                ayudaIndicaciones="Por ejemplo: para alumnado de 1.º de ESO con dificultades lectoras; sin ejercicios de desarrollo…"
+              />
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="mt-6 flex items-center justify-between rounded-xl border border-error/30 px-5 py-4">
         <div>
           <div className="text-sm font-medium">Eliminar documento</div>
           <div className="text-xs text-texto-3">Se mueve a la papelera de la carpeta de datos.</div>

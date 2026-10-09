@@ -1037,6 +1037,56 @@ Solo licencias que permitan reutilizarla (CC0, dominio público, CC BY, CC BY-SA
   // ---------------------------------------------------------------------------
   // 6. Autoevaluación
 
+  /**
+   * Versión adaptada de un documento (atención a la diversidad, DUA): crea un documento nuevo con
+   * las mismas secciones, imágenes e índice, y un redactor adapta cada sección.
+   */
+  async crearVersion(asig: string, doc: string, tipo: TipoVersion, indicaciones?: string) {
+    const guia = GUIAS_VERSION[tipo];
+    if (!guia) throw new ErrorUsuario('Tipo de versión no válido');
+    const original = await this.almacen.obtenerDocumento(asig, doc);
+    const secciones = (await this.almacen.listarSecciones(asig, doc)).filter((s) => s.palabras > 20);
+    if (!secciones.length) throw new ErrorUsuario('El documento todavía no tiene secciones redactadas');
+    const nuevo = await this.almacen.crearDocumento(asig, {
+      titulo: `${original.titulo} (${guia.nombre.toLowerCase()})`,
+      objetivo: original.objetivo,
+      destinatarios: original.destinatarios,
+      extension: original.extension,
+      permisos: original.permisos,
+    });
+    // Copia de lo que define el contenido (no los trabajos, sugerencias ni exportaciones)
+    const origen = this.almacen.dirDocumento(asig, doc);
+    const destino = this.almacen.dirDocumento(asig, nuevo.id);
+    for (const sub of ['secciones', 'recursos']) {
+      await fs.cp(path.join(origen, sub), path.join(destino, sub), { recursive: true, force: true }).catch(() => {});
+    }
+    for (const archivo of ['indice.json', 'investigacion.md', 'autoevaluacion.json']) {
+      await fs.copyFile(path.join(origen, archivo), path.join(destino, archivo)).catch(() => {});
+    }
+    const trabajos: Trabajo[] = [];
+    for (const s of secciones) {
+      trabajos.push(
+        await this.lanzar({
+          agente: 'redactor',
+          asignatura: asig,
+          documento: nuevo.id,
+          titulo: `Adaptar «${s.titulo}» (${guia.nombre.toLowerCase()})`,
+          paso: 'redaccion',
+          seccion: s.archivo,
+          ref: s.archivo,
+          incluir: { secciones: [s.archivo] },
+          indicaciones,
+          tarea: `Esta es una versión adaptada del documento «${original.titulo}»: ${guia.nombre.toLowerCase()}.
+Reescribe la sección \`secciones/${s.archivo}\` (sobrescríbela) siguiendo estas pautas:
+${guia.pautas}
+
+Conserva los títulos de los apartados, las imágenes (con su pie y su referencia), los diagramas, las tablas, las fórmulas y los demás bloques salvo que la pauta diga otra cosa, y respeta las normas de formato. No toques otras secciones.`,
+        }),
+      );
+    }
+    return { documento: nuevo, trabajos: trabajos.length };
+  }
+
   async autoevaluacion(asig: string, doc: string, indicaciones?: string) {
     if (this.ocupado('autoevaluacion', asig, doc)) throw new ErrorUsuario('Ya se está preparando la autoevaluación');
     const archivo = await this.conCandado(`${asig}/${doc}/secciones`, async () => {
@@ -1787,3 +1837,32 @@ export function tiposVisualesPermitidos(p: Required<Permisos>, conCodex: boolean
 function menorEsfuerzo(a: Esfuerzo, b: Esfuerzo): Esfuerzo {
   return ESFUERZOS.indexOf(a) <= ESFUERZOS.indexOf(b) ? a : b;
 }
+
+export type TipoVersion = 'lectura-facil' | 'refuerzo' | 'ampliacion';
+
+/** Pautas de cada versión adaptada (atención a la diversidad). */
+const GUIAS_VERSION: Record<TipoVersion, { nombre: string; pautas: string }> = {
+  'lectura-facil': {
+    nombre: 'Lectura fácil',
+    pautas: `- Sigue las pautas de lectura fácil (norma UNE 153101 EX): frases cortas, una idea por frase y un mensaje por párrafo.
+- Vocabulario frecuente y concreto. Si un término técnico es imprescindible, explícalo con palabras sencillas la primera vez que aparece (puedes destacarlo en negrita).
+- Voz activa, orden sujeto-verbo-complemento, sin dobles negaciones, metáforas, ironías ni frases hechas.
+- Números en cifra; listas cuando haya varios elementos; ejemplos cotidianos.
+- Quita lo accesorio (detalles, excepciones, curiosidades) y conserva lo esencial del objetivo de la sección.
+- Mantén las imágenes y los esquemas: ayudan a entender.`,
+  },
+  refuerzo: {
+    nombre: 'Refuerzo',
+    pautas: `- Para alumnado que necesita afianzar lo básico: los mismos contenidos esenciales, explicados paso a paso y más despacio.
+- Más ejemplos resueltos y guiados (de lo sencillo a lo complejo), con las dificultades habituales y cómo evitarlas.
+- Al final de cada apartado, un recuadro «Recuerda» (cita en Markdown) con las ideas clave y 2-3 preguntas rápidas de comprobación con su solución en un bloque \`::: solucion\`.
+- Reduce o quita lo que no sea esencial para el objetivo; no añadas contenidos nuevos.`,
+  },
+  ampliacion: {
+    nombre: 'Ampliación',
+    pautas: `- Para alumnado con alto rendimiento o interés: conserva todo el contenido y profundiza.
+- Añade conexiones con otros temas y materias, aplicaciones reales, casos, matices y debates actuales.
+- Añade al final de la sección un apartado «Para saber más» con 2-3 retos o problemas de mayor dificultad (con su solución en un bloque \`::: solucion\`) y alguna lectura o recurso fiable.
+- No inventes datos ni referencias: si citas algo, que sea comprobable.`,
+  },
+};
