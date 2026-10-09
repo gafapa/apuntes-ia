@@ -14,7 +14,7 @@ import { Cola } from './agents/cola';
 import { AGENTES } from './agents/agentes';
 import { abrirArchivo, abrirCarpeta, abrirTerminal, comandoInstalacion, comandoSesion, comprobarMotor } from './agents/motores';
 import { cargarAjustes, guardarAjustes } from './ajustes';
-import { Flujo, type TipoVersion } from './flujo';
+import { Flujo, type AmbitoChat, type TipoVersion } from './flujo';
 import type { OpcionesActividad } from '../shared/actividades';
 import { exportar } from './exportar';
 import { Contador } from './tokens';
@@ -342,8 +342,8 @@ export async function crearServidor(op: OpcionesServidor) {
   });
 
   app.post('/api/trabajos', async (req) => {
-    const b = req.body as { motor?: Motor; tarea: string; asignatura: string; documento?: string; seccion?: string; herramientas?: HerramientasChat; seleccionTexto?: SeleccionTexto };
-    return flujo.chat(b.asignatura, b.documento, b.tarea ?? '', b.motor, b.seccion, b.herramientas, b.seleccionTexto);
+    const b = req.body as { motor?: Motor; tarea: string; asignatura: string; documento?: string; seccion?: string; herramientas?: HerramientasChat; seleccionTexto?: SeleccionTexto; ambito?: AmbitoChat };
+    return flujo.chat(b.asignatura, b.documento, b.tarea ?? '', b.motor, b.seccion, b.herramientas, b.seleccionTexto, b.ambito);
   });
 
   app.get('/api/uso', async () => cola.uso);

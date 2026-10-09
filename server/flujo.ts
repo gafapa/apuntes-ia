@@ -346,8 +346,19 @@ export class Flujo {
     seccionActiva?: string,
     herramientas: HerramientasChat = {},
     seleccionTexto?: SeleccionTexto,
+    ambito?: AmbitoChat,
   ) {
     if (!tarea.trim()) throw new ErrorUsuario('Escribe qué quieres que haga');
+    // El agente solo actúa sobre lo que está abierto en la zona central. Con una sección abierta,
+    // es como si estuviera seleccionada entera (la app sustituye la sección y no puede tocar nada más)
+    let todaLaSeccion = false;
+    if (doc && !seleccionTexto?.fragmento.trim() && ambito?.vista === 'apuntes' && ambito.seccion) {
+      const texto = await this.almacen.leerSeccion(asig, doc, ambito.seccion).catch(() => '');
+      if (texto.trim()) {
+        seleccionTexto = { seccion: ambito.seccion, desde: 0, hasta: texto.split('\n').length, fragmento: texto, texto: '' };
+        todaLaSeccion = true;
+      }
+    }
     // Petición sobre un fragmento seleccionado en la vista previa: el agente no edita la sección,
     // escribe el fragmento nuevo y la app lo sustituye en su sitio (así no puede tocar nada más)
     let sobreSeleccion: { texto: string; post: Postproceso } | undefined;
@@ -358,8 +369,8 @@ export class Flujo {
       sobreSeleccion = {
         texto: `
 
-## Selección
-El usuario ha seleccionado este fragmento de \`secciones/${sel.seccion}\`${
+## ${todaLaSeccion ? 'Sección abierta' : 'Selección'}
+${todaLaSeccion ? `El usuario tiene abierta la sección \`secciones/${sel.seccion}\` y solo se puede trabajar sobre ella. Su contenido actual es este` : `El usuario ha seleccionado este fragmento de \`secciones/${sel.seccion}\``}${
           parcial ? ` (y, dentro de él, en concreto el texto «${sel.texto.slice(0, 1500)}»)` : ''
         }:
 
@@ -367,7 +378,7 @@ El usuario ha seleccionado este fragmento de \`secciones/${sel.seccion}\`${
 ${sel.fragmento}
 \`\`\`\`
 
-Actúa SOLO sobre este fragmento; puedes leer la sección para entender el contexto.
+Actúa SOLO sobre ${todaLaSeccion ? 'esta sección; no modifiques otros archivos' : 'este fragmento; puedes leer la sección para entender el contexto'}.
 - Si la petición pide cambiarlo (reescribir, ampliar, corregir, añadir algo junto a él, sustituir una imagen…), NO edites la sección: escribe en \`${salida}\` el fragmento nuevo completo, en Markdown, que sustituirá exactamente al de arriba (incluye también lo que no cambie). Nada más en ese archivo.
 - Si es una pregunta o una consulta, respóndela sin escribir ningún archivo.`,
         post: { tipo: 'seleccion', datos: { salida, seccion: sel.seccion, fragmento: sel.fragmento } },
@@ -385,24 +396,59 @@ Actúa SOLO sobre este fragmento; puedes leer la sección para entender el conte
         `- Propuestas visuales pendientes: ${e.visuales.filter((v) => v.estado === 'propuesta').length}`,
       ].join('\n');
     }
+    // En las demás pestañas: se le dice qué puede tocar y, al terminar, se deshace lo de fuera
+    let restriccion = '';
+    let postAmbito: Postproceso | undefined;
+    if (doc && !sobreSeleccion && ambito?.vista) {
+      const a = AMBITOS[ambito.vista] ?? AMBITOS.apuntes;
+      restriccion = `\n\n## Pestaña abierta: ${a.nombre}\nEl usuario está en la pestaña «${a.nombre}» y solo se puede trabajar sobre ella: ${a.descripcion}${
+        a.permitidos.length ? '' : ' No modifiques ningún archivo: responde a lo que pregunte.'
+      } Si la petición pide cambiar otra cosa, explícale que debe abrir la pestaña correspondiente.`;
+      postAmbito = { tipo: 'ambito', datos: { permitidos: a.permitidos, nombre: a.nombre } };
+    }
     await this.prepararFuentes(asig, doc);
     const motorFinal = motor && this.dep.motoresListos().has(motor) ? motor : undefined;
-    return this.lanzar({
+    const instantanea = postAmbito && doc ? await instantaneaDocumento(this.almacen.dirDocumento(asig, doc)) : undefined;
+    const trabajo = await this.lanzar({
       agente: 'orquestador',
       asignatura: asig,
       documento: doc,
       titulo: tarea.trim().split(/\r?\n/)[0].slice(0, 120),
-      tarea: tarea + estado + (sobreSeleccion?.texto ?? ''),
+      tarea: tarea + estado + (sobreSeleccion?.texto ?? '') + restriccion,
       paso: 'chat',
       motor: motorFinal,
       seccionActiva: seleccionTexto?.seccion ?? seccionActiva,
-      post: sobreSeleccion?.post,
+      post: sobreSeleccion?.post ?? postAmbito,
       // Herramientas elegidas en el panel (por defecto: web y fuentes sí, imágenes no)
       web: herramientas.web ?? true,
       imagenes: !!herramientas.imagenes && !!this.dep.mcpFuentes,
       guardarImagenes: !!doc,
       fuentes: herramientas.fuentes ?? true,
     });
+    if (instantanea) this.instantaneas.set(trabajo.id, instantanea);
+    return trabajo;
+  }
+
+  /** Copia de los archivos de texto del documento antes de una petición limitada a una pestaña. */
+  private instantaneas = new Map<string, Map<string, string>>();
+
+  /** Deshace los cambios que el agente haya hecho fuera de la pestaña abierta. */
+  private async restaurarFueraDeAmbito(t: Trabajo, datos: Record<string, unknown>): Promise<string[]> {
+    const antes = this.instantaneas.get(t.id);
+    this.instantaneas.delete(t.id);
+    if (!antes || !t.documento) return [];
+    const dir = this.almacen.dirDocumento(t.asignatura, t.documento);
+    const permitidos = (datos.permitidos as string[]) ?? [];
+    const permitido = (rel: string) => permitidos.some((p) => (p.endsWith('/') ? rel.startsWith(p) : rel === p));
+    const ahora = await instantaneaDocumento(dir);
+    const deshechos: string[] = [];
+    for (const rel of new Set([...antes.keys(), ...ahora.keys()])) {
+      if (permitido(rel) || antes.get(rel) === ahora.get(rel)) continue;
+      if (antes.has(rel)) await fs.writeFile(path.join(dir, rel), antes.get(rel)!, 'utf8');
+      else await fs.rm(path.join(dir, rel), { force: true });
+      deshechos.push(rel);
+    }
+    return deshechos;
   }
 
   // ---------------------------------------------------------------------------
@@ -1539,6 +1585,10 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
         return this.postMolecula(t, datos);
       case 'actividad':
         return this.postActividad(t, datos);
+      case 'ambito':
+        return this.restaurarFueraDeAmbito(t, datos).then((d) =>
+          d.length ? `Hecho. Se han deshecho los cambios fuera de la pestaña «${datos.nombre}»: ${d.join(', ')}` : undefined,
+        );
       case 'curriculo':
         return this.almacen.leerCurriculo(t.asignatura).then((c) => {
           if (!c.trim()) throw new Error('El agente no ha escrito curriculo.md. Respóndele para que lo haga.');
@@ -1554,6 +1604,10 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
   }
 
   private async alFallarPost(t: Trabajo, post: Postproceso) {
+    if (post.tipo === 'ambito') {
+      await this.restaurarFueraDeAmbito(t, post.datos ?? {}).catch(() => {});
+      return;
+    }
     if (post.tipo === 'actividad' && t.documento) {
       const ultimo = t.eventos.filter((e) => e.tipo === 'error').at(-1)?.texto;
       await this.cambiarActividades(t.asignatura, t.documento, (l) => {
@@ -1980,3 +2034,40 @@ const GUIAS_VERSION: Record<TipoVersion, { nombre: string; pautas: string }> = {
 - No inventes datos ni referencias: si citas algo, que sea comprobable.`,
   },
 };
+
+export interface AmbitoChat {
+  vista: string; // pestaña abierta en la zona central (paso del flujo, apuntes, recursos, material, ficha)
+  seccion?: string; // sección abierta (en «apuntes»)
+}
+
+/** Qué puede tocar el agente según la pestaña abierta (rutas relativas a la carpeta del documento). */
+const AMBITOS: Record<string, { nombre: string; descripcion: string; permitidos: string[] }> = {
+  apuntes: { nombre: 'Apuntes (documento completo)', descripcion: 'las secciones del documento (secciones/*.md).', permitidos: ['secciones/'] },
+  redaccion: { nombre: 'Redacción', descripcion: 'las secciones del documento (secciones/*.md).', permitidos: ['secciones/'] },
+  investigacion: { nombre: 'Investigación', descripcion: 'el dossier de investigación (investigacion.md) y sus preguntas (preguntas.json). No modifiques las secciones.', permitidos: ['investigacion.md', 'preguntas.json'] },
+  indice: { nombre: 'Índice director', descripcion: 'el índice director (indice.json), manteniendo su formato. No modifiques las secciones.', permitidos: ['indice.json'] },
+  revision: { nombre: 'Revisión', descripcion: 'las sugerencias de revisión (sugerencias.json). No modifiques las secciones: las aplica el usuario.', permitidos: ['sugerencias.json'] },
+  visuales: { nombre: 'Visuales', descripcion: 'las propuestas de visuales (visuales.json) y las imágenes (recursos/). No modifiques las secciones.', permitidos: ['visuales.json', 'recursos/'] },
+  autoevaluacion: { nombre: 'Autoevaluación', descripcion: 'los bloques de actividades (actividades.json), manteniendo su formato. No modifiques las secciones.', permitidos: ['actividades.json'] },
+  exportar: { nombre: 'Exportar', descripcion: 'la exportación (formatos, opciones, archivos exportados).', permitidos: [] },
+  recursos: { nombre: 'Imágenes', descripcion: 'las imágenes del documento (recursos/). No modifiques las secciones.', permitidos: ['recursos/'] },
+  material: { nombre: 'Fuentes', descripcion: 'las fuentes del documento (fuentes/). No modifiques las secciones.', permitidos: ['fuentes/'] },
+  ficha: { nombre: 'Ficha', descripcion: 'la ficha del documento (documento.json: título, objetivo, destinatarios y extensión). No modifiques las secciones.', permitidos: ['documento.json'] },
+};
+
+/** Contenido de los archivos de texto del documento (secciones y archivos de la raíz). */
+async function instantaneaDocumento(dir: string): Promise<Map<string, string>> {
+  const r = new Map<string, string>();
+  const leer = async (sub: string, filtro: RegExp) => {
+    const nombres = await fs.readdir(path.join(dir, sub)).catch(() => [] as string[]);
+    for (const n of nombres) {
+      if (!filtro.test(n)) continue;
+      const rel = sub ? `${sub}/${n}` : n;
+      const texto = await fs.readFile(path.join(dir, rel), 'utf8').catch(() => undefined);
+      if (texto !== undefined) r.set(rel, texto);
+    }
+  };
+  await leer('', /\.(md|json)$/);
+  await leer('secciones', /\.md$/);
+  return r;
+}

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Check, TextSelect, X, ChevronDown, CircleStop, Eraser, Globe, FileEdit, Landmark, Library, Loader2, PanelRightClose, PanelRightOpen, Search, Send, Sparkles, Wrench } from 'lucide-react';
+import { Bot, Check, Crosshair, TextSelect, X, ChevronDown, CircleStop, Eraser, Globe, FileEdit, Landmark, Library, Loader2, PanelRightClose, PanelRightOpen, Search, Send, Sparkles, Wrench } from 'lucide-react';
 import type { HerramientasChat, Motor, Trabajo } from '../../../shared/tipos';
 import { api } from '../lib/api';
 import { useEstado } from '../lib/estado';
 import { renderizar } from '../lib/markdown';
 import { usePermisos } from '../lib/permisos';
+import { PASOS, VISTAS_DOCUMENTO, useVistaDocumento } from './flujo/pasos';
 import { BotonIcono, Insignia, cx } from './ui';
 import { ParTokens } from './ContadorTokens';
 
@@ -39,6 +40,18 @@ export function PanelAgentes() {
   const [enviando, setEnviando] = useState(false);
   const [soloEste, setSoloEste] = useState(true);
   const [herramientas, setHerramientas] = useState(leerHerramientas);
+  // El agente solo actúa sobre la pestaña abierta en la zona central (y, en Apuntes, sobre la sección abierta)
+  const [vista] = useVistaDocumento();
+  const ambito = seleccion.documento ? { vista, seccion: vista === 'apuntes' ? seccionActiva : undefined } : undefined;
+  const nombreAmbito = !ambito
+    ? undefined
+    : seleccionTexto
+      ? undefined
+      : ambito.vista === 'apuntes'
+        ? ambito.seccion
+          ? `Sección «${ambito.seccion.replace(/^\d+-/, '').replace(/\.md$/, '').replace(/-/g, ' ')}»`
+          : 'Documento completo'
+        : ([...PASOS, ...VISTAS_DOCUMENTO].find((p) => p.id === ambito.vista)?.titulo ?? ambito.vista);
   // Lo que la ficha no permite no se puede activar
   const permisos = usePermisos(seleccion.asignatura, seleccion.documento);
   const permitida: Record<keyof HerramientasChat, boolean> = { web: permisos.busquedaWeb, imagenes: permisos.busquedaImagenes, fuentes: permisos.fuentes };
@@ -90,6 +103,7 @@ export function PanelAgentes() {
         seccion: seleccionTexto?.seccion ?? seccionActiva,
         herramientas,
         seleccionTexto,
+        ambito,
       });
       setTarea('');
       useEstado.setState({ seleccionTexto: undefined });
@@ -133,6 +147,12 @@ export function PanelAgentes() {
 
       {/* Petición */}
       <div className="border-b border-borde p-3">
+        {nombreAmbito && (
+          <div className="mb-2 flex items-center gap-1.5 text-[12px] text-texto-3" title="El agente solo puede trabajar sobre lo que tienes abierto en la zona central">
+            <Crosshair className="size-3.5 shrink-0 text-acento" />
+            Actúa sobre: <span className="truncate font-medium text-texto-2">{nombreAmbito}</span>
+          </div>
+        )}
         {seleccionTexto && (
           <div className="mb-2 flex items-start gap-2 rounded-lg border border-acento/30 bg-acento-suave px-2.5 py-1.5 text-[12px]">
             <TextSelect className="mt-0.5 size-3.5 shrink-0 text-acento" />
@@ -233,11 +253,6 @@ export function PanelAgentes() {
                 </div>
               )}
             </div>
-            {seccionActiva && (
-              <span className="truncate text-[11px] text-texto-3" title="La IA sabe qué sección tienes abierta">
-                · {seccionActiva.replace(/^\d+-/, '').replace(/\.md$/, '')}
-              </span>
-            )}
             <button
               onClick={enviar}
               disabled={!tarea.trim() || enviando}

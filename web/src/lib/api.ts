@@ -206,7 +206,7 @@ export const api = {
 
   trabajos: () => pedir<Trabajo[]>('GET', '/api/trabajos'),
   trabajo: (id: string) => pedir<Trabajo>('GET', `/api/trabajos/${e(id)}`),
-  lanzar: (datos: { motor?: Motor; tarea: string; asignatura: string; documento?: string; seccion?: string; herramientas?: HerramientasChat; seleccionTexto?: SeleccionTexto }) =>
+  lanzar: (datos: { motor?: Motor; tarea: string; asignatura: string; documento?: string; seccion?: string; herramientas?: HerramientasChat; seleccionTexto?: SeleccionTexto; ambito?: { vista: string; seccion?: string } }) =>
     pedir<Trabajo>('POST', '/api/trabajos', datos),
   responder: (id: string, texto: string) => pedir<Trabajo>('POST', `/api/trabajos/${e(id)}/responder`, { texto }),
   cancelar: (id: string) => pedir('POST', `/api/trabajos/${e(id)}/cancelar`),
