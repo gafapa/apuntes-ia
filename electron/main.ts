@@ -27,6 +27,8 @@ if (!app.requestSingleInstanceLock()) {
  * aparte que se recarga solo, así los cambios en el código se ven al momento sin reinstalar.
  */
 const URL_EN_VIVO = process.env.APUNTES_EN_VIVO;
+// En vivo se puede inspeccionar la ventana desde fuera (chrome://inspect o http://127.0.0.1:9333/json)
+if (URL_EN_VIVO) app.commandLine.appendSwitch('remote-debugging-port', '9333');
 
 async function iniciar() {
   Menu.setApplicationMenu(null);
