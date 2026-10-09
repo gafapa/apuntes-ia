@@ -149,6 +149,20 @@ texto, en el idioma de los apuntes y sin faltas.`,
 distinto tipo y dificultad (comprensión, aplicación, relación de conceptos), siempre basadas en
 el contenido de los apuntes, e incluyes las soluciones explicadas.`,
   },
+  curriculo: {
+    id: 'curriculo',
+    nombre: 'Experto en currículo',
+    descripcion: 'Busca el currículo oficial y comprueba que los apuntes lo cubren',
+    motor: 'claude',
+    web: true,
+    esfuerzo: 'medium',
+    instrucciones: `Eres un especialista en ordenación educativa española (LOMLOE y Formación Profesional).
+Conoces los reales decretos de enseñanzas mínimas de Primaria, ESO y Bachillerato, los reales decretos
+de los títulos de FP y los decretos y órdenes de las comunidades autónomas, y sabes dónde se publican
+(BOE y boletines autonómicos). Transcribes el currículo literalmente y con su referencia (norma, fecha
+y enlace), sin resumir, reordenar ni inventar. Al revisar unos apuntes, compruebas que cubren los
+criterios que les corresponden según su índice y su objetivo, sin exigir lo que pertenece a otros temas.`,
+  },
   glosario: {
     id: 'glosario',
     nombre: 'Glosario',
@@ -177,6 +191,7 @@ export function bloqueContexto({ asignatura: a, documento: d, secciones, seccion
     `- Nombre: ${a.nombre}${a.etapa?.startsWith('fp-') ? ' (módulo profesional)' : ''}`,
     a.etapa && ETAPAS[a.etapa] && `- Enseñanza: ${ETAPAS[a.etapa]} (sistema educativo español, LOMLOE)`,
     a.titulo && `- Ciclo formativo: ${a.titulo}${a.familia ? ` (familia profesional de ${a.familia})` : ''}`,
+    a.comunidad && `- Comunidad autónoma: ${a.comunidad}`,
     a.nivel && `- Nivel: ${a.nivel}`,
     `- Idioma de los apuntes: ${a.idioma || 'español'}`,
     a.estilo && `- Estilo de redacción: ${a.estilo}`,

@@ -149,6 +149,9 @@ export const api = {
   abrirExportado: (a: string, d: string, nombre: string) => pedir('POST', `${doc(a, d)}/exportados/${e(nombre)}/abrir`),
 
   glosario: (a: string) => pedir<{ contenido: string }>('GET', `${asig(a)}/glosario`),
+  curriculo: (a: string) => pedir<{ contenido: string }>('GET', `${asig(a)}/curriculo`),
+  guardarCurriculo: (a: string, contenido: string) => pedir('PUT', `${asig(a)}/curriculo`, { contenido }),
+  buscarCurriculo: (a: string, indicaciones?: string) => pedir<Trabajo>('POST', `${asig(a)}/curriculo/buscar`, { indicaciones }),
   guardarGlosario: (a: string, contenido: string) => pedir('PUT', `${asig(a)}/glosario`, { contenido }),
   actualizarGlosario: (a: string, indicaciones?: string) => pedir<Trabajo>('POST', `${asig(a)}/glosario/actualizar`, { indicaciones }),
   plantillas: (a: string) => pedir<{ docx: boolean; odt: boolean }>('GET', `${asig(a)}/plantillas`),

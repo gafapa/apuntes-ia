@@ -129,6 +129,7 @@ export function PasoRedaccion({ a, d, estado, trabajos }: Props) {
 
 const NOMBRES_REVISION: Record<TipoRevision, { nombre: string; ayuda: string }> = {
   estilo: { nombre: 'Estilo', ayuda: 'claridad, tono, ortografía' },
+  curriculo: { nombre: 'Currículo', ayuda: 'cobertura de los criterios oficiales (necesita el currículo en la asignatura)' },
   calidad: { nombre: 'Calidad', ayuda: 'rigor y huecos' },
   fuentes: { nombre: 'Fuentes y datos', ayuda: 'verificación en la web' },
 };

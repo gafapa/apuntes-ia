@@ -33,6 +33,7 @@ const EQUILIBRADO: Record<Motor, Tabla> = {
     estilo: ['sonnet', 'low'],
     'director-visual': ['sonnet', 'low'],
     glosario: ['haiku', 'low'],
+    curriculo: ['sonnet', 'medium'],
   },
   codex: {
     arquitecto: ['gpt-6-astra', 'high'],
@@ -46,6 +47,7 @@ const EQUILIBRADO: Record<Motor, Tabla> = {
     estilo: ['gpt-6-luna', 'low'],
     'director-visual': ['gpt-6.1-sol', 'low'],
     glosario: ['gpt-6-luna', 'low'],
+    curriculo: ['gpt-6.1-sol', 'medium'],
   },
 };
 // Ahorro: recorta donde menos se nota (estilo, visuales, glosario, autoevaluación) y mantiene un modelo
@@ -63,6 +65,7 @@ const AHORRO: Record<Motor, Tabla> = {
     estilo: ['haiku', 'low'],
     'director-visual': ['haiku', 'low'],
     glosario: ['haiku', 'low'],
+    curriculo: ['sonnet', 'low'],
   },
   codex: {
     arquitecto: ['gpt-6.1-sol', 'high'],
@@ -76,6 +79,7 @@ const AHORRO: Record<Motor, Tabla> = {
     estilo: ['gpt-6-luna', 'low'],
     'director-visual': ['gpt-6-luna', 'medium'],
     glosario: ['gpt-6-luna', 'low'],
+    curriculo: ['gpt-6.1-sol', 'low'],
   },
 };
 // Calidad: sube los agentes que deciden el resultado sin disparar los que se llaman a menudo.
@@ -92,6 +96,7 @@ const CALIDAD: Record<Motor, Tabla> = {
     estilo: ['sonnet', 'medium'],
     'director-visual': ['sonnet', 'medium'],
     glosario: ['sonnet', 'low'],
+    curriculo: ['opus', 'medium'],
   },
   codex: {
     arquitecto: ['gpt-6-astra', 'xhigh'],
@@ -105,6 +110,7 @@ const CALIDAD: Record<Motor, Tabla> = {
     estilo: ['gpt-6.1-sol', 'medium'],
     'director-visual': ['gpt-6.1-sol', 'medium'],
     glosario: ['gpt-6.1-sol', 'low'],
+    curriculo: ['gpt-6-astra', 'medium'],
   },
 };
 const PRESETS: Record<PerfilGasto, Record<Motor, Tabla>> = { ahorro: AHORRO, equilibrado: EQUILIBRADO, calidad: CALIDAD };

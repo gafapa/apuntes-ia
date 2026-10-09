@@ -501,6 +501,16 @@ ${JSON.stringify(
         )}`
       : '';
     if (soloApartados && !actual?.entradas.length) throw new ErrorUsuario('Primero hace falta un índice con secciones');
+    // Con el currículo oficial, el índice se planifica para cubrir los criterios que tocan a este tema
+    const curriculo = await this.almacen.leerCurriculo(asig);
+    const conCurriculo = curriculo.trim()
+      ? `
+
+## Currículo oficial de la asignatura (curriculo.md)
+Planifica el índice para que cubra los resultados de aprendizaje, criterios de evaluación o saberes básicos que correspondan a ESTE documento (según su título y su objetivo; no todo el currículo). En el «objetivo» de cada sección indica entre paréntesis los códigos que trabaja (p. ej. «(RA2: a, b)» o «(CE 3.1, 3.2)»).
+
+${curriculo.slice(0, 30_000)}`
+      : '';
     const ejemploApartados =
       profundidad === 1
         ? ''
@@ -545,7 +555,7 @@ NO crees ni modifiques secciones. Escribe el índice completo en el archivo \`${
   ]
 }
 
-Si el usuario te pide cambios después, vuelve a escribir el archivo completo.${indiceActual}`
+Si el usuario te pide cambios después, vuelve a escribir el archivo completo.${indiceActual}${conCurriculo}`
         : `Diseña el índice director del documento a partir del dossier (\`investigacion.md\`, si existe), del material aportado y del objetivo.
 ${actual ? 'Ya existe un índice en `indice.json`: tenlo en cuenta y mejóralo según las indicaciones.\n' : ''}
 NO crees ni modifiques secciones. Escribe tu propuesta en el archivo \`${salida}\` con este JSON exacto (sin comentarios):
@@ -565,7 +575,7 @@ NO crees ni modifiques secciones. Escribe tu propuesta en el archivo \`${salida}
 
 ${reglaProfundidad}
 Entre 3 y 12 secciones, según la extensión pedida. La primera puede ser una introducción breve y la última un resumen o síntesis; no incluyas una sección de autoevaluación (hay un agente para eso).
-Si el usuario te pide cambios después, vuelve a escribir el archivo completo con la versión corregida.${indiceActual}`,
+Si el usuario te pide cambios después, vuelve a escribir el archivo completo con la versión corregida.${indiceActual}${conCurriculo}`,
       post: { tipo: 'indice', datos: { salida, profundidad } },
     });
   }
@@ -708,8 +718,14 @@ ${mapa}
       estilo: 'claridad, tono adecuado a los destinatarios, frases largas o ambiguas, repeticiones, ortografía, gramática y coherencia terminológica',
       calidad: 'errores conceptuales, imprecisiones, explicaciones incompletas, saltos lógicos, conceptos usados antes de explicarlos y contenidos que faltan para cumplir el objetivo',
       fuentes: 'datos, cifras, fechas, nombres y afirmaciones verificables; compruébalos contra el dossier, el material aportado y fuentes fiables de la web',
+      curriculo:
+        'la cobertura del currículo oficial (incluido abajo): qué resultados de aprendizaje, criterios de evaluación o saberes básicos que corresponden a este documento —según su índice y su objetivo— no están tratados o lo están de forma insuficiente. Propón el texto que falta en el lugar adecuado y cita en el motivo el código del criterio (p. ej. «RA2.c» o «CE 3.1»). No exijas lo que pertenece a otros temas',
     };
-    const agente: Record<TipoRevision, string> = { estilo: 'estilo', calidad: 'calidad', fuentes: 'fuentes' };
+    const agente: Record<TipoRevision, string> = { estilo: 'estilo', calidad: 'calidad', fuentes: 'fuentes', curriculo: 'curriculo' };
+    const curriculo = tipos.includes('curriculo') ? await this.almacen.leerCurriculo(asig) : '';
+    if (tipos.includes('curriculo') && !curriculo.trim()) {
+      throw new ErrorUsuario('Esta asignatura aún no tiene el currículo oficial. Búscalo en la pestaña «Currículo» de la asignatura.');
+    }
     const lanzados: Trabajo[] = [];
     for (const tipo of tipos) {
       if (this.ocupado('revision', asig, doc, undefined, tipo)) continue;
@@ -719,14 +735,18 @@ ${mapa}
           agente: agente[tipo],
           asignatura: asig,
           documento: doc,
-          titulo: `Revisión de ${tipo === 'fuentes' ? 'fuentes y datos' : tipo}`,
+          titulo: `Revisión de ${tipo === 'fuentes' ? 'fuentes y datos' : tipo === 'curriculo' ? 'cobertura del currículo' : tipo}`,
           paso: 'revision',
           ref: tipo,
           incluir: { secciones: secciones.map((s) => s.archivo), dossier: tipo === 'fuentes', glosario: tipo === 'estilo' },
           indicaciones,
           tarea: `Revisa estas secciones fijándote en: ${foco[tipo]}.
 ${lista}
-
+${tipo === 'curriculo' ? `
+===== Currículo oficial de la asignatura (curriculo.md) =====
+${curriculo.slice(0, 40_000)}
+===== fin del currículo =====
+` : ''}
 NO modifiques las secciones: el usuario decidirá qué cambios aceptar. Escribe tus sugerencias en \`${salida}\` con este JSON exacto:
 
 {
@@ -1301,6 +1321,38 @@ Edita solo esos elementos; no cambies nada más del texto. Si alguno ya tiene un
   // ---------------------------------------------------------------------------
   // Glosario de la asignatura
 
+  /** Busca el currículo oficial de la asignatura y lo transcribe en curriculo.md. */
+  async buscarCurriculo(asig: string, indicaciones?: string) {
+    if (this.ocupado('curriculo', asig, undefined)) throw new ErrorUsuario('Ya se está buscando el currículo');
+    const a = await this.almacen.obtenerAsignatura(asig);
+    const fp = a.etapa?.startsWith('fp-');
+    return this.lanzar({
+      agente: 'curriculo',
+      asignatura: asig,
+      titulo: 'Buscar el currículo oficial',
+      paso: 'curriculo',
+      web: true,
+      indicaciones,
+      tarea: `Busca el currículo oficial de esta asignatura y transcríbelo en \`curriculo.md\`.
+${
+  fp
+    ? `Es un módulo de Formación Profesional: localiza el real decreto del título${a.titulo ? ` «${a.titulo}»` : ''} en el BOE y, dentro de él, el módulo «${a.nombre}». Transcribe sus **resultados de aprendizaje** con sus **criterios de evaluación** (RA1 con a), b), c)…) y, si el decreto los incluye, los contenidos básicos y la duración.`
+    : `Es una materia de ${a.nivel || 'la enseñanza indicada'}: localiza el real decreto de enseñanzas mínimas (LOMLOE) que corresponda y transcribe, para ESTE curso, las **competencias específicas**, los **criterios de evaluación** (con su numeración, p. ej. 1.1, 1.2) y los **saberes básicos**.`
+}
+${
+  a.comunidad
+    ? `La comunidad autónoma es ${a.comunidad}: busca también su decreto u orden propios y, si concretan o amplían el currículo estatal, usa su versión e indícalo.`
+    : 'Si no se indica la comunidad autónoma, usa la norma estatal.'
+}
+Formato de \`curriculo.md\`:
+- \`# Currículo oficial: <asignatura>\`
+- Una línea \`Fuente:\` con la norma (nombre, fecha) y su enlace al BOE o al boletín autonómico.
+- Los apartados del currículo con su numeración original, transcritos literalmente (sin resumir).
+Usa solo fuentes oficiales (boe.es, boletines autonómicos, webs de las consejerías o del ministerio). Si no encuentras la norma con seguridad, escríbelo en el archivo en lugar de inventar. No toques otros archivos.`,
+      post: { tipo: 'curriculo', datos: {} },
+    });
+  }
+
   async glosario(asig: string, indicaciones?: string) {
     if (this.ocupado('glosario', asig, undefined)) throw new ErrorUsuario('Ya se está actualizando el glosario');
     return this.lanzar({
@@ -1348,6 +1400,11 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
         return this.postImagenIa(t, datos);
       case 'molecula':
         return this.postMolecula(t, datos);
+      case 'curriculo':
+        return this.almacen.leerCurriculo(t.asignatura).then((c) => {
+          if (!c.trim()) throw new Error('El agente no ha escrito curriculo.md. Respóndele para que lo haga.');
+          return 'Currículo oficial guardado. Revísalo en la pestaña «Currículo» de la asignatura.';
+        });
       case 'seleccion':
         return this.postSeleccion(t, datos);
       case 'imagen-web':

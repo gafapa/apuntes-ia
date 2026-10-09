@@ -415,7 +415,7 @@ export async function crearServidor(op: OpcionesServidor) {
     flujo.redactar(params(req).a, params(req).d, cuerpo(req).archivos ?? [], cuerpo(req).indicaciones),
   );
   app.post(`${D}/flujo/revisar`, async (req) => {
-    const tipos = (cuerpo(req).tipos ?? []).filter((t) => ['estilo', 'calidad', 'fuentes'].includes(t));
+    const tipos = (cuerpo(req).tipos ?? []).filter((t) => ['estilo', 'calidad', 'fuentes', 'curriculo'].includes(t));
     if (!tipos.length) throw new ErrorUsuario('Elige al menos un tipo de revisión');
     return flujo.revisar(params(req).a, params(req).d, tipos, cuerpo(req).archivos, cuerpo(req).indicaciones);
   });
@@ -485,6 +485,13 @@ export async function crearServidor(op: OpcionesServidor) {
   }
 
   // Glosario de la asignatura
+  // Currículo oficial de la asignatura
+  app.get('/api/asignaturas/:a/curriculo', async (req) => ({ contenido: await almacen.leerCurriculo((req.params as PA).a) }));
+  app.put('/api/asignaturas/:a/curriculo', async (req) => {
+    await almacen.guardarCurriculo((req.params as PA).a, String((req.body as { contenido?: string })?.contenido ?? ''));
+    return { ok: true };
+  });
+  app.post('/api/asignaturas/:a/curriculo/buscar', async (req) => flujo.buscarCurriculo((req.params as PA).a, cuerpo(req).indicaciones));
   app.post('/api/asignaturas/:a/glosario/actualizar', async (req) => flujo.glosario((req.params as PA).a, cuerpo(req).indicaciones));
   app.get('/api/asignaturas/:a/glosario', async (req) => ({ contenido: await almacen.leerGlosario((req.params as PA).a) }));
   app.put('/api/asignaturas/:a/glosario', async (req) => {

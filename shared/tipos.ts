@@ -18,6 +18,8 @@ export interface Asignatura {
   color: string;
   /** Qué pueden usar los agentes (lo que falta está permitido). */
   permisos?: Permisos;
+  /** Comunidad autónoma (para buscar su currículo propio además del estatal). */
+  comunidad?: string;
   creado: string;
   actualizado: string;
 }
@@ -214,6 +216,7 @@ export type PasoFlujo =
   | 'visuales'
   | 'autoevaluacion'
   | 'glosario'
+  | 'curriculo'
   | 'fuentes';
 
 export type TipoBusqueda = 'cualquiera' | 'academico' | 'educativo' | 'video';
@@ -265,7 +268,7 @@ export interface Indice {
   actualizado: string;
 }
 
-export type TipoRevision = 'estilo' | 'calidad' | 'fuentes';
+export type TipoRevision = 'estilo' | 'calidad' | 'fuentes' | 'curriculo';
 
 export interface Sugerencia {
   id: string;

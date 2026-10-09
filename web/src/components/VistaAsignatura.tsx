@@ -7,7 +7,7 @@ import { AreaTexto, Boton, Campo, Vacio, confirmar, cx } from './ui';
 import { GastoTokens } from './ContadorTokens';
 import { GestorFuentes } from './GestorFuentes';
 import { ModalNuevoDocumento } from './Modales';
-import { PestanaGlosario, PestanaPlantillas } from './PestanasAsignatura';
+import { PestanaCurriculo, PestanaGlosario, PestanaPlantillas } from './PestanasAsignatura';
 import { SelectorEnsenanza, type ValorEnsenanza } from './SelectorEnsenanza';
 import { EditorPermisos } from './EditorPermisos';
 import { describirNivel, type Etapa } from '../../../shared/catalogo/educacion';
@@ -17,7 +17,7 @@ const normalizarIdioma = (i: string) => (/^(español|castellano)$/i.test(i.trim(
 
 const COLORES = ['#7c5cff', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#64748b'];
 
-type Pestana = 'documentos' | 'contexto' | 'material' | 'glosario' | 'plantillas';
+type Pestana = 'documentos' | 'contexto' | 'material' | 'curriculo' | 'glosario' | 'plantillas';
 
 export function VistaAsignatura({ asignatura }: { asignatura: string }) {
   const { seleccionar, cargarAsignaturas, avisar, versiones, reconexion } = useEstado();
@@ -66,6 +66,7 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
               ['contexto', 'Contexto y destinatarios'],
               ['material', 'Fuentes'],
               ['glosario', 'Glosario'],
+              ['curriculo', 'Currículo'],
               ['plantillas', 'Plantillas'],
             ] as [Pestana, string][]
           ).map(([id, txt]) => (
@@ -133,6 +134,20 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
           )}
 
           {pestana === 'glosario' && <PestanaGlosario a={a.id} />}
+          {pestana === 'curriculo' && (
+            <PestanaCurriculo
+              a={a.id}
+              comunidad={a.comunidad}
+              onComunidad={async (comunidad) => {
+                try {
+                  setA(await api.guardarAsignatura(a.id, { comunidad }));
+                  cargarAsignaturas();
+                } catch (e) {
+                  avisar((e as Error).message, 'error');
+                }
+              }}
+            />
+          )}
           {pestana === 'plantillas' && <PestanaPlantillas a={a.id} />}
           {pestana === 'material' && (
             <GestorFuentes

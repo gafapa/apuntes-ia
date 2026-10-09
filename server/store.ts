@@ -134,7 +134,7 @@ export class Almacen {
   async actualizarAsignatura(id: string, datos: Partial<AsignaturaDetalle>): Promise<AsignaturaDetalle> {
     const dir = this.dirAsignatura(id);
     const actual = await leerJson<Asignatura>(path.join(dir, 'asignatura.json'));
-    const campos = ['nombre', 'nivel', 'destinatarios', 'idioma', 'estilo', 'color', 'etapa', 'curso', 'modalidad', 'familia', 'titulo'] as const;
+    const campos = ['nombre', 'nivel', 'destinatarios', 'idioma', 'estilo', 'color', 'etapa', 'curso', 'modalidad', 'familia', 'titulo', 'comunidad'] as const;
     const nuevo: Asignatura = { ...actual, id, actualizado: ahora() };
     for (const c of campos) if (typeof datos[c] === 'string') nuevo[c] = datos[c]!;
     if (datos.permisos && typeof datos.permisos === 'object') nuevo.permisos = limpiarPermisos(datos.permisos);
@@ -400,6 +400,15 @@ export class Almacen {
 
   async guardarGlosario(asig: string, texto: string) {
     await fs.writeFile(path.join(this.dirAsignatura(asig), 'glosario.md'), texto, 'utf8');
+  }
+
+  /** Currículo oficial de la asignatura (curriculo.md), transcrito de la norma. */
+  async leerCurriculo(asig: string) {
+    return leerTexto(path.join(this.dirAsignatura(asig), 'curriculo.md'));
+  }
+
+  async guardarCurriculo(asig: string, texto: string) {
+    await fs.writeFile(path.join(this.dirAsignatura(asig), 'curriculo.md'), texto, 'utf8');
   }
 
   /** Plantilla de Word/LibreOffice propia de la asignatura (plantilla.docx / plantilla.odt). */
