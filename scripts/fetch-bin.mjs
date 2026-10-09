@@ -54,7 +54,13 @@ const versiones = {};
 
 for (const prog of PROGRAMAS) {
   const final = path.join(destino, prog.nombre + exe);
-  const rel = await (await fetch(`https://api.github.com/repos/${prog.repo}/releases/latest`, { headers: { 'User-Agent': 'apuntes-ia-build' } })).json();
+  // Con token (en GitHub Actions) para no chocar con el límite de la API sin autenticar
+  const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
+  const respuesta = await fetch(`https://api.github.com/repos/${prog.repo}/releases/latest`, {
+    headers: { 'User-Agent': 'apuntes-ia-build', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+  if (!respuesta.ok) throw new Error(`GitHub API (${prog.repo}): ${respuesta.status} ${await respuesta.text()}`);
+  const rel = await respuesta.json();
   versiones[prog.nombre] = rel.tag_name;
   if (fs.existsSync(final) && fs.existsSync(path.join(destino, `.${prog.nombre}-${rel.tag_name}`))) {
     console.log(`${prog.nombre} ${rel.tag_name} ya descargado`);
