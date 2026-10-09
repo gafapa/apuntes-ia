@@ -52,7 +52,7 @@ export interface BloqueActividad {
   opciones: OpcionesActividad;
   estado: 'generando' | 'lista' | 'error';
   error?: string;
-  incluir: boolean; // si va en los apuntes (y en la exportación a Moodle)
+  incluir: boolean; // si va en los apuntes
   preguntas: PreguntaActividad[];
   creado: string;
   actualizado: string;

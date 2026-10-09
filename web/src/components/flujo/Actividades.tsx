@@ -21,7 +21,7 @@ import { ActividadAgente, Paso } from './comun';
 
 /**
  * Autoevaluación en bloques: cada bloque (un tipo de actividad, una cantidad, una dificultad y unas
- * secciones) se genera por separado y se marca para incluirlo o no en los apuntes y en Moodle.
+ * secciones) se genera por separado, se marca para incluirlo o no en los apuntes y se exporta a Moodle por separado.
  */
 export function PasoActividades({ a, d, estado, trabajos }: { a: string; d: string; estado: EstadoFlujo; trabajos: Trabajo[] }) {
   const { avisar } = useEstado();
@@ -33,9 +33,9 @@ export function PasoActividades({ a, d, estado, trabajos }: { a: string; d: stri
   const secciones = estado.secciones.filter((s) => !ARCHIVO_AUTOEVALUACION.test(s.archivo) && s.palabras > 40);
   const trabajoDe = (id: string) => trabajos.find((t) => t.ref === id && t.paso === 'autoevaluacion' && (t.estado === 'ejecutando' || t.estado === 'en-cola'));
 
-  const moodle = async () => {
+  const moodle = async (id: string) => {
     try {
-      const r = await api.exportarMoodle(a, d);
+      const r = await api.exportarMoodle(a, d, id);
       avisar(`Exportada para Moodle: ${r.nombre}. En Moodle: Banco de preguntas › Importar › Formato GIFT.`, 'ok');
       await api.abrirCarpeta(a, d, 'exportados');
     } catch (e) {
@@ -53,11 +53,6 @@ export function PasoActividades({ a, d, estado, trabajos }: { a: string; d: stri
       descripcion="Bloques de actividades que generas uno a uno: eliges el tipo, la cantidad, la dificultad y las secciones. Marca los que quieras incluir en los apuntes."
       acciones={
         <>
-          {incluidos.length > 0 && (
-            <Boton icono={<Download className="size-4" />} onClick={moodle} title="Archivo GIFT con los bloques incluidos, para el banco de preguntas de Moodle (Aules, EducaMadrid…)">
-              Moodle
-            </Boton>
-          )}
           <Boton variante="primario" icono={<Plus className="size-4" />} disabled={!secciones.length} onClick={() => setModal({})}>
             Nuevo bloque
           </Boton>
@@ -79,7 +74,7 @@ export function PasoActividades({ a, d, estado, trabajos }: { a: string; d: stri
                   <input
                     type="checkbox"
                     className="size-4 shrink-0 accent-[var(--acento)] cursor-pointer"
-                    title="Incluir en los apuntes (y en la exportación a Moodle)"
+                    title="Incluir en los apuntes"
                     checked={b.incluir}
                     disabled={b.estado !== 'lista'}
                     onChange={(e) => api.editarActividad(a, d, b.id, { incluir: e.target.checked }).catch((err) => avisar(err.message, 'error'))}
@@ -102,6 +97,17 @@ export function PasoActividades({ a, d, estado, trabajos }: { a: string; d: stri
                     </span>
                   )}
                   {b.estado === 'lista' && !b.incluir && <Insignia>no se incluye</Insignia>}
+                  {b.estado === 'lista' && (
+                    <Boton
+                      tam="sm"
+                      variante="fantasma"
+                      icono={<Download className="size-3.5" />}
+                      onClick={() => moodle(b.id)}
+                      title="Archivo GIFT de este bloque, para el banco de preguntas de Moodle (Aules, EducaMadrid…)"
+                    >
+                      Moodle
+                    </Boton>
+                  )}
                   <Boton tam="sm" variante="fantasma" icono={<RotateCcw className="size-3.5" />} disabled={b.estado === 'generando'} onClick={() => setModal({ bloque: b })}>
                     Rehacer
                   </Boton>

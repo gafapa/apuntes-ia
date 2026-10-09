@@ -1828,11 +1828,12 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
   }
 
   /** Exporta en formato GIFT (Moodle, Aules, EducaMadrid…) los bloques marcados para incluir. */
-  async exportarMoodle(asig: string, doc: string): Promise<Exportado> {
-    const bloques = (await this.actividades(asig, doc)).filter((b) => b.incluir && b.estado === 'lista' && b.preguntas.length);
-    if (!bloques.length) throw new ErrorUsuario('No hay bloques de actividades marcados para incluir');
+  async exportarMoodle(asig: string, doc: string, id: string): Promise<Exportado> {
+    const bloque = (await this.actividades(asig, doc)).find((b) => b.id === id);
+    if (!bloque || bloque.estado !== 'lista' || !bloque.preguntas.length) throw new ErrorUsuario('El bloque todavía no está listo');
+    const bloques = [bloque];
     const documento = await this.almacen.obtenerDocumento(asig, doc);
-    const nombre = `${slug(documento.titulo) || 'autoevaluacion'}-moodle.gift`;
+    const nombre = `${slug(documento.titulo) || 'apuntes'}-${slug(bloque.titulo).slice(0, 40) || bloque.id}-moodle.gift`;
     const ruta = this.almacen.rutaExportado(asig, doc, nombre);
     await fs.mkdir(path.dirname(ruta), { recursive: true });
     await fs.writeFile(ruta, generarGift(bloques, documento.titulo), 'utf8');

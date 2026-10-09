@@ -532,7 +532,7 @@ export async function crearServidor(op: OpcionesServidor) {
     const b = req.body as { tipo?: TipoVersion; indicaciones?: string };
     return flujo.crearVersion(params(req).a, params(req).d, b.tipo as TipoVersion, b.indicaciones);
   });
-  app.post(`${D}/exportar/moodle`, async (req) => flujo.exportarMoodle(params(req).a, params(req).d));
+  app.post(`${D}/actividades/:id/moodle`, async (req) => flujo.exportarMoodle(params(req).a, params(req).d, (req.params as { id: string }).id));
   app.post(`${D}/exportar`, async (req) => {
     const b = req.body as { opciones: OpcionesExportacion; diagramas?: Record<string, string> };
     if (!['docx', 'odt', 'pdf', 'md'].includes(b?.opciones?.formato)) throw new ErrorUsuario('Formato no válido');
