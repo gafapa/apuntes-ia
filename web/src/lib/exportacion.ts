@@ -7,6 +7,7 @@ import { PATRON_MOLECULA, consultaMolecula } from '../../../shared/quimica';
 import { dibujarMolecula, resolverMolecula } from './moleculas';
 import { PATRON_BLOQUE, claveBloque, type TipoBloque } from '../../../shared/bloques';
 import { dibujarBloque } from './bloques';
+import { registrarIconos } from './mermaidIconos';
 
 let contador = 0;
 
@@ -56,6 +57,7 @@ export async function diagramasAPng(textos: string[]): Promise<Record<string, st
   }
   if (!codigos.size) return {};
   const mermaid = (await import('mermaid')).default;
+  registrarIconos(mermaid);
   mermaid.initialize({
     startOnLoad: false,
     theme: 'default',

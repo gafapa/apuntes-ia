@@ -8,6 +8,7 @@ import 'katex/contrib/mhchem';
 import { consultaMolecula } from '../../../shared/quimica';
 import { BLOQUES_DIBUJADOS, type TipoBloque } from '../../../shared/bloques';
 import { dibujarBloque } from './bloques';
+import { registrarIconos } from './mermaidIconos';
 import { dibujarMolecula, resolverMolecula } from './moleculas';
 
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true });
@@ -127,7 +128,10 @@ export async function dibujarDiagramas(contenedor: HTMLElement) {
   void dibujarBloques(contenedor);
   const nodos = [...contenedor.querySelectorAll<HTMLElement>('.mermaid[data-codigo]')];
   if (!nodos.length) return;
-  mermaidListo ??= import('mermaid').then((m) => m.default);
+  mermaidListo ??= import('mermaid').then((m) => {
+    registrarIconos(m.default);
+    return m.default;
+  });
   const mermaid = await mermaidListo;
   const oscuro = document.documentElement.classList.contains('dark');
   mermaid.initialize({ startOnLoad: false, theme: oscuro ? 'dark' : 'default', securityLevel: 'strict', fontFamily: 'Inter Variable' });
