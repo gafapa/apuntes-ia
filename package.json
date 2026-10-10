@@ -1,7 +1,7 @@
 {
   "name": "apuntes-ia",
   "productName": "Apuntes IA",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Crea apuntes con varios agentes de IA (Claude Code y Codex) trabajando en paralelo",
   "author": "Pablo Gallego",
   "license": "MIT",
