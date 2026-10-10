@@ -195,6 +195,7 @@ export class Almacen {
       destinatarios: datos.destinatarios ?? '',
       extension: datos.extension ?? '',
       ...(datos.permisos ? { permisos: limpiarPermisos(datos.permisos) } : {}),
+      ...(datos.importado ? { importado: datos.importado } : {}),
       creado: ahora(),
       actualizado: ahora(),
     };

@@ -34,6 +34,8 @@ const EQUILIBRADO: Record<Motor, Tabla> = {
     'director-visual': ['sonnet', 'low'],
     glosario: ['haiku', 'low'],
     curriculo: ['sonnet', 'medium'],
+    diagnostico: ['sonnet', 'high'],
+    transcriptor: ['sonnet', 'low'],
   },
   codex: {
     arquitecto: ['gpt-6-astra', 'high'],
@@ -48,6 +50,8 @@ const EQUILIBRADO: Record<Motor, Tabla> = {
     'director-visual': ['gpt-6.1-sol', 'low'],
     glosario: ['gpt-6-luna', 'low'],
     curriculo: ['gpt-6.1-sol', 'medium'],
+    diagnostico: ['gpt-6.1-sol', 'high'],
+    transcriptor: ['gpt-6.1-sol', 'low'],
   },
 };
 // Ahorro: recorta donde menos se nota (estilo, visuales, glosario, autoevaluación) y mantiene un modelo
@@ -66,6 +70,8 @@ const AHORRO: Record<Motor, Tabla> = {
     'director-visual': ['haiku', 'low'],
     glosario: ['haiku', 'low'],
     curriculo: ['sonnet', 'low'],
+    diagnostico: ['sonnet', 'medium'],
+    transcriptor: ['haiku', 'low'],
   },
   codex: {
     arquitecto: ['gpt-6.1-sol', 'high'],
@@ -80,6 +86,8 @@ const AHORRO: Record<Motor, Tabla> = {
     'director-visual': ['gpt-6-luna', 'medium'],
     glosario: ['gpt-6-luna', 'low'],
     curriculo: ['gpt-6.1-sol', 'low'],
+    diagnostico: ['gpt-6.1-sol', 'medium'],
+    transcriptor: ['gpt-6-luna', 'low'],
   },
 };
 // Calidad: sube los agentes que deciden el resultado sin disparar los que se llaman a menudo.
@@ -97,6 +105,8 @@ const CALIDAD: Record<Motor, Tabla> = {
     'director-visual': ['sonnet', 'medium'],
     glosario: ['sonnet', 'low'],
     curriculo: ['opus', 'medium'],
+    diagnostico: ['opus', 'high'],
+    transcriptor: ['sonnet', 'medium'],
   },
   codex: {
     arquitecto: ['gpt-6-astra', 'xhigh'],
@@ -111,6 +121,8 @@ const CALIDAD: Record<Motor, Tabla> = {
     'director-visual': ['gpt-6.1-sol', 'medium'],
     glosario: ['gpt-6.1-sol', 'low'],
     curriculo: ['gpt-6-astra', 'medium'],
+    diagnostico: ['gpt-6-astra', 'high'],
+    transcriptor: ['gpt-6.1-sol', 'medium'],
   },
 };
 const PRESETS: Record<PerfilGasto, Record<Motor, Tabla>> = { ahorro: AHORRO, equilibrado: EQUILIBRADO, calidad: CALIDAD };

@@ -77,7 +77,7 @@ const opcionesIndice = {
 // import() oculto al empaquetador: pdfjs es un módulo ESM y el proceso principal es CommonJS
 const importar = new Function('m', 'return import(m)') as (m: string) => Promise<any>;
 
-async function textoPdf(ruta: string): Promise<{ pagina: number; texto: string }[]> {
+export async function textoPdf(ruta: string): Promise<{ pagina: number; texto: string }[]> {
   const pdfjs = await importar('pdfjs-dist/legacy/build/pdf.mjs');
   const datos = new Uint8Array(await fs.readFile(ruta));
   const tarea = pdfjs.getDocument({ data: datos, useSystemFonts: true, disableFontFace: true, verbosity: 0 });

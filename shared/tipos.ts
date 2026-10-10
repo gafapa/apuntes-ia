@@ -72,8 +72,61 @@ export interface Documento {
   extension: string; // p. ej. "10-15 páginas"
   /** Cambios sobre los permisos de la asignatura (lo que falta se hereda). */
   permisos?: Permisos;
+  /** Si el documento parte de unos apuntes existentes (Word, LibreOffice, Markdown o PDF). */
+  importado?: Importacion;
   creado: string;
   actualizado: string;
+}
+
+// ---------- Importar apuntes existentes ----------
+
+export type FormatoImportado = 'docx' | 'odt' | 'md' | 'pdf';
+
+/**
+ * Qué se hace con unos apuntes importados:
+ * - conservador: se convierten en las secciones del documento y los agentes solo proponen cambios;
+ * - reestructurar: son la base de un índice nuevo; se reorganizan conservando su contenido;
+ * - reescribir: son la fuente principal de unos apuntes nuevos.
+ */
+export type ModoMejora = 'conservador' | 'reestructurar' | 'reescribir';
+
+export interface Importacion {
+  archivo: string; // nombre del archivo original (en original/)
+  formato: FormatoImportado;
+  modo: ModoMejora;
+  fecha: string;
+  estiloOriginal?: boolean; // el Word u ODT original hace de plantilla al exportar
+}
+
+export type AreaDiagnostico = 'contenido' | 'actualidad' | 'estructura' | 'estilo' | 'curriculo' | 'visuales' | 'actividades' | 'formato';
+
+/** Qué fase de la app resuelve un problema del diagnóstico. */
+export type AccionDiagnostico = 'estilo' | 'calidad' | 'fuentes' | 'curriculo' | 'visuales' | 'actividades' | 'indice';
+
+export interface ProblemaDiagnostico {
+  id: string;
+  area: AreaDiagnostico;
+  seccion?: string; // archivo de la sección, si es de una concreta
+  descripcion: string;
+  gravedad: 'baja' | 'media' | 'alta';
+  accion?: AccionDiagnostico;
+}
+
+/** Informe general del agente de diagnóstico sobre unos apuntes (sin tocarlos). */
+export interface Diagnostico {
+  resumen: string;
+  puntosFuertes: string[];
+  problemas: ProblemaDiagnostico[];
+  recomendacion: ModoMejora;
+  motivoRecomendacion: string;
+  actualizado: string;
+}
+
+/** Versión guardada de una sección (historial) o el texto importado original. */
+export interface VersionSeccion {
+  id: string; // marca de tiempo, u «original»
+  fecha: string;
+  palabras: number;
 }
 
 export interface Seccion {
@@ -220,7 +273,9 @@ export type PasoFlujo =
   | 'autoevaluacion'
   | 'glosario'
   | 'curriculo'
-  | 'fuentes';
+  | 'fuentes'
+  | 'importacion'
+  | 'diagnostico';
 
 export type TipoBusqueda = 'cualquiera' | 'academico' | 'educativo' | 'video';
 
@@ -367,6 +422,7 @@ export interface EstadoFlujo {
   visuales: PropuestaVisual[];
   autoevaluacion?: string; // archivo de la antigua sección de autoevaluación
   actividades: BloqueActividad[]; // bloques de actividades de autoevaluación
+  diagnostico?: Diagnostico;
   exportados: Exportado[];
 }
 

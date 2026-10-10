@@ -7,6 +7,7 @@ import { useEstado } from '../../lib/estado';
 import { diferencias } from '../../lib/diff';
 import { AreaTexto, Boton, Insignia, cx } from '../ui';
 import { ActividadAgente, BotonAgente, Paso, trabajosDe } from './comun';
+import { PanelDiagnostico } from './Diagnostico';
 
 interface Props {
   a: string;
@@ -136,6 +137,7 @@ const NOMBRES_REVISION: Record<TipoRevision, { nombre: string; ayuda: string }> 
 
 export function PasoRevision({ a, d, estado, trabajos, recargar }: Props) {
   const { avisar } = useEstado();
+  const importado = useEstado((s) => !!s.asignaturas.find((x) => x.id === a)?.documentos.find((x) => x.id === d)?.importado);
   const activos = trabajosDe(trabajos, 'revision');
   const [tipos, setTipos] = useState<Set<TipoRevision>>(new Set(['estilo', 'calidad']));
   const pendientes = estado.sugerencias.filter((s) => s.estado === 'pendiente');
@@ -165,7 +167,7 @@ export function PasoRevision({ a, d, estado, trabajos, recargar }: Props) {
       titulo="Revisión"
       opcional
       hecho={estado.sugerencias.length > 0 && pendientes.length === 0 && activos.length === 0}
-      trabajando={activos.length > 0}
+      trabajando={activos.length > 0 || trabajosDe(trabajos, 'diagnostico').length > 0}
       descripcion="Los revisores no tocan el texto: proponen cambios y tú decides cuáles aceptar."
       acciones={
         <BotonAgente
@@ -178,6 +180,7 @@ export function PasoRevision({ a, d, estado, trabajos, recargar }: Props) {
       }
     >
       <div className="space-y-3">
+        <PanelDiagnostico a={a} d={d} estado={estado} trabajos={trabajos} conImportacion={importado} />
         <div className="flex flex-wrap gap-2">
           {(Object.keys(NOMBRES_REVISION) as TipoRevision[]).map((t) => {
             const enCurso = activos.some((x) => x.ref === t);

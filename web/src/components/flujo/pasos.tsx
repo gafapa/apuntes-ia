@@ -60,7 +60,7 @@ export function estadoPaso(id: IdPaso, e: EstadoFlujo | undefined, trabajos: Tra
       const hechas = secciones.filter((s) => s.palabras >= MIN_PALABRAS).length;
       return {
         hecho: secciones.length > 0 && hechas === secciones.length,
-        trabajando: enCurso('redaccion'),
+        trabajando: enCurso('redaccion') || enCurso('importacion'), // importación: transcripción de un PDF
         aviso: secciones.length ? `${hechas}/${secciones.length}` : undefined,
       };
     }
@@ -68,7 +68,7 @@ export function estadoPaso(id: IdPaso, e: EstadoFlujo | undefined, trabajos: Tra
       const pendientes = e.sugerencias.filter((s) => s.estado === 'pendiente').length;
       return {
         hecho: e.sugerencias.length > 0 && pendientes === 0 && !enCurso('revision'),
-        trabajando: enCurso('revision'),
+        trabajando: enCurso('revision') || enCurso('diagnostico'),
         aviso: pendientes ? `${pendientes} pendientes` : undefined,
       };
     }
@@ -98,6 +98,10 @@ export function estadoPaso(id: IdPaso, e: EstadoFlujo | undefined, trabajos: Tra
 export function vistaInicial(e: EstadoFlujo | undefined, trabajos: Trabajo[]): IdVista {
   if (!e) return 'investigacion';
   if (!e.secciones.length && !e.investigacion && !e.indice) return 'investigacion';
+  // Apuntes importados: lo primero es su diagnóstico (en la fase de revisión)
+  if ((e.diagnostico || trabajos.some((t) => t.paso === 'diagnostico' && activo(t))) && !estadoPaso('revision', e, trabajos).hecho) {
+    if (!trabajos.some((t) => (t.paso === 'indice' || t.paso === 'redaccion' || t.paso === 'importacion') && activo(t))) return 'revision';
+  }
   for (const p of PASOS) {
     const s = estadoPaso(p.id, e, trabajos);
     if (s.trabajando || s.aviso === 'por aprobar') return p.id;

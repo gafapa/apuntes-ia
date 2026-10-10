@@ -5,16 +5,18 @@ import fastifyWebsocket from '@fastify/websocket';
 import fastifyMultipart from '@fastify/multipart';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { WebSocket } from 'ws';
-import type { Ajustes, EstadoMotor, HerramientasChat, PerfilGasto, SeleccionTexto, Trabajo, Indice, MensajeWS, MezclaVisuales, Motor, OpcionesExportacion, PropuestaVisual, TipoBusqueda, TipoRevision } from '../shared/tipos';
+import type { Ajustes, EstadoMotor, HerramientasChat, PerfilGasto, SeleccionTexto, Trabajo, Indice, MensajeWS, MezclaVisuales, ModoMejora, Motor, OpcionesExportacion, PropuestaVisual, TipoBusqueda, TipoRevision } from '../shared/tipos';
 import { Almacen, ErrorUsuario } from './store';
 import { Cola } from './agents/cola';
 import { AGENTES } from './agents/agentes';
 import { abrirArchivo, abrirCarpeta, abrirTerminal, comandoInstalacion, comandoSesion, comprobarMotor } from './agents/motores';
 import { cargarAjustes, guardarAjustes } from './ajustes';
 import { Flujo, type AmbitoChat, type TipoVersion } from './flujo';
+import { Historial } from './historial';
 import type { OpcionesActividad } from '../shared/actividades';
 import { exportar } from './exportar';
 import { Contador } from './tokens';
@@ -60,6 +62,8 @@ export async function crearServidor(op: OpcionesServidor) {
 
   const moleculas = new Moleculas(path.join(path.dirname(op.archivoAjustes), 'moleculas.json'));
   const arasaac = new Arasaac(path.join(path.dirname(op.archivoAjustes), 'arasaac'));
+  // Versiones de las secciones: se guardan al cambiar los archivos (lo que haga quien los cambie)
+  const historial = new Historial(() => almacen.raiz);
   const flujo = new Flujo({ almacen: () => almacen, cola, ajustes: () => ajustes, motoresListos, dirBin, mcpFuentes: op.mcpFuentes, moleculas });
   await cola.cargar(); // retoma los trabajos que seguían en marcha
   contador.sembrar(cola.listar());
@@ -114,6 +118,7 @@ export async function crearServidor(op: OpcionesServidor) {
   const pendientes = new Map<string, NodeJS.Timeout>();
   const vigilar = () => {
     vigilante?.close();
+    historial.cebar().catch(() => {});
     try {
       vigilante = fs.watch(almacen.raiz, { recursive: true }, (_ev, archivo) => {
         if (!archivo) return;
@@ -125,6 +130,7 @@ export async function crearServidor(op: OpcionesServidor) {
           setTimeout(() => {
             pendientes.delete(ruta);
             const [asignatura, sub, documento] = ruta.split('/');
+            historial.alCambiar(ruta).catch(() => {});
             difundir({ tipo: 'archivos', asignatura, documento: sub === 'documentos' ? documento : undefined, ruta });
           }, 250),
         );
@@ -474,6 +480,62 @@ export async function crearServidor(op: OpcionesServidor) {
   );
   app.delete(`${D}/actividades/:id`, async (req) => flujo.eliminarActividad(params(req).a, params(req).d, (req.params as { id: string }).id));
 
+
+  // ---------- Importar apuntes existentes, diagnóstico e historial de las secciones ----------
+  app.post('/api/asignaturas/:a/importar', async (req) => {
+    const { a } = req.params as PA;
+    const campos: Record<string, string> = {};
+    let archivo: { ruta: string; nombre: string } | undefined;
+    const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'apuntes-subida-'));
+    try {
+      for await (const parte of req.parts()) {
+        if (parte.type === 'file') {
+          const ruta = path.join(tmp, path.basename(parte.filename) || 'apuntes');
+          await pipeline(parte.file, fs.createWriteStream(ruta));
+          archivo = { ruta, nombre: path.basename(parte.filename) };
+        } else campos[parte.fieldname] = String(parte.value ?? '');
+      }
+      if (!archivo) throw new ErrorUsuario('Falta el archivo de los apuntes');
+      return await flujo.importar(a, archivo, {
+        titulo: campos.titulo,
+        objetivo: campos.objetivo,
+        destinatarios: campos.destinatarios,
+        modo: campos.modo as ModoMejora,
+        estiloOriginal: campos.estiloOriginal === 'true',
+        diagnosticar: campos.diagnosticar !== 'false',
+      });
+    } finally {
+      await fsp.rm(tmp, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+  app.post(`${D}/flujo/diagnostico`, async (req) => flujo.diagnosticar(params(req).a, params(req).d, cuerpo(req).indicaciones));
+  // Abre el archivo original de unos apuntes importados con el programa del sistema
+  app.post(`${D}/original/abrir`, async (req) => {
+    const documento = await almacen.obtenerDocumento(params(req).a, params(req).d);
+    const ruta = documento.importado && path.join(almacen.dirDocumento(params(req).a, params(req).d), 'original', path.basename(documento.importado.archivo));
+    if (!ruta || !fs.existsSync(ruta)) throw new ErrorUsuario('No se encuentra el archivo original', 404);
+    abrirArchivo(ruta);
+    return { ok: true };
+  });
+  app.post(`${D}/flujo/modo`, async (req) => flujo.cambiarModo(params(req).a, params(req).d, (req.body as { modo: ModoMejora }).modo));
+  app.get(`${D}/secciones/:s/historial`, async (req) => {
+    const { a, d, s } = req.params as PS;
+    return historial.listar(almacen.dirDocumento(a, d), s);
+  });
+  app.get(`${D}/secciones/:s/historial/:id`, async (req) => {
+    const { a, d, s, id } = req.params as PS & { id: string };
+    return { contenido: await historial.leer(almacen.dirDocumento(a, d), s, id).catch(() => { throw new ErrorUsuario('Esa versión ya no existe', 404); }) };
+  });
+  app.post(`${D}/secciones/:s/historial/:id/restaurar`, async (req) => {
+    const { a, d, s, id } = req.params as PS & { id: string };
+    const dirDoc = almacen.dirDocumento(a, d);
+    const antigua = await historial.leer(dirDoc, s, id).catch(() => { throw new ErrorUsuario('Esa versión ya no existe', 404); });
+    // El texto actual se guarda antes, para poder deshacer la restauración
+    const actual = await almacen.leerSeccion(a, d, s).catch(() => '');
+    if (actual.trim()) await historial.guardar(dirDoc, s, actual);
+    await almacen.guardarSeccion(a, d, s, antigua);
+    return { ok: true };
+  });
 
   // Índice de las fuentes (RAG): estado y búsqueda para el usuario
   for (const base of ['/api/asignaturas/:a/fuentes-indice', '/api/asignaturas/:a/documentos/:d/fuentes-indice']) {

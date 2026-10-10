@@ -10,6 +10,7 @@ import {
   Download,
   Eye,
   FileText,
+  History,
   Loader2,
   PencilLine,
   Plus,
@@ -28,6 +29,7 @@ import { Editor } from './Editor';
 import { VistaPrevia } from './VistaPrevia';
 import { GestorFuentes } from './GestorFuentes';
 import { GaleriaRecursos } from './GaleriaRecursos';
+import { HistorialSeccion } from './HistorialSeccion';
 import { VistaPaso } from './flujo/VistaFlujo';
 import { PASOS, useFlujoActual, useVistaDocumento } from './flujo/pasos';
 
@@ -141,6 +143,7 @@ function Apuntes({ asignatura, documento }: { asignatura: string; documento: str
   const [texto, setTexto] = useState('');
   const [estadoGuardado, setEstadoGuardado] = useState<'guardado' | 'pendiente' | 'guardando'>('guardado');
   const [conflicto, setConflicto] = useState<string>();
+  const [verHistorial, setVerHistorial] = useState(false);
   const [modo, setModo] = useState<Modo>(() => (localStorage.getItem('modoEditor') as Modo) || 'dividido');
   const [completo, setCompleto] = useState<{ archivo: string; texto: string }[]>([]);
   const guardadoRef = useRef(''); // último contenido sincronizado con el disco
@@ -408,7 +411,15 @@ function Apuntes({ asignatura, documento }: { asignatura: string; documento: str
                   </button>
                 ))}
               </div>
-              <span className="ml-auto flex items-center gap-1.5 text-xs text-texto-3">
+              <button
+                title="Versiones anteriores de esta sección (y el original, si se importó)"
+                onClick={() => setVerHistorial(true)}
+                className="ml-auto flex items-center gap-1.5 rounded-md px-2 py-1 text-[12.5px] text-texto-3 transition-colors hover:bg-panel-2 hover:text-texto cursor-pointer"
+              >
+                <History className="size-3.5" />
+                Historial
+              </button>
+              <span className="flex items-center gap-1.5 text-xs text-texto-3">
                 {estadoGuardado === 'guardando' && <Loader2 className="size-3 animate-spin" />}
                 {estadoGuardado === 'guardado' && <Check className="size-3 text-ok" />}
                 {estadoGuardado === 'guardado' ? 'Guardado' : estadoGuardado === 'guardando' ? 'Guardando…' : 'Sin guardar'}
@@ -454,6 +465,17 @@ function Apuntes({ asignatura, documento }: { asignatura: string; documento: str
                 </div>
               )}
             </div>
+            {activa && activa !== TODO && (
+              <HistorialSeccion
+                a={asignatura}
+                d={documento}
+                archivo={activa}
+                titulo={secciones.find((s) => s.archivo === activa)?.titulo ?? activa}
+                actual={texto}
+                abierto={verHistorial}
+                onCerrar={() => setVerHistorial(false)}
+              />
+            )}
           </>
         )}
       </div>
@@ -538,7 +560,23 @@ function FichaDocumento({
           Guardar cambios
         </Boton>
       </div>
-      <div className="mt-10 rounded-xl border border-borde px-5 py-4">
+      {doc.importado && (
+        <div className="mt-10 flex flex-wrap items-center gap-3 rounded-xl border border-borde px-5 py-4">
+          <div className="min-w-60 flex-1">
+            <div className="text-sm font-medium">Apuntes de partida</div>
+            <p className="mt-0.5 text-[12.5px] text-texto-3">
+              Importados de «{doc.importado.archivo}» el {new Date(doc.importado.fecha).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })} ·{' '}
+              {doc.importado.modo === 'conservador' ? 'mejorando sobre el texto' : doc.importado.modo === 'reestructurar' ? 'reorganizándolos' : 'rehaciéndolos'}
+              {doc.importado.estiloOriginal && ' · se exportan con su estilo'}.
+              {doc.importado.modo === 'conservador' && ' En el historial de cada sección puedes compararla con el original.'}
+            </p>
+          </div>
+          <Boton tam="sm" icono={<FileText className="size-3.5" />} onClick={() => api.abrirOriginal(doc.asignatura, doc.id).catch((e) => avisar(e.message, 'error'))}>
+            Abrir el original
+          </Boton>
+        </div>
+      )}
+      <div className="mt-6 rounded-xl border border-borde px-5 py-4">
         <div className="text-sm font-medium">Versiones adaptadas</div>
         <p className="mt-0.5 text-[12.5px] text-texto-3">
           Atención a la diversidad: crea una copia del documento (con sus imágenes y su índice) y un redactor adapta cada sección. El original no cambia.

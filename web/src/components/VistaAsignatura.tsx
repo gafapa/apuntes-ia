@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { FileText, Plus, Trash2 } from 'lucide-react';
+import { FileText, FileUp, Plus, Trash2 } from 'lucide-react';
 import type { AsignaturaDetalle } from '../../../shared/tipos';
 import { api } from '../lib/api';
 import { useEstado } from '../lib/estado';
 import { AreaTexto, Boton, Campo, Vacio, confirmar, cx } from './ui';
 import { GastoTokens } from './ContadorTokens';
 import { GestorFuentes } from './GestorFuentes';
-import { ModalNuevoDocumento } from './Modales';
+import { ModalImportar, ModalNuevoDocumento } from './Modales';
 import { PestanaCurriculo, PestanaGlosario, PestanaPlantillas } from './PestanasAsignatura';
 import { SelectorEnsenanza, type ValorEnsenanza } from './SelectorEnsenanza';
 import { EditorPermisos } from './EditorPermisos';
@@ -24,6 +24,7 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
   const [a, setA] = useState<AsignaturaDetalle>();
   const [pestana, setPestana] = useState<Pestana>('documentos');
   const [nuevoDoc, setNuevoDoc] = useState(false);
+  const [importar, setImportar] = useState(false);
   const version = `${versiones[`${asignatura}/`] ?? 0}-${reconexion}`; // también al reconectar con el servidor
 
   useEffect(() => {
@@ -91,9 +92,14 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
                 titulo="Sin documentos todavía"
                 texto="Cada documento es un bloque de apuntes (un tema, una unidad…) con sus propias secciones."
                 accion={
-                  <Boton variante="primario" icono={<Plus className="size-4" />} onClick={() => setNuevoDoc(true)}>
-                    Nuevo documento
-                  </Boton>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Boton variante="primario" icono={<Plus className="size-4" />} onClick={() => setNuevoDoc(true)}>
+                      Nuevo documento
+                    </Boton>
+                    <Boton icono={<FileUp className="size-4" />} onClick={() => setImportar(true)}>
+                      Mejorar apuntes existentes
+                    </Boton>
+                  </div>
                 }
               />
             ) : (
@@ -119,6 +125,14 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
                 >
                   <Plus className="size-5" />
                   Nuevo documento
+                </button>
+                <button
+                  onClick={() => setImportar(true)}
+                  className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-borde px-4 text-center text-texto-3 transition-colors hover:border-acento hover:text-acento cursor-pointer"
+                >
+                  <FileUp className="size-5" />
+                  Mejorar apuntes existentes
+                  <span className="text-[11.5px]">Word, LibreOffice, Markdown o PDF</span>
                 </button>
               </div>
             ))}
@@ -170,6 +184,7 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
         )}
       </div>
       <ModalNuevoDocumento asignatura={nuevoDoc ? a.id : undefined} onCerrar={() => setNuevoDoc(false)} />
+      <ModalImportar asignatura={importar ? a.id : undefined} onCerrar={() => setImportar(false)} />
     </div>
   );
 }

@@ -193,7 +193,9 @@ export async function exportar(
     const salidaTmp = path.join(dirTmp, nombre);
 
     if (op.formato === 'docx' || op.formato === 'odt') {
-      const plantilla = almacen.rutaPlantilla(asig, op.formato);
+      // Plantilla del documento (el Word u ODT original de unos apuntes importados) o de la asignatura
+      const delDocumento = path.join(dirDoc, `plantilla.${op.formato}`);
+      const plantilla = existsSync(delDocumento) ? delDocumento : almacen.rutaPlantilla(asig, op.formato);
       await ejecutarBinario(
         pandoc,
         [entrada, '-o', salidaTmp, ...comunes, ...(existsSync(plantilla) ? ['--reference-doc', plantilla] : [])],

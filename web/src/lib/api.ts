@@ -1,5 +1,7 @@
 import type {
   Esfuerzo,
+  ModoMejora,
+  VersionSeccion,
   ModelosDisponibles,
   PerfilGasto,
   HerramientasChat,
@@ -133,6 +135,27 @@ export const api = {
   decidirSugerencias: (a: string, d: string, ids: string[], decision: 'aceptar' | 'rechazar', propuesta?: string) =>
     pedir<{ aplicadas: number; fallidas: number }>('POST', `${doc(a, d)}/flujo/sugerencias/${decision}`, { ids, propuesta }),
   limpiarSugerencias: (a: string, d: string) => pedir('DELETE', `${doc(a, d)}/flujo/sugerencias`),
+  diagnosticar: (a: string, d: string, indicaciones?: string) => pedir<Trabajo>('POST', `${doc(a, d)}/flujo/diagnostico`, { indicaciones }),
+  abrirOriginal: (a: string, d: string) => pedir('POST', `${doc(a, d)}/original/abrir`),
+  cambiarModo: (a: string, d: string, modo: ModoMejora) => pedir<Trabajo>('POST', `${doc(a, d)}/flujo/modo`, { modo }),
+  /** Crea un documento a partir de unos apuntes existentes (Word, LibreOffice, Markdown o PDF). */
+  importarApuntes: async (
+    a: string,
+    archivo: File,
+    campos: { titulo?: string; modo: ModoMejora; estiloOriginal: boolean; diagnosticar: boolean },
+  ) => {
+    const fd = new FormData();
+    // Los campos van antes que el archivo: el servidor los lee en orden
+    for (const [k, v] of Object.entries(campos)) if (v !== undefined) fd.append(k, String(v));
+    fd.append('archivo', archivo, archivo.name);
+    const r = await fetch(`${asig(a)}/importar`, { method: 'POST', body: fd });
+    if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string; message?: string }).error ?? 'No se han podido importar los apuntes');
+    return (await r.json()) as { documento: Documento; secciones: number; imagenes: number; trabajos: number; avisos: string[] };
+  },
+  historial: (a: string, d: string, s: string) => pedir<VersionSeccion[]>('GET', `${doc(a, d)}/secciones/${e(s)}/historial`),
+  versionSeccion: (a: string, d: string, s: string, id: string) =>
+    pedir<{ contenido: string }>('GET', `${doc(a, d)}/secciones/${e(s)}/historial/${e(id)}`),
+  restaurarVersion: (a: string, d: string, s: string, id: string) => pedir('POST', `${doc(a, d)}/secciones/${e(s)}/historial/${e(id)}/restaurar`),
   proponerVisuales: (a: string, d: string, archivos?: string[], indicaciones?: string, mezcla?: MezclaVisuales) =>
     pedir<Trabajo>('POST', `${doc(a, d)}/flujo/visuales`, { archivos, indicaciones, mezcla }),
   editarPropuesta: (a: string, d: string, id: string, cambios: Partial<PropuestaVisual>) =>

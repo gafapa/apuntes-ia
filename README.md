@@ -22,6 +22,14 @@ Windows, macOS y Linux. Las apps instaladas se actualizan solas.
 - **Actividades**: bloques independientes de autoevaluación que se piden con un diálogo
   (varios tipos de pregunta en un mismo bloque, dificultad, soluciones) y se incluyen o no en
   los apuntes; cada bloque se exporta a **Moodle** (GIFT).
+- **Mejorar apuntes existentes**: se importan de Word, LibreOffice, Markdown (o un .zip con sus
+  imágenes) o PDF, y un agente hace un **diagnóstico** (qué conservar, qué falta, qué corregir,
+  con acceso directo a la fase que lo resuelve). Tres modos: mejorar sobre el texto (solo
+  sugerencias), reorganizar o rehacer usándolos como fuente. Se puede exportar con el estilo del
+  Word u ODT original.
+- **Historial de cada sección**: se guarda cómo estaba antes de cada cambio (de un agente, de
+  una sugerencia o tuyo), se compara con el texto actual o con el original importado y se
+  restaura.
 - **Versiones adaptadas**: lectura fácil, refuerzo y ampliación.
 - **Chat lateral** que actúa solo sobre la pestaña abierta o sobre el texto seleccionado en la
   vista previa, con herramientas (web, imágenes, calculadora) según los permisos.
@@ -109,6 +117,17 @@ en cada equipo donde se use.
 | 7. Exportar | (Pandoc + Typst) | `exportados/*.docx / .odt / .pdf` o un `.zip` con Markdown y figuras |
 
 Además: orquestador (chat libre, conoce el estado del flujo) y glosario de la asignatura.
+
+### Apuntes importados
+
+`server/importar.ts` convierte el archivo con Pandoc (Word y ODT, con sus imágenes a
+`recursos/`), quita lo que la app genera al exportar (índice manual, numeración de títulos,
+«Figura N.») y reparte el texto en secciones por sus encabezados. Un PDF lo transcribe el agente
+*Transcriptor* (los escaneados sin texto se rechazan). El original queda en `original/` y, en el
+modo «mejorar sobre el texto», cada sección tal como se importó en `original/secciones/`, para
+compararla. En los modos «reorganizar» y «rehacer» el texto pasa a `fuentes/apuntes-originales.md`
+y el arquitecto y los redactores reciben pautas para usarlo. El agente *Diagnóstico* escribe
+`diagnostico.json`. El historial de las secciones (`server/historial.ts`) va en `.historial/`.
 Los agentes que proponen cosas escriben un JSON en `.agentes/` y es el servidor quien lo
 valida e incorpora, para que varios agentes trabajen a la vez sin pisarse.
 
