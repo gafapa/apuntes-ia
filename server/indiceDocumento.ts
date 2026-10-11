@@ -94,13 +94,25 @@ export function saltoPagina(formato: 'docx' | 'odt'): string {
 export async function retocar(
   archivo: string,
   formato: 'docx' | 'odt',
-  op: { portada: boolean; indice: boolean; color: string; plantillaPropia: boolean },
+  op: { portada: boolean; indice: boolean; color: string; plantillaPropia: boolean; original?: { cuerpo: string; tabla?: string } },
 ) {
   const zip = await JSZip.loadAsync(await fs.readFile(archivo));
   const color = /^#[0-9a-f]{6}$/i.test(op.color) ? op.color.slice(1).toUpperCase() : '6D4AFF';
 
   if (formato === 'docx') {
     let doc = await zip.file('word/document.xml')!.async('string');
+    let estilos = await zip.file('word/styles.xml')!.async('string');
+    // Plantilla = Word original de unos apuntes importados: el texto normal y las tablas, con sus estilos
+    let tablasConEstilo = false;
+    if (op.original) {
+      const cuerpo = idEstilo(estilos, op.original.cuerpo, 'paragraph');
+      if (cuerpo) doc = doc.replace(/<w:pStyle w:val="(?:BodyText|FirstParagraph)"\s*\/>/g, `<w:pStyle w:val="${cuerpo}"/>`);
+      const tabla = op.original.tabla && idEstilo(estilos, op.original.tabla, 'table');
+      if (tabla) {
+        doc = doc.replace(/<w:tblStyle w:val="Table"\s*\/>/g, `<w:tblStyle w:val="${tabla}"/>`);
+        tablasConEstilo = true;
+      }
+    }
     if (op.portada) {
       // Portada en página propia: tras la fecha (o el último párrafo del bloque de título), salto
       const fin = ['Date', 'Author', 'Subtitle', 'Title']
@@ -122,14 +134,15 @@ export async function retocar(
     // Tablas centradas y, salvo plantilla propia, con bordes finos (Pandoc solo raya bajo la cabecera)
     const borde = (lado: string) => `<w:${lado} w:val="single" w:sz="4" w:space="0" w:color="A6A6A6"/>`;
     const bordes = `<w:tblBorders>${['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(borde).join('')}</w:tblBorders>`;
-    doc = doc.replace(/<w:tblPr>[\s\S]*?<\/w:tblPr>/g, (t) => ajustar(t, 'tblPr', `<w:jc w:val="center"/>${op.plantillaPropia ? '' : bordes}`));
+    // (con el Word original, si sus tablas no tenían estilo, también con bordes)
+    const conBordes = !op.plantillaPropia || (op.original && !tablasConEstilo);
+    doc = doc.replace(/<w:tblPr>[\s\S]*?<\/w:tblPr>/g, (t) => ajustar(t, 'tblPr', `<w:jc w:val="center"/>${conBordes ? bordes : ''}`));
     // Imágenes sin pie (párrafos normales con un dibujo): también centradas
     doc = doc.replace(/<w:p>((?:(?!<\/w:p>)[\s\S])*?<w:drawing>[\s\S]*?<\/w:p>)/g, (p) =>
       /^<w:p>\s*<w:pPr>/.test(p) ? ajustar(p, 'pPr', '<w:jc w:val="center"/>') : p.replace('<w:p>', '<w:p><w:pPr><w:jc w:val="center"/></w:pPr>'),
     );
     zip.file('word/document.xml', doc);
 
-    let estilos = await zip.file('word/styles.xml')!.async('string');
     // Figuras y pies centrados (estilos de Pandoc)
     for (const id of ['CaptionedFigure', 'Figure', 'ImageCaption', 'TableCaption']) {
       estilos = estilos.replace(new RegExp(`<w:style [^>]*w:styleId="${id}"[^>]*>[\\s\\S]*?</w:style>`), (st) =>
@@ -206,4 +219,14 @@ export async function retocar(
     }
   }
   await fs.writeFile(archivo, await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }));
+}
+
+/** Identificador de un estilo de Word por su nombre visible (o por su identificador). */
+function idEstilo(estilos: string, nombre: string, tipo: 'paragraph' | 'table'): string | undefined {
+  for (const m of estilos.matchAll(/<w:style\b([^>]*)>([\s\S]*?)<\/w:style>/g)) {
+    if (!m[1].includes(`w:type="${tipo}"`)) continue;
+    const id = m[1].match(/w:styleId="([^"]+)"/)?.[1];
+    const visible = m[2].match(/<w:name w:val="([^"]+)"/)?.[1];
+    if (id && (visible?.toLowerCase() === nombre.toLowerCase() || id === nombre)) return id;
+  }
 }

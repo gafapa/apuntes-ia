@@ -96,6 +96,8 @@ export interface Importacion {
   modo: ModoMejora;
   fecha: string;
   estiloOriginal?: boolean; // el Word u ODT original hace de plantilla al exportar
+  estiloCuerpo?: string; // Word: estilo del texto normal del original (se aplica al exportar)
+  estiloTabla?: string; // Word: estilo de las tablas del original
 }
 
 export type AreaDiagnostico = 'contenido' | 'actualidad' | 'estructura' | 'estilo' | 'curriculo' | 'visuales' | 'actividades' | 'formato';

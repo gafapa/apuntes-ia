@@ -132,6 +132,18 @@ body {
 .apunte .mermaid-error { color: var(--error); font-size: 0.85em; white-space: pre-wrap; }
 /* Bloques seleccionados en la vista previa (el chat actúa solo sobre ellos) */
 .apunte .seleccionado { background: color-mix(in srgb, var(--acento) 9%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--acento) 9%, transparent), -6px 0 0 0 var(--acento); border-radius: 2px; }
+/* Apuntes importados de Word: estilos propios (se aplican al exportar con el original), resaltado y notas */
+.apunte .estilo-propio { position: relative; margin: 0.8em 0; padding: 0.35em 0.9em; border-left: 3px solid var(--acento); background: var(--panel-2); border-radius: 0 6px 6px 0; }
+.apunte .estilo-propio::before { content: attr(data-estilo); display: block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--texto-3); }
+.apunte .estilo-propio > :first-child { margin-top: 0.2em; }
+.apunte .estilo-propio > :last-child { margin-bottom: 0.2em; }
+.apunte .estilo-caracter { text-decoration: underline dotted var(--acento); text-underline-offset: 3px; }
+.apunte mark { background: #fde68a; color: inherit; border-radius: 2px; padding: 0 1px; }
+.dark .apunte mark { background: #854d0e; }
+.apunte .footnotes-sep { margin: 1.6em 0 0.6em; border: 0; border-top: 1px solid var(--borde); }
+.apunte .footnotes { font-size: 0.88em; color: var(--texto-2); }
+.apunte .footnote-ref a, .apunte .footnote-backref { text-decoration: none; }
+
 /* Soluciones de los ejercicios (::: solucion), plegadas */
 .apunte details.solucion { margin: 0.8em 0; border: 1px solid var(--borde); border-left: 3px solid var(--ok, #16a34a); border-radius: 8px; padding: 0.4em 0.9em; background: var(--panel-2); }
 .apunte details.solucion > summary { cursor: pointer; font-weight: 600; color: var(--texto-2); }

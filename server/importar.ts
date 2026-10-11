@@ -10,6 +10,7 @@ import type { Apartado, FormatoImportado } from '../shared/tipos';
 import { ejecutarBinario, rutaPandoc } from './conversion';
 import { ErrorUsuario, slug } from './store';
 import { textoPdf } from './rag';
+import { ajustarAst } from './formatoImportado';
 
 export const EXTENSIONES_IMPORTABLES = ['.docx', '.odt', '.md', '.markdown', '.txt', '.zip', '.pdf'];
 
@@ -19,17 +20,15 @@ export function formatoDe(nombre: string): FormatoImportado | undefined {
   if (['.md', '.markdown', '.txt', '.zip'].includes(ext)) return 'md';
 }
 
-// Markdown de Pandoc reducido a lo que entiende la vista previa: tablas con barras, sin HTML ni
-// atributos (los anchos y los pies los pone la app al exportar)
+// Markdown de Pandoc reducido a lo que entiende la vista previa: tablas con barras y sin HTML. Los
+// estilos propios van en `::: {custom-style}` y `[…]{…}`, y el ancho de las imágenes en `{width=…}`
+// (ver formatoImportado.ts)
 const SALIDA_PANDOC = [
   'markdown',
   '-raw_html',
   '-native_divs',
   '-native_spans',
-  '-fenced_divs',
-  '-bracketed_spans',
   '-header_attributes',
-  '-link_attributes',
   '-grid_tables',
   '-multiline_tables',
   '-simple_tables',
@@ -45,6 +44,8 @@ export interface Convertido {
   titulo?: string; // de las propiedades del documento o del bloque YAML del Markdown
   imagenes: number;
   avisos: string[];
+  estiloCuerpo?: string; // Word: estilo propio del texto normal
+  estiloTabla?: string; // Word: estilo de tabla más usado
 }
 
 /**
@@ -58,11 +59,24 @@ export async function aMarkdown(origen: string, nombre: string, dirBin: string |
   try {
     let texto: string;
     let base: string; // carpeta desde la que se resuelven las imágenes del texto
+    let formatoWord: { estiloCuerpo?: string; estiloTabla?: string } = {};
     if (formato === 'docx' || formato === 'odt') {
       if (!dirBin || !existsSync(rutaPandoc(dirBin))) throw new ErrorUsuario('No se encuentra Pandoc para convertir el archivo: reinstala la aplicación.');
-      // Las imágenes se extraen a tmp/media; Pandoc las enlaza con rutas relativas a cwd
-      texto = await ejecutarBinario(rutaPandoc(dirBin), ['-s', '-f', formato, '-t', SALIDA_PANDOC, '--wrap=none', '--extract-media=.', origen], tmp);
+      // Las imágenes se extraen a tmp/media; Pandoc las enlaza con rutas relativas a cwd. Se pasa por
+      // el árbol JSON para ajustar tablas, estilos e imágenes antes de escribir el Markdown
+      const pandoc = rutaPandoc(dirBin);
+      const json = await ejecutarBinario(pandoc, ['-f', formato === 'docx' ? 'docx+styles' : 'odt', '-t', 'json', '--extract-media=.', origen], tmp);
+      const ajustado = ajustarAst(JSON.parse(json), formato === 'docx');
+      await fs.writeFile(path.join(tmp, '.arbol.json'), JSON.stringify(ajustado.ast), 'utf8');
+      texto = (await ejecutarBinario(pandoc, ['-s', '-f', 'json', '-t', SALIDA_PANDOC, '--wrap=none', '.arbol.json'], tmp))
+        // Sin comillas, como las escribe la app: {width=8.5cm}
+        .replace(/\{width="([^"]+)"\}/g, '{width=$1}');
       base = tmp;
+      if (ajustado.tablasAplanadas) {
+        const n = ajustado.tablasAplanadas;
+        avisos.push(`${n === 1 ? 'Una tabla tenía' : `${n} tablas tenían`} celdas combinadas o con varios párrafos: se han separado las celdas y unido los párrafos (el contenido está completo). Revisa cómo han quedado.`);
+      }
+      formatoWord = { estiloCuerpo: ajustado.estiloCuerpo, estiloTabla: ajustado.estiloTabla };
     } else if (path.extname(nombre).toLowerCase() === '.zip') {
       // Markdown con sus imágenes (p. ej. el que exporta la propia app)
       const zip = await JSZip.loadAsync(await fs.readFile(origen));
@@ -118,7 +132,7 @@ export async function aMarkdown(origen: string, nombre: string, dirBin: string |
           : `El Markdown enlaza ${faltan.length} ${faltan.length === 1 ? 'imagen' : 'imágenes'} que no se han podido importar: sube un .zip con el .md y sus imágenes.`,
       );
     }
-    return { texto: limpiar(texto), titulo, imagenes, avisos };
+    return { texto: limpiar(texto), titulo, imagenes, avisos, ...formatoWord };
   } finally {
     await fs.rm(tmp, { recursive: true, force: true }).catch(() => {});
   }
@@ -164,6 +178,49 @@ export interface SeccionImportada {
  * se ajustan para que cada sección empiece con `#`.
  */
 export function partirEnSecciones(md: string, tituloPorDefecto: string): { titulo?: string; secciones: SeccionImportada[] } {
+  // Las notas al pie (Pandoc las pone todas al final) van a la sección donde se citan
+  const { texto, notas } = separarNotas(md);
+  const r = partirPorEncabezados(texto, tituloPorDefecto);
+  const pendientes = new Map(notas);
+  for (const s of r.secciones) {
+    const propias = [...s.texto.matchAll(/\[\^([^\]\s]+)\](?!:)/g)].map((m) => m[1]).filter((n) => pendientes.has(n));
+    const defs = [...new Set(propias)].map((n) => {
+      const d = pendientes.get(n)!;
+      pendientes.delete(n);
+      return d;
+    });
+    if (defs.length) s.texto = `${s.texto.trimEnd()}\n\n${defs.join('\n\n')}\n`;
+  }
+  if (pendientes.size && r.secciones.length) {
+    const ultima = r.secciones[r.secciones.length - 1];
+    ultima.texto = `${ultima.texto.trimEnd()}\n\n${[...pendientes.values()].join('\n\n')}\n`;
+  }
+  return r;
+}
+
+/** Saca del texto las definiciones de las notas al pie (`[^n]: …` y sus líneas sangradas). */
+export function separarNotas(md: string): { texto: string; notas: Map<string, string> } {
+  const lineas = md.split('\n');
+  const notas = new Map<string, string>();
+  const resto: string[] = [];
+  let enCodigo = false;
+  for (let i = 0; i < lineas.length; i++) {
+    const l = lineas[i];
+    if (/^\s*(```|~~~)/.test(l)) enCodigo = !enCodigo;
+    const m = !enCodigo && l.match(/^\[\^([^\]\s]+)\]:/);
+    if (!m) {
+      resto.push(l);
+      continue;
+    }
+    const nota = [l];
+    // Continúa mientras haya líneas sangradas (o en blanco seguidas de una sangrada)
+    while (i + 1 < lineas.length && (/^( {4}|\t)/.test(lineas[i + 1]) || (!lineas[i + 1].trim() && /^( {4}|\t)/.test(lineas[i + 2] ?? '')))) nota.push(lineas[++i]);
+    notas.set(m[1], nota.join('\n').trimEnd());
+  }
+  return { texto: notas.size ? resto.join('\n').replace(/\n{3,}/g, '\n\n') : md, notas };
+}
+
+function partirPorEncabezados(md: string, tituloPorDefecto: string): { titulo?: string; secciones: SeccionImportada[] } {
   const lineas = md.split('\n');
   const encabezados: { linea: number; nivel: number; titulo: string }[] = [];
   let enCodigo = false;

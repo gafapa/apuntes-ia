@@ -201,7 +201,9 @@ export async function exportar(
         [entrada, '-o', salidaTmp, ...comunes, ...(existsSync(plantilla) ? ['--reference-doc', plantilla] : [])],
         dirDoc,
       );
-      await retocar(salidaTmp, op.formato, { portada: op.portada, indice: op.indice, color: asignatura.color, plantillaPropia: existsSync(plantilla) });
+      // Con el original de unos apuntes importados, el texto y las tablas llevan sus estilos
+      const original = existsSync(delDocumento) && documento.importado ? { cuerpo: documento.importado.estiloCuerpo ?? 'Normal', tabla: documento.importado.estiloTabla } : undefined;
+      await retocar(salidaTmp, op.formato, { portada: op.portada, indice: op.indice, color: asignatura.color, plantillaPropia: existsSync(plantilla), original });
     } else {
       const typst = path.join(dirBin, process.platform === 'win32' ? 'typst.exe' : 'typst');
       if (!existsSync(typst)) throw new ErrorUsuario('No se encuentra Typst. Reinstala la aplicación.');

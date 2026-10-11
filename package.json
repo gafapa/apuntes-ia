@@ -39,6 +39,7 @@
     "js-yaml": "^5.4.3",
     "jszip": "^3.10.2",
     "markdown-it-container": "^4.0.0",
+    "markdown-it-footnote": "^4.0.0",
     "mhchemparser": "^4.2.1",
     "minisearch": "^7.2.0",
     "pdfjs-dist": "^6.4.299",

@@ -4,6 +4,9 @@ import MarkdownIt from 'markdown-it';
 import texmath from 'markdown-it-texmath';
 import katex from 'katex';
 import contenedor from 'markdown-it-container';
+// @ts-expect-error: el paquete no incluye tipos
+import notasAlPie from 'markdown-it-footnote';
+import { marcasPandoc } from './marcasPandoc';
 // Notación química de mhchem: $\ce{2H2 + O2 -> 2H2O}$
 import 'katex/contrib/mhchem';
 import { consultaMolecula } from '../../../shared/quimica';
@@ -20,6 +23,10 @@ md.use(contenedor, 'solucion', {
   render: (tokens: { nesting: number }[], idx: number) =>
     tokens[idx].nesting === 1 ? '<details class="solucion"><summary>Solución</summary>\n' : '</details>\n',
 });
+
+// Notas al pie ([^1]) y marcas de los apuntes importados de Word (estilos, subrayado, anchos)
+md.use(notasAlPie);
+md.use(marcasPandoc);
 
 // Cada bloque de primer nivel lleva las líneas del Markdown de las que sale (data-l="desde-hasta",
 // desde 0 y sin incluir «hasta»): así una selección en la vista previa se traduce a su fragmento

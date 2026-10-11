@@ -1177,7 +1177,13 @@ Conserva los títulos de los apartados, las imágenes (con su pie y su referenci
         titulo: op.titulo?.trim() || convertido?.titulo || partido?.titulo || sinExtension || 'Apuntes importados',
         objetivo: op.objetivo ?? '',
         destinatarios: op.destinatarios ?? '',
-        importado: { archivo: nombre, formato, modo, fecha: new Date().toISOString(), ...(estiloOriginal ? { estiloOriginal } : {}) },
+        importado: {
+          archivo: nombre,
+          formato,
+          modo,
+          fecha: new Date().toISOString(),
+          ...(estiloOriginal ? { estiloOriginal, estiloCuerpo: convertido?.estiloCuerpo, estiloTabla: convertido?.estiloTabla } : {}),
+        },
       });
       const doc = documento.id;
       try {

@@ -122,7 +122,15 @@ Además: orquestador (chat libre, conoce el estado del flujo) y glosario de la a
 
 `server/importar.ts` convierte el archivo con Pandoc (Word y ODT, con sus imágenes a
 `recursos/`), quita lo que la app genera al exportar (índice manual, numeración de títulos,
-«Figura N.») y reparte el texto en secciones por sus encabezados. Un PDF lo transcribe el agente
+«Figura N.») y reparte el texto en secciones por sus encabezados (cada nota al pie va a la
+sección donde se cita). Antes de escribir el Markdown, `server/formatoImportado.ts` ajusta el
+árbol de Pandoc para no perder formato: las tablas con celdas combinadas o varios párrafos por
+celda se aplanan (antes se perdían), los estilos propios del Word quedan como
+`::: {custom-style="…"}` y `[texto]{custom-style="…"}`, y se conservan el subrayado, el
+resaltado y el ancho de las imágenes. Al exportar con el original de plantilla, Pandoc vuelve a
+aplicar esos estilos y el texto normal y las tablas toman el estilo que tenían en el original.
+La vista previa los muestra (`web/src/lib/marcasPandoc.ts`). En ODT, Pandoc no lee los estilos
+propios. Un PDF lo transcribe el agente
 *Transcriptor* (los escaneados sin texto se rechazan). El original queda en `original/` y, en el
 modo «mejorar sobre el texto», cada sección tal como se importó en `original/secciones/`, para
 compararla. En los modos «reorganizar» y «rehacer» el texto pasa a `fuentes/apuntes-originales.md`
