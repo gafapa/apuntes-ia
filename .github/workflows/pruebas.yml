@@ -1,0 +1,31 @@
+# Comprueba tipos y pasa las pruebas automáticas en cada cambio de main (y en las pull requests)
+name: Pruebas
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pruebas:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - so: windows-latest
+            plataforma: win
+          - so: ubuntu-latest
+            plataforma: linux
+    runs-on: ${{ matrix.so }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: node scripts/fetch-bin.mjs ${{ matrix.plataforma }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: npm test

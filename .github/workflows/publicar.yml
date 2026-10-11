@@ -18,10 +18,16 @@ jobs:
         include:
           - so: windows-latest
             plataforma: win
+            certificado: WIN_CERTIFICADO
+            clave: WIN_CERTIFICADO_CLAVE
           - so: macos-latest
             plataforma: mac
+            certificado: MAC_CERTIFICADO
+            clave: MAC_CERTIFICADO_CLAVE
           - so: ubuntu-latest
             plataforma: linux
+            certificado: NINGUNO
+            clave: NINGUNO
     runs-on: ${{ matrix.so }}
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +41,15 @@ jobs:
       - run: node scripts/fetch-bin.mjs ${{ matrix.plataforma }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: npm test
       - name: Instalador y publicación
         run: npx electron-builder --${{ matrix.plataforma }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Firma (opcional, ver README): si existen estos secretos, el instalador sale firmado y,
+          # en macOS, notarizado. Sin ellos se publica sin firmar, como hasta ahora.
+          CSC_LINK: ${{ secrets[matrix.certificado] }}
+          CSC_KEY_PASSWORD: ${{ secrets[matrix.clave] }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
