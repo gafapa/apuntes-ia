@@ -14,6 +14,8 @@ let servidor: Awaited<ReturnType<typeof crearServidor>> | null = null;
  */
 const DIR_PORTABLE = process.env.PORTABLE_EXECUTABLE_DIR ? path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'Apuntes IA datos') : undefined;
 if (DIR_PORTABLE) app.setPath('userData', path.join(DIR_PORTABLE, '.electron'));
+// Windows solo muestra los avisos del sistema (notificaciones) de una app con identificador propio
+if (process.platform === 'win32') app.setAppUserModelId('es.apuntesia.app');
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();

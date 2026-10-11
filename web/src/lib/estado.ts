@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import type { Ajustes, ContadorTokens, EstadoMotor, MensajeWS, SeleccionTexto, Trabajo, UsoSuscripcion } from '../../../shared/tipos';
 import { api, type AsignaturaResumen } from './api';
+import { avisarTrabajo, avisarUso } from './notificaciones';
 
 export interface Aviso {
   id: number;
@@ -142,6 +143,7 @@ function conectar() {
         const previo = trabajos[msg.trabajo.id];
         const t = { ...msg.trabajo, eventos: previo?.eventos ?? [] };
         useEstado.setState({ trabajos: { ...trabajos, [t.id]: t } });
+        avisarTrabajo(previo, t, useEstado.getState().trabajos, useEstado.getState().asignaturas);
         if (previo && previo.estado === 'ejecutando' && t.estado === 'ok') {
           useEstado.getState().avisar(`${t.nombreAgente} ha terminado: ${t.titulo}`, 'ok');
         } else if (previo && t.estado === 'error' && previo.estado !== 'error') {
@@ -162,6 +164,7 @@ function conectar() {
         useEstado.setState({ tokens: msg.contador });
         break;
       case 'uso':
+        avisarUso(useEstado.getState().uso, msg.uso);
         useEstado.setState({ uso: msg.uso });
         break;
       case 'archivos': {
