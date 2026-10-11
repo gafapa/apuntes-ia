@@ -43,7 +43,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: npm test
       - name: Instalador y publicación
-        run: npx electron-builder --${{ matrix.plataforma }} --publish always
+        shell: bash
+        # Los secretos que no existen llegan vacíos y electron-builder tomaría un CSC_LINK vacío por
+        # una ruta: se quitan antes de compilar
+        run: |
+          for v in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!v}" ]; then unset "$v"; fi
+          done
+          npx electron-builder --${{ matrix.plataforma }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Firma (opcional, ver README): si existen estos secretos, el instalador sale firmado y,
