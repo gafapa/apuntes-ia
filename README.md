@@ -23,7 +23,8 @@ Windows, macOS y Linux. Las apps instaladas se actualizan solas.
   (varios tipos de pregunta en un mismo bloque, dificultad, soluciones) y se incluyen o no en
   los apuntes; cada bloque se exporta a **Moodle** (GIFT).
 - **Mejorar apuntes existentes**: se importan de Word, LibreOffice, Markdown (o un .zip con sus
-  imágenes) o PDF, y un agente hace un **diagnóstico** (qué conservar, qué falta, qué corregir,
+  imágenes) o PDF, uno o varios a la vez, conservando su formato (tablas, estilos propios del Word,
+  notas al pie, tamaño de las imágenes), y un agente hace un **diagnóstico** (qué conservar, qué falta, qué corregir,
   con acceso directo a la fase que lo resuelve). Tres modos: mejorar sobre el texto (solo
   sugerencias), reorganizar o rehacer usándolos como fuente. Se puede exportar con el estilo del
   Word u ODT original.
@@ -35,7 +36,16 @@ Windows, macOS y Linux. Las apps instaladas se actualizan solas.
   vista previa, con herramientas (web, imágenes, calculadora) según los permisos.
 - **Permisos por asignatura y documento** (imágenes, diagramas, búsqueda web…; todo permitido
   por defecto) y **modelo y esfuerzo por agente** con perfiles de gasto.
-- **Consumo de tokens** por asignatura y por documento.
+- **Consumo de tokens** por asignatura y por documento, **estimación** antes de lanzar cada fase
+  (según lo que ha gastado antes cada agente) y **tope de tokens** por documento.
+- **Límite de uso de la suscripción**: si se agota, los agentes de ese motor esperan y siguen solos
+  (continuando su conversación) cuando se renueva. Aviso si un agente deja de dar señales y
+  «Reintentar» en los trabajos fallidos.
+- **Avisos del sistema** cuando termina una fase, falla un agente o se agota el límite, si la
+  ventana no está a la vista.
+- **Papelera** (restaurar lo eliminado), **duplicar** asignaturas y documentos (para otro grupo o
+  el curso siguiente), **copias de seguridad** en .zip (de una asignatura o de todas) y
+  **exportar todos** los documentos de una asignatura a una carpeta.
 - **Exportación** a Word, LibreOffice, PDF y Markdown (zip con las figuras), con índice, pies
   numerados y solucionario opcional al final.
 - Pantalla de inicio con lo que necesita la app y su estado en el equipo.
@@ -68,8 +78,13 @@ segundo plano) y al volver a abrirla se relanzan los trabajos que quedaron a med
 npm install
 npm run dev          # servidor (:4317) + interfaz con recarga en caliente (http://localhost:5173)
 npm run typecheck
+npm test             # pruebas (tests/): cola de agentes con un motor falso, importar/exportar, gestión
 npm start            # compila y abre la app en Electron
 ```
+
+Las pruebas de importar y exportar necesitan Pandoc en `resources-bin/` (`npm run fetch-bin`); sin él
+se saltan. GitHub Actions las pasa en cada cambio de `main` (`.github/workflows/pruebas.yml`) y antes
+de compilar cada versión.
 
 En desarrollo los datos van a `Documentos/Apuntes IA (desarrollo)`; se puede cambiar
 con la variable `APUNTES_DATOS`.
@@ -99,10 +114,26 @@ en cada equipo donde se use.
 
 ## Publicar una versión
 
-1. Sube la versión: `npm version 0.4.0 && git push && git push --tags`.
-2. GitHub Actions (`.github/workflows/publicar.yml`) compila Windows, macOS y Linux y crea
-   la *release*. Las apps instaladas la detectan, la descargan solas y ofrecen reiniciar.
+1. Sube la versión: `npm version 0.5.0 && git push && git push --tags`.
+2. GitHub Actions (`.github/workflows/publicar.yml`) pasa las pruebas, compila Windows, macOS y
+   Linux y crea la *release*. Las apps instaladas la detectan, la descargan solas y ofrecen reiniciar.
 3. Página de descarga: GitHub Pages con la carpeta `docs/`.
+
+### Firmar los instaladores (opcional)
+
+Sin firma, Windows muestra el aviso de SmartScreen y macOS dice que la app «está dañada» (hay que
+abrirla con clic derecho → Abrir). Si se añaden estos secretos al repositorio (*Settings → Secrets and
+variables → Actions*), el *workflow* firma los instaladores y notariza el de macOS:
+
+| Secreto | Qué es |
+|---|---|
+| `WIN_CERTIFICADO`, `WIN_CERTIFICADO_CLAVE` | Certificado de firma de código de Windows (.pfx en base64) y su contraseña |
+| `MAC_CERTIFICADO`, `MAC_CERTIFICADO_CLAVE` | Certificado «Developer ID Application» (.p12 en base64) y su contraseña |
+| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | Cuenta de Apple Developer para notarizar |
+
+Para pasar un certificado a base64: `base64 -i certificado.p12 | pbcopy` (macOS) o
+`[Convert]::ToBase64String([IO.File]::ReadAllBytes("certificado.pfx"))` (PowerShell). Con Azure
+Trusted Signing, en lugar del certificado se añade `azureSignOptions` en `electron-builder.yml`.
 
 ## Flujo de un documento
 
@@ -171,10 +202,13 @@ aunque siempre se puede escribir otra (las comunidades autónomas tienen materia
 |---|---|
 | `electron/` | Proceso principal: arranca el servidor local y abre la ventana |
 | `server/` | API REST + WebSocket (Fastify), almacenamiento en disco, cola de agentes |
+| `server/fases/` | El flujo de un documento por fases (base → preparación → escritura → visuales → actividades → importación → asignatura), encadenadas por herencia; `server/flujo.ts` procesa los resultados |
+| `server/gestion.ts` | Papelera, duplicar, copias de seguridad y reunir lo exportado |
 | `server/agents/` | Detección de Claude/Codex, cola con límite de simultaneidad, prompts de los agentes |
 | `shared/` | Tipos compartidos entre servidor e interfaz |
 | `web/` | Interfaz (React + Tailwind + CodeMirror) |
 | `scripts/` | Compilación del proceso principal y descarga de binarios |
+| `tests/` | Pruebas (`node:test`), con un motor de agentes falso y documentos de ejemplo |
 
 ## Cómo se ejecutan los agentes
 

@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Almacen } from '../server/store';
-import { borrarDePapelera, crearCopia, duplicarAsignatura, duplicarDocumento, listarPapelera, restaurarCopia, restaurarDePapelera } from '../server/gestion';
+import { borrarDePapelera, crearCopia, duplicarAsignatura, duplicarDocumento, listarPapelera, restaurarCopia, restaurarDePapelera, reunirExportados } from '../server/gestion';
 
 const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'apuntes-gestion-'));
 const almacen = new Almacen(path.join(raiz, 'datos'));
@@ -77,6 +77,18 @@ test('papelera: eliminar, listar, restaurar y vaciar', async () => {
   await almacen.eliminarDocumento(asig, d);
   await borrarDePapelera(almacen);
   assert.deepEqual(await listarPapelera(almacen), []);
+});
+
+test('reunir lo exportado de varios documentos en una carpeta', async () => {
+  const otro = (await almacen.crearDocumento(asig, { titulo: 'Tema 2' })).id;
+  fs.writeFileSync(almacen.rutaExportado(asig, otro, 'la-celula.pdf'), 'otro pdf con el mismo nombre');
+  const dir = await reunirExportados(almacen, asig, [
+    { documento: doc, nombre: 'la-celula.pdf' },
+    { documento: otro, nombre: 'la-celula.pdf' },
+    { documento: otro, nombre: 'no-existe.pdf' },
+  ]);
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['la-celula-2.pdf', 'la-celula.pdf']);
+  assert.ok(dir.startsWith(path.join(almacen.dirAsignatura(asig), 'exportados')));
 });
 
 test('tope de tokens del documento: se guarda y se quita con 0', async () => {
