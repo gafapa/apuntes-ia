@@ -65,7 +65,17 @@ export async function crearServidor(op: OpcionesServidor) {
   const arasaac = new Arasaac(path.join(path.dirname(op.archivoAjustes), 'arasaac'));
   // Versiones de las secciones: se guardan al cambiar los archivos (lo que haga quien los cambie)
   const historial = new Historial(() => almacen.raiz);
-  const flujo = new Flujo({ almacen: () => almacen, cola, ajustes: () => ajustes, motoresListos, dirBin, mcpFuentes: op.mcpFuentes, moleculas });
+  const flujo = new Flujo({
+    almacen: () => almacen,
+    cola,
+    ajustes: () => ajustes,
+    motoresListos,
+    dirBin,
+    mcpFuentes: op.mcpFuentes,
+    moleculas,
+    gastoDocumento: (asig, doc) =>
+      Object.values(contador.leer().porAsignatura?.[asig]?.documentos[doc] ?? {}).reduce((n, t) => n + t.entrada + t.salida, 0),
+  });
   await cola.cargar(); // retoma los trabajos que seguían en marcha
   contador.sembrar(cola.listar());
   cola.on('terminado', (t: Trabajo) => contador.llamada(t.agente));

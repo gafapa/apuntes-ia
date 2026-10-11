@@ -209,6 +209,9 @@ export class Almacen {
     const nuevo: Documento = { ...actual, actualizado: ahora() };
     for (const c of campos) if (typeof datos[c] === 'string') nuevo[c] = datos[c]!;
     if (datos.permisos && typeof datos.permisos === 'object') nuevo.permisos = limpiarPermisos(datos.permisos);
+    // Tope de tokens: un número positivo; 0 o null lo quita
+    if (typeof datos.presupuesto === 'number' && datos.presupuesto > 0) nuevo.presupuesto = Math.round(datos.presupuesto);
+    else if ('presupuesto' in datos) delete nuevo.presupuesto;
     await escribirJson(path.join(this.dirDocumento(asig, id), 'documento.json'), nuevo);
     return nuevo;
   }

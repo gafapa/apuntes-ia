@@ -88,6 +88,7 @@ export function PasoVisuales({ a, d, estado, trabajos, recargar }: Props) {
           icono={<ImagePlus className="size-4" />}
           disabled={director.length > 0 || !estado.secciones.length}
           onLanzar={(ind) => api.proponerVisuales(a, d, undefined, ind, mezcla)}
+          estimacion={[['director-visual', 1]]}
           ayudaIndicaciones="Por ejemplo: nada de imágenes IA, fotos de los equipos reales, como mucho 5 visuales…"
         />
       }

@@ -28,6 +28,7 @@ import { GastoTokens } from './ContadorTokens';
 import { Editor } from './Editor';
 import { VistaPrevia } from './VistaPrevia';
 import { GestorFuentes } from './GestorFuentes';
+import { abreviar } from '../lib/formato';
 import { ModalDuplicarDocumento } from './Gestion';
 import { GaleriaRecursos } from './GaleriaRecursos';
 import { HistorialSeccion } from './HistorialSeccion';
@@ -486,6 +487,15 @@ function Apuntes({ asignatura, documento }: { asignatura: string; documento: str
 
 // ---------------------------------------------------------------------------
 
+const TOPES: [number, string][] = [
+  [0, 'Sin tope'],
+  [2_000_000, '2 M'],
+  [5_000_000, '5 M'],
+  [10_000_000, '10 M'],
+  [20_000_000, '20 M'],
+  [50_000_000, '50 M'],
+];
+
 function FichaDocumento({
   doc,
   destinatariosAsignatura,
@@ -498,7 +508,8 @@ function FichaDocumento({
   onGuardado: (d: Documento) => void;
 }) {
   const { avisar, seleccionar, cargarAsignaturas } = useEstado();
-  const inicial = { titulo: doc.titulo, objetivo: doc.objetivo, destinatarios: doc.destinatarios, extension: doc.extension, permisos: doc.permisos ?? {} };
+  const inicial = { titulo: doc.titulo, objetivo: doc.objetivo, destinatarios: doc.destinatarios, extension: doc.extension, permisos: doc.permisos ?? {}, presupuesto: doc.presupuesto ?? 0 };
+  const gastado = useEstado((s) => Object.values(s.tokens?.porAsignatura?.[doc.asignatura]?.documentos[doc.id] ?? {}).reduce((n, t) => n + t.entrada + t.salida, 0));
   const [f, setF] = useState(inicial);
   const [guardando, setGuardando] = useState(false);
   const [duplicando, setDuplicando] = useState(false);
@@ -551,6 +562,32 @@ function FichaDocumento({
       </Campo>
       <Campo etiqueta="Qué pueden usar los agentes" ayuda="Por defecto, lo mismo que la asignatura. Cambia solo lo que este documento necesite distinto.">
         <EditorPermisos valor={f.permisos} onCambio={(permisos) => setF({ ...f, permisos })} heredados={permisosEfectivos(permisosAsignatura)} />
+      </Campo>
+      <Campo
+        etiqueta="Tope de tokens"
+        ayuda={`Al llegar a él no se lanzan más agentes en este documento (los que estén trabajando terminan). Lleva gastados ${abreviar(gastado)} (entrada + salida).`}
+      >
+        <div className="flex flex-wrap items-center gap-1.5">
+          {TOPES.map(([n, nombre]) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setF({ ...f, presupuesto: n })}
+              className={cx(
+                'rounded-lg border px-2.5 py-1 text-[13px] transition-colors cursor-pointer',
+                f.presupuesto === n ? 'border-acento bg-acento-suave text-acento' : 'border-borde hover:bg-panel-2',
+                n > 0 && n <= gastado && 'text-texto-3 line-through',
+              )}
+            >
+              {nombre}
+            </button>
+          ))}
+          {f.presupuesto > 0 && (
+            <span className={cx('ml-1 text-[12.5px]', gastado >= f.presupuesto ? 'font-medium text-error' : gastado >= f.presupuesto * 0.8 ? 'text-aviso' : 'text-texto-3')}>
+              {gastado >= f.presupuesto ? 'Alcanzado' : `Quedan ${abreviar(f.presupuesto - gastado)}`}
+            </span>
+          )}
+        </div>
       </Campo>
       <div className="flex justify-end gap-2">
         {cambiado && (

@@ -41,6 +41,7 @@ export function PasoInvestigacion({ a, d, estado, trabajos, recargar }: Props) {
               icono={<FileSearch className="size-4" />}
               disabled={activos.length > 0}
               onLanzar={(ind) => api.investigar(a, d, ind, true)}
+              estimacion={[['investigador', 1]]}
               ayudaIndicaciones="Por ejemplo: busca datos recientes, usa fuentes oficiales…"
             />
           ) : (
@@ -50,6 +51,7 @@ export function PasoInvestigacion({ a, d, estado, trabajos, recargar }: Props) {
               icono={<FileSearch className="size-4" />}
               disabled={activos.length > 0}
               onLanzar={(ind) => api.investigar(a, d, ind)}
+              estimacion={[['investigador', 1]]}
               ayudaIndicaciones="Por ejemplo: céntrate en el temario de la PAU, usa fuentes en español, incluye ejemplos de la vida cotidiana…"
             />
           )}
@@ -340,6 +342,7 @@ export function PasoIndice({ a, d, estado, trabajos, recargar }: Props) {
           icono={<ListTree className="size-4" />}
           disabled={activos.length > 0}
           onLanzar={(ind) => conCambiosGuardados(() => api.proponerIndice(a, d, ind, profundidad))}
+          estimacion={[['arquitecto', 1]]}
           ayudaIndicaciones="Por ejemplo: 6 secciones como máximo, empieza por un caso práctico, añade una sección de historia…"
         />
       }

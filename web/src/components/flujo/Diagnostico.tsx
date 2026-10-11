@@ -88,6 +88,7 @@ export function PanelDiagnostico({ a, d, estado, trabajos, conImportacion }: { a
           icono={<Stethoscope className="size-4" />}
           disabled={!estado.secciones.length}
           onLanzar={(ind) => api.diagnosticar(a, d, ind)}
+          estimacion={[['diagnostico', 1]]}
           ayudaIndicaciones="Por ejemplo: fíjate sobre todo en si está al día con la normativa actual…"
         />
       </div>

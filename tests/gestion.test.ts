@@ -79,6 +79,12 @@ test('papelera: eliminar, listar, restaurar y vaciar', async () => {
   assert.deepEqual(await listarPapelera(almacen), []);
 });
 
+test('tope de tokens del documento: se guarda y se quita con 0', async () => {
+  assert.equal((await almacen.actualizarDocumento(asig, doc, { presupuesto: 5_000_000 })).presupuesto, 5_000_000);
+  assert.equal((await almacen.actualizarDocumento(asig, doc, { titulo: 'La célula' })).presupuesto, 5_000_000);
+  assert.equal((await almacen.actualizarDocumento(asig, doc, { presupuesto: 0 })).presupuesto, undefined);
+});
+
 test('copia de seguridad y restauración', async () => {
   const zip = path.join(raiz, 'copia.zip');
   await pipeline(await crearCopia(almacen, [asig], 'prueba'), fs.createWriteStream(zip));

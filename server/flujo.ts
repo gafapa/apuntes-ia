@@ -68,6 +68,8 @@ interface Dependencias {
   dirBin?: string;
   mcpFuentes?: { comando: string; args: string[]; env?: Record<string, string> };
   moleculas?: Moleculas;
+  /** Tokens (entrada + salida) gastados ya en un documento, para su tope. */
+  gastoDocumento?: (asig: string, doc: string) => number;
 }
 
 interface Lanzamiento {
@@ -178,6 +180,15 @@ export class Flujo {
   private async lanzar(l: Lanzamiento): Promise<Trabajo> {
     const asignatura = await this.almacen.obtenerAsignatura(l.asignatura);
     const documento = l.documento ? await this.almacen.obtenerDocumento(l.asignatura, l.documento) : undefined;
+    if (documento?.presupuesto && this.dep.gastoDocumento) {
+      const gastado = this.dep.gastoDocumento(l.asignatura, documento.id);
+      if (gastado >= documento.presupuesto) {
+        const m = (n: number) => `${(n / 1e6).toLocaleString('es', { maximumFractionDigits: 1 })} M`;
+        throw new ErrorUsuario(
+          `«${documento.titulo}» ha llegado a su tope de ${m(documento.presupuesto)} tokens (lleva ${m(gastado)}). Súbelo o quítalo en la ficha del documento para seguir.`,
+        );
+      }
+    }
     const secciones = documento ? await this.almacen.listarSecciones(l.asignatura, documento.id) : undefined;
     const dirAsig = this.almacen.dirAsignatura(asignatura.id);
     const cwd = documento ? this.almacen.dirDocumento(asignatura.id, documento.id) : dirAsig;

@@ -4,6 +4,8 @@ import type { EstadoFlujo, PasoFlujo, Trabajo } from '../../../../shared/tipos';
 import { api } from '../../lib/api';
 import { useEstado } from '../../lib/estado';
 import { AreaTexto, Boton, Insignia, cx } from '../ui';
+import { estimar } from '../../lib/estimacion';
+import { abreviar } from '../../lib/formato';
 
 /** Estado del flujo de un documento, que se recarga cuando cambian sus archivos o sus trabajos. */
 export function useFlujo(asignatura: string, documento: string) {
@@ -120,6 +122,7 @@ export function BotonAgente({
   icono,
   disabled,
   ayudaIndicaciones = 'Indicaciones para el agente (opcional): enfoque, nivel, qué incluir o evitar…',
+  estimacion,
 }: {
   texto: string;
   onLanzar: (indicaciones?: string) => Promise<unknown>;
@@ -127,8 +130,12 @@ export function BotonAgente({
   icono?: ReactNode;
   disabled?: boolean;
   ayudaIndicaciones?: string;
+  /** Agentes que va a lanzar y cuántas veces, para mostrar cuántos tokens gastará más o menos. */
+  estimacion?: [string, number][];
 }) {
   const { avisar } = useEstado();
+  const tokens = useEstado((s) => s.tokens);
+  const previstos = estimacion?.length ? estimar(tokens, estimacion) : 0;
   const [conIndicaciones, setConIndicaciones] = useState(false);
   const [indicaciones, setIndicaciones] = useState('');
   const [cargando, setCargando] = useState(false);
@@ -147,6 +154,14 @@ export function BotonAgente({
   return (
     <div className="flex flex-col items-end gap-2">
       <div className="flex items-center gap-1">
+        {previstos > 0 && !disabled && (
+          <span
+            className="mr-1 text-[12px] whitespace-nowrap text-texto-3 tabular-nums"
+            title="Tokens (entrada + salida) que gastará aproximadamente, según lo que han gastado antes estos agentes. Depende de la extensión de los apuntes y de las fuentes."
+          >
+            ≈ {abreviar(previstos)} tokens
+          </span>
+        )}
         <button
           title="Añadir indicaciones"
           onClick={() => setConIndicaciones(!conIndicaciones)}

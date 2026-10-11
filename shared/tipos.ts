@@ -74,6 +74,8 @@ export interface Documento {
   permisos?: Permisos;
   /** Si el documento parte de unos apuntes existentes (Word, LibreOffice, Markdown o PDF). */
   importado?: Importacion;
+  /** Tope de tokens (entrada + salida): al alcanzarlo no se lanzan más agentes en el documento. */
+  presupuesto?: number;
   creado: string;
   actualizado: string;
 }

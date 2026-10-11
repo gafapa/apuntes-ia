@@ -72,6 +72,7 @@ export function PasoRedaccion({ a, d, estado, trabajos }: Props) {
             icono={<PenLine className="size-4" />}
             disabled={!libres.length}
             onLanzar={(ind) => api.redactar(a, d, libres, ind)}
+            estimacion={[['redactor', libres.length]]}
             ayudaIndicaciones="Se aplican a todas las secciones elegidas. Por ejemplo: tono cercano, más ejemplos, incluye una tabla resumen…"
           />
         )
@@ -175,6 +176,7 @@ export function PasoRevision({ a, d, estado, trabajos, recargar }: Props) {
           icono={<SearchCheck className="size-4" />}
           disabled={!tipos.size || !estado.secciones.length}
           onLanzar={(ind) => api.revisar(a, d, [...tipos], undefined, ind)}
+          estimacion={[...tipos].map((t) => [t, 1])}
           ayudaIndicaciones="Por ejemplo: sé muy exigente con la ortografía, revisa sobre todo la sección 3…"
         />
       }
