@@ -48,7 +48,7 @@ async function leerTexto(archivo: string): Promise<string> {
   }
 }
 
-async function nombreLibre(dir: string, base: string): Promise<string> {
+export async function nombreLibre(dir: string, base: string): Promise<string> {
   let nombre = base;
   for (let i = 2; existsSync(path.join(dir, nombre)); i++) nombre = `${base}-${i}`;
   return nombre;

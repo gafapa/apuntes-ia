@@ -28,6 +28,7 @@ import { GastoTokens } from './ContadorTokens';
 import { Editor } from './Editor';
 import { VistaPrevia } from './VistaPrevia';
 import { GestorFuentes } from './GestorFuentes';
+import { ModalDuplicarDocumento } from './Gestion';
 import { GaleriaRecursos } from './GaleriaRecursos';
 import { HistorialSeccion } from './HistorialSeccion';
 import { VistaPaso } from './flujo/VistaFlujo';
@@ -500,6 +501,7 @@ function FichaDocumento({
   const inicial = { titulo: doc.titulo, objetivo: doc.objetivo, destinatarios: doc.destinatarios, extension: doc.extension, permisos: doc.permisos ?? {} };
   const [f, setF] = useState(inicial);
   const [guardando, setGuardando] = useState(false);
+  const [duplicando, setDuplicando] = useState(false);
   const cambiado = JSON.stringify(f) !== JSON.stringify(inicial);
 
   const guardar = async () => {
@@ -516,7 +518,7 @@ function FichaDocumento({
 
   const eliminar = async () => {
     const ok = await confirmar(`¿Eliminar «${doc.titulo}»?`, {
-      texto: 'Se moverá a la papelera de la carpeta de datos (.papelera).',
+      texto: 'Se moverá a la papelera, de donde podrás recuperarlo (pantalla de inicio → Papelera).',
       boton: 'Eliminar',
       peligro: true,
     });
@@ -606,15 +608,25 @@ function FichaDocumento({
           ))}
         </div>
       </div>
-      <div className="mt-6 flex items-center justify-between rounded-xl border border-error/30 px-5 py-4">
+      <div className="mt-6 flex items-center justify-between rounded-xl border border-borde px-5 py-4">
+        <div>
+          <div className="text-sm font-medium">Duplicar documento</div>
+          <div className="text-xs text-texto-3">Una copia en esta asignatura o en otra, para adaptarla a otro grupo o nivel.</div>
+        </div>
+        <Boton tam="sm" icono={<Copy className="size-3.5" />} onClick={() => setDuplicando(true)}>
+          Duplicar
+        </Boton>
+      </div>
+      <div className="flex items-center justify-between rounded-xl border border-error/30 px-5 py-4">
         <div>
           <div className="text-sm font-medium">Eliminar documento</div>
-          <div className="text-xs text-texto-3">Se mueve a la papelera de la carpeta de datos.</div>
+          <div className="text-xs text-texto-3">Se mueve a la papelera (se puede restaurar desde la pantalla de inicio).</div>
         </div>
         <Boton tam="sm" icono={<Trash2 className="size-3.5" />} onClick={eliminar} className="text-error">
           Eliminar
         </Boton>
       </div>
+      <ModalDuplicarDocumento asignatura={doc.asignatura} documento={duplicando ? doc.id : undefined} titulo={doc.titulo} onCerrar={() => setDuplicando(false)} />
     </div>
   );
 }

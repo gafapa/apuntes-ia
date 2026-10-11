@@ -21,6 +21,7 @@ import type { OpcionesActividad } from '../shared/actividades';
 import { exportar } from './exportar';
 import { Contador } from './tokens';
 import { plantillaBase } from './plantillaBase';
+import { borrarDePapelera, crearCopia, duplicarAsignatura, duplicarDocumento, listarPapelera, reunirExportados, restaurarCopia, restaurarDePapelera } from './gestion';
 import { Moleculas } from './moleculas';
 import { Arasaac } from './arasaac';
 import { rutaPandoc } from './conversion';
@@ -259,6 +260,57 @@ export async function crearServidor(op: OpcionesServidor) {
     const { a, d } = req.params as PD;
     await almacen.eliminarDocumento(a, d);
     return { ok: true };
+  });
+
+  // ---------- Duplicar, papelera y copias de seguridad ----------
+  app.post('/api/asignaturas/:a/duplicar', async (req) => {
+    const id = await duplicarAsignatura(almacen, (req.params as PA).a, (req.body as { nombre?: string })?.nombre);
+    return almacen.obtenerAsignatura(id);
+  });
+  app.post('/api/asignaturas/:a/documentos/:d/duplicar', async (req) => {
+    const { a, d } = req.params as PD;
+    return duplicarDocumento(almacen, a, d, (req.body ?? {}) as { titulo?: string; destino?: string });
+  });
+  app.get('/api/papelera', async () => listarPapelera(almacen));
+  app.post('/api/papelera/:id/restaurar', async (req) => restaurarDePapelera(almacen, (req.params as { id: string }).id));
+  app.delete('/api/papelera/:id', async (req) => {
+    await borrarDePapelera(almacen, (req.params as { id: string }).id);
+    return listarPapelera(almacen);
+  });
+  app.delete('/api/papelera', async () => {
+    await borrarDePapelera(almacen);
+    return [];
+  });
+  // Copia de seguridad: ?asignaturas=a,b (sin nada, todas)
+  app.get('/api/copia', async (req, reply) => {
+    const lista = String((req.query as { asignaturas?: string }).asignaturas ?? '').split(',').filter(Boolean);
+    const flujoZip = await crearCopia(almacen, lista, op.version ?? 'desarrollo');
+    const fecha = new Date().toISOString().slice(0, 10);
+    const nombre = lista.length === 1 ? `${lista[0]}-copia-${fecha}.zip` : `apuntes-ia-copia-${fecha}.zip`;
+    return reply.header('Content-Type', 'application/zip').header('Content-Disposition', `attachment; filename="${nombre}"`).send(flujoZip);
+  });
+  app.post('/api/copia', async (req) => {
+    const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'apuntes-copia-'));
+    try {
+      let restauradas: { id: string; nombre: string }[] = [];
+      for await (const parte of req.parts()) {
+        if (parte.type !== 'file') continue;
+        const ruta = path.join(tmp, 'copia.zip');
+        await pipeline(parte.file, fs.createWriteStream(ruta));
+        restauradas = await restaurarCopia(almacen, ruta);
+      }
+      if (!restauradas.length) throw new ErrorUsuario('Falta el archivo de la copia');
+      return restauradas;
+    } finally {
+      await fsp.rm(tmp, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+  // Lo exportado de varios documentos, junto en una carpeta (que se abre)
+  app.post('/api/asignaturas/:a/exportados/reunir', async (req) => {
+    const archivos = ((req.body as { archivos?: { documento: string; nombre: string }[] })?.archivos ?? []).filter((f) => f?.documento && f?.nombre);
+    const dir = await reunirExportados(almacen, (req.params as PA).a, archivos);
+    abrirCarpeta(dir);
+    return { carpeta: dir };
   });
 
   // ---------- Secciones ----------

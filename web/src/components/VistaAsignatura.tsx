@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileText, FileUp, Plus, Trash2 } from 'lucide-react';
+import { Archive, Copy, FileDown, FileText, FileUp, Plus, Trash2 } from 'lucide-react';
 import type { AsignaturaDetalle } from '../../../shared/tipos';
 import { api } from '../lib/api';
 import { useEstado } from '../lib/estado';
@@ -7,6 +7,7 @@ import { AreaTexto, Boton, Campo, Vacio, confirmar, cx } from './ui';
 import { GastoTokens } from './ContadorTokens';
 import { GestorFuentes } from './GestorFuentes';
 import { ModalImportar, ModalNuevoDocumento } from './Modales';
+import { ModalDuplicarAsignatura, ModalExportarTodos } from './Gestion';
 import { PestanaCurriculo, PestanaGlosario, PestanaPlantillas } from './PestanasAsignatura';
 import { SelectorEnsenanza, type ValorEnsenanza } from './SelectorEnsenanza';
 import { EditorPermisos } from './EditorPermisos';
@@ -25,6 +26,8 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
   const [pestana, setPestana] = useState<Pestana>('documentos');
   const [nuevoDoc, setNuevoDoc] = useState(false);
   const [importar, setImportar] = useState(false);
+  const [duplicar, setDuplicar] = useState(false);
+  const [exportarTodos, setExportarTodos] = useState(false);
   const version = `${versiones[`${asignatura}/`] ?? 0}-${reconexion}`; // también al reconectar con el servidor
 
   useEffect(() => {
@@ -35,7 +38,7 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
 
   const eliminar = async () => {
     const ok = await confirmar(`¿Eliminar la asignatura «${a.nombre}»?`, {
-      texto: 'Se moverá con todos sus documentos a la papelera de la carpeta de datos (.papelera), de donde podrás recuperarla.',
+      texto: 'Se moverá con todos sus documentos a la papelera, de donde podrás recuperarla (pantalla de inicio → Papelera).',
       boton: 'Eliminar',
       peligro: true,
     });
@@ -58,6 +61,25 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
             </p>
           </div>
           <GastoTokens asignatura={a.id} etiqueta="Tokens" className="mt-2 shrink-0 text-[12.5px]" />
+        </div>
+        <div className="mt-3 ml-8 flex flex-wrap gap-1.5">
+          {a.documentos.length > 0 && (
+            <Boton tam="sm" variante="fantasma" icono={<FileDown className="size-3.5" />} onClick={() => setExportarTodos(true)}>
+              Exportar todos
+            </Boton>
+          )}
+          <Boton tam="sm" variante="fantasma" icono={<Copy className="size-3.5" />} title="Para otro grupo o para el curso que viene" onClick={() => setDuplicar(true)}>
+            Duplicar
+          </Boton>
+          <Boton
+            tam="sm"
+            variante="fantasma"
+            icono={<Archive className="size-3.5" />}
+            title="Un .zip con la asignatura, sus documentos y sus fuentes, para guardarlo aparte o llevarlo a otro equipo"
+            onClick={() => api.descargarCopia([a.id])}
+          >
+            Copia de seguridad
+          </Boton>
         </div>
 
         <div className="mt-8 flex gap-1 border-b border-borde">
@@ -175,7 +197,7 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
           <div className="mt-12 flex items-center justify-between rounded-xl border border-error/30 px-5 py-4">
             <div>
               <div className="text-sm font-medium">Eliminar asignatura</div>
-              <div className="text-xs text-texto-3">Se mueve a la papelera junto con sus documentos.</div>
+              <div className="text-xs text-texto-3">Se mueve a la papelera junto con sus documentos (se puede restaurar desde la pantalla de inicio).</div>
             </div>
             <Boton tam="sm" icono={<Trash2 className="size-3.5" />} onClick={eliminar} className="text-error">
               Eliminar
@@ -185,6 +207,8 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
       </div>
       <ModalNuevoDocumento asignatura={nuevoDoc ? a.id : undefined} onCerrar={() => setNuevoDoc(false)} />
       <ModalImportar asignatura={importar ? a.id : undefined} onCerrar={() => setImportar(false)} />
+      <ModalDuplicarAsignatura asignatura={duplicar ? a.id : undefined} nombre={a.nombre} onCerrar={() => setDuplicar(false)} />
+      <ModalExportarTodos asignatura={exportarTodos ? a.id : undefined} onCerrar={() => setExportarTodos(false)} />
     </div>
   );
 }

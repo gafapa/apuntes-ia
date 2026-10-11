@@ -31,6 +31,7 @@ import type {
   Seccion,
   Trabajo,
   UsoSuscripcion,
+  ElementoPapelera,
 } from '../../../shared/tipos';
 import type { BloqueActividad, OpcionesActividad } from '../../../shared/actividades';
 
@@ -152,6 +153,25 @@ export const api = {
     if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string; message?: string }).error ?? 'No se han podido importar los apuntes');
     return (await r.json()) as { documento: Documento; secciones: number; imagenes: number; trabajos: number; avisos: string[] };
   },
+  // Duplicar, papelera, copias de seguridad y exportar varios documentos
+  duplicarAsignatura: (a: string, nombre?: string) => pedir<AsignaturaDetalle>('POST', `${asig(a)}/duplicar`, { nombre }),
+  duplicarDocumento: (a: string, d: string, datos: { titulo?: string; destino?: string }) => pedir<Documento>('POST', `${doc(a, d)}/duplicar`, datos),
+  papelera: () => pedir<ElementoPapelera[]>('GET', '/api/papelera'),
+  restaurarDePapelera: (id: string) => pedir<{ asignatura: string; documento?: string }>('POST', `/api/papelera/${e(id)}/restaurar`),
+  borrarDePapelera: (id?: string) => pedir<ElementoPapelera[]>('DELETE', id ? `/api/papelera/${e(id)}` : '/api/papelera'),
+  /** Descarga la copia de seguridad (en la app de escritorio, pregunta dónde guardarla). */
+  descargarCopia: (asignaturas?: string[]) => {
+    const enlace = Object.assign(document.createElement('a'), { href: `/api/copia${asignaturas?.length ? `?asignaturas=${asignaturas.map(e).join(',')}` : ''}`, download: '' });
+    enlace.click();
+  },
+  restaurarCopia: async (archivo: File) => {
+    const fd = new FormData();
+    fd.append('copia', archivo, archivo.name);
+    const r = await fetch('/api/copia', { method: 'POST', body: fd });
+    if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? 'No se ha podido restaurar la copia');
+    return (await r.json()) as { id: string; nombre: string }[];
+  },
+  reunirExportados: (a: string, archivos: { documento: string; nombre: string }[]) => pedir<{ carpeta: string }>('POST', `${asig(a)}/exportados/reunir`, { archivos }),
   historial: (a: string, d: string, s: string) => pedir<VersionSeccion[]>('GET', `${doc(a, d)}/secciones/${e(s)}/historial`),
   versionSeccion: (a: string, d: string, s: string, id: string) =>
     pedir<{ contenido: string }>('GET', `${doc(a, d)}/secciones/${e(s)}/historial/${e(id)}`),

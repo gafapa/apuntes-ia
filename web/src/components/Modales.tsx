@@ -164,46 +164,65 @@ const MODOS_MEJORA: { id: ModoMejora; nombre: string; texto: string }[] = [
   },
 ];
 
-/** Crear un documento a partir de unos apuntes existentes. */
+/** Crear documentos a partir de unos apuntes existentes (uno por archivo). */
 export function ModalImportar({ asignatura, onCerrar }: { asignatura?: string; onCerrar: () => void }) {
   const { asignaturas, cargarAsignaturas, seleccionar, avisar } = useEstado();
   const asig = asignaturas.find((a) => a.id === asignatura);
-  const [archivo, setArchivo] = useState<File>();
+  const [archivos, setArchivos] = useState<File[]>([]);
   const [titulo, setTitulo] = useState('');
   const [modo, setModo] = useState<ModoMejora>('conservador');
   const [estiloOriginal, setEstiloOriginal] = useState(true);
   const [diagnosticar, setDiagnosticar] = useState(true);
-  const [importando, setImportando] = useState(false);
+  const [progreso, setProgreso] = useState(''); // «2 de 5»
   useEffect(() => {
     if (!asignatura) return;
-    setArchivo(undefined);
+    setArchivos([]);
     setTitulo('');
     setModo('conservador');
   }, [asignatura]);
-  const ext = archivo?.name.split('.').pop()?.toLowerCase() ?? '';
-  const esOficina = ext === 'docx' || ext === 'odt';
-  const esPdf = ext === 'pdf';
+  const exts = new Set(archivos.map((f) => f.name.split('.').pop()?.toLowerCase() ?? ''));
+  const esOficina = exts.has('docx') || exts.has('odt');
+  const esPdf = exts.has('pdf');
 
   const importar = async (e: FormEvent) => {
     e.preventDefault();
-    if (!asignatura || !archivo) return;
-    setImportando(true);
-    try {
-      const r = await api.importarApuntes(asignatura, archivo, { titulo: titulo.trim() || undefined, modo, estiloOriginal: esOficina && estiloOriginal, diagnosticar });
-      await cargarAsignaturas();
-      const partes = [
-        r.secciones ? `${r.secciones} ${r.secciones === 1 ? 'sección' : 'secciones'}` : '',
-        r.imagenes ? `${r.imagenes} ${r.imagenes === 1 ? 'imagen' : 'imágenes'}` : '',
-      ].filter(Boolean);
-      avisar(`Apuntes importados${partes.length ? `: ${partes.join(' y ')}` : ''}.${r.trabajos ? ' Los agentes ya están trabajando.' : ''}`, 'ok');
-      for (const a of r.avisos) avisar(a, 'info');
-      seleccionar({ asignatura, documento: r.documento.id });
-      onCerrar();
-    } catch (err) {
-      avisar((err as Error).message, 'error');
-    } finally {
-      setImportando(false);
+    if (!asignatura || !archivos.length) return;
+    const hechos: { documento: string; titulo: string }[] = [];
+    const fallos: string[] = [];
+    let trabajos = 0;
+    for (const [i, archivo] of archivos.entries()) {
+      setProgreso(archivos.length > 1 ? `${i + 1} de ${archivos.length}` : '…');
+      const ext = archivo.name.split('.').pop()?.toLowerCase() ?? '';
+      try {
+        const r = await api.importarApuntes(asignatura, archivo, {
+          titulo: archivos.length === 1 ? titulo.trim() || undefined : undefined,
+          modo,
+          estiloOriginal: (ext === 'docx' || ext === 'odt') && estiloOriginal,
+          diagnosticar,
+        });
+        hechos.push({ documento: r.documento.id, titulo: r.documento.titulo });
+        trabajos += r.trabajos;
+        for (const a of r.avisos) avisar(archivos.length > 1 ? `${archivo.name}: ${a}` : a, 'info');
+        if (archivos.length === 1) {
+          const partes = [
+            r.secciones ? `${r.secciones} ${r.secciones === 1 ? 'sección' : 'secciones'}` : '',
+            r.imagenes ? `${r.imagenes} ${r.imagenes === 1 ? 'imagen' : 'imágenes'}` : '',
+          ].filter(Boolean);
+          avisar(`Apuntes importados${partes.length ? `: ${partes.join(' y ')}` : ''}.${r.trabajos ? ' Los agentes ya están trabajando.' : ''}`, 'ok');
+        }
+      } catch (err) {
+        fallos.push(`${archivo.name}: ${(err as Error).message}`);
+      }
     }
+    setProgreso('');
+    await cargarAsignaturas();
+    for (const f of fallos) avisar(f, 'error');
+    if (archivos.length > 1 && hechos.length) {
+      avisar(`${hechos.length} de ${archivos.length} apuntes importados.${trabajos ? ' Los agentes ya están trabajando.' : ''}`, 'ok');
+    }
+    if (!hechos.length) return;
+    if (hechos.length === 1) seleccionar({ asignatura, documento: hechos[0].documento });
+    onCerrar();
   };
 
   return (
@@ -215,17 +234,21 @@ export function ModalImportar({ asignatura, onCerrar }: { asignatura?: string; o
       descripcion={asig ? `Se crea un documento nuevo en ${asig.nombre}. El archivo original no se modifica.` : undefined}
     >
       <form onSubmit={importar} className="space-y-4">
-        <Campo etiqueta="Archivo" ayuda="Word (.docx), LibreOffice (.odt), Markdown (.md, o un .zip con el .md y sus imágenes) o PDF.">
+        <Campo
+          etiqueta="Archivos"
+          ayuda="Word (.docx), LibreOffice (.odt), Markdown (.md, o un .zip con el .md y sus imágenes) o PDF. Puedes elegir varios a la vez: cada uno será un documento (un tema, una unidad…)."
+        >
           <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-borde px-4 py-3 transition-colors hover:border-acento">
             <FileUp className="size-5 shrink-0 text-acento" />
-            <span className={cx('min-w-0 flex-1 truncate text-sm', !archivo && 'text-texto-3')}>{archivo ? archivo.name : 'Elige el archivo de tus apuntes…'}</span>
+            <span className={cx('min-w-0 flex-1 truncate text-sm', !archivos.length && 'text-texto-3')}>
+              {archivos.length === 0 ? 'Elige los archivos de tus apuntes…' : archivos.length === 1 ? archivos[0].name : `${archivos.length} archivos: ${archivos.map((f) => f.name).join(', ')}`}
+            </span>
             <input
               type="file"
+              multiple
               className="hidden"
               accept=".docx,.odt,.md,.markdown,.txt,.zip,.pdf"
-              onChange={(e) => {
-                setArchivo(e.target.files?.[0]);
-              }}
+              onChange={(e) => setArchivos([...(e.target.files ?? [])])}
             />
           </label>
         </Campo>
@@ -235,9 +258,11 @@ export function ModalImportar({ asignatura, onCerrar }: { asignatura?: string; o
             Si tienes el Word o el ODT original, mejor impórtalo.
           </p>
         )}
-        <Campo etiqueta="Título" ayuda="Si lo dejas vacío, se usa el título de los apuntes.">
-          <Entrada value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Tema 3: La célula" />
-        </Campo>
+        {archivos.length <= 1 && (
+          <Campo etiqueta="Título" ayuda="Si lo dejas vacío, se usa el título de los apuntes.">
+            <Entrada value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Tema 3: La célula" />
+          </Campo>
+        )}
         <Campo etiqueta="Qué hacer con ellos">
           <div className="space-y-1.5">
             {MODOS_MEJORA.map((m) => (
@@ -267,7 +292,7 @@ export function ModalImportar({ asignatura, onCerrar }: { asignatura?: string; o
           {esOficina && (
             <label className="flex cursor-pointer items-center gap-2 text-[13px] text-texto-2">
               <input type="checkbox" className="accent-[var(--acento)]" checked={estiloOriginal} onChange={(e) => setEstiloOriginal(e.target.checked)} />
-              Exportar con el estilo del original (fuentes, colores y títulos de tu {ext === 'odt' ? 'ODT' : 'Word'})
+              Exportar con el estilo del original (fuentes, colores y títulos de tu {exts.has('docx') ? 'Word' : 'ODT'})
             </label>
           )}
         </div>
@@ -275,8 +300,8 @@ export function ModalImportar({ asignatura, onCerrar }: { asignatura?: string; o
           <Boton type="button" onClick={onCerrar}>
             Cancelar
           </Boton>
-          <Boton type="submit" variante="primario" cargando={importando} disabled={!archivo}>
-            Importar
+          <Boton type="submit" variante="primario" cargando={!!progreso} disabled={!archivos.length}>
+            {progreso ? `Importando ${progreso}` : archivos.length > 1 ? `Importar ${archivos.length} archivos` : 'Importar'}
           </Boton>
         </div>
       </form>

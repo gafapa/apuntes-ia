@@ -473,3 +473,13 @@ export interface BusquedaImagenes {
   resultados: ResultadoImagen[];
   fuentes: { fuente: FuenteImagen; nombre: string; n: number; error?: string }[];
 }
+
+/** Asignatura o documento en la papelera (carpeta .papelera de los datos). */
+export interface ElementoPapelera {
+  id: string; // nombre de la carpeta en la papelera
+  tipo: 'asignatura' | 'documento';
+  titulo: string;
+  asignatura: string; // id de la asignatura (la propia o a la que pertenecía el documento)
+  nombreAsignatura?: string; // de un documento, si su asignatura sigue existiendo
+  eliminado: string; // ISO
+}

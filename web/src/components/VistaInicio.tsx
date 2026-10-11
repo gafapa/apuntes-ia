@@ -1,18 +1,38 @@
 import { useState } from 'react';
-import { BookOpen, FileText, Plus } from 'lucide-react';
+import { Archive, BookOpen, FileText, Plus, Trash2 } from 'lucide-react';
+import { api } from '../lib/api';
 import { useEstado } from '../lib/estado';
 import { Boton, Vacio } from './ui';
 import { ModalNuevaAsignatura } from './Modales';
+import { BotonRestaurarCopia, ModalPapelera } from './Gestion';
 
 export function VistaInicio() {
   const { asignaturas, seleccionar } = useEstado();
   const [nueva, setNueva] = useState(false);
+  const [papelera, setPapelera] = useState(false);
 
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-5xl px-10 py-12">
         <h1 className="text-2xl font-semibold tracking-tight">Tus asignaturas</h1>
         <p className="mt-1 text-texto-2">Cada asignatura guarda su contexto y sus destinatarios; dentro creas los documentos de apuntes.</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {asignaturas.length > 0 && (
+            <Boton
+              tam="sm"
+              variante="fantasma"
+              icono={<Archive className="size-3.5" />}
+              title="Un .zip con todas las asignaturas, sus documentos y sus fuentes, para guardarlo aparte o llevarlo a otro equipo"
+              onClick={() => api.descargarCopia()}
+            >
+              Copia de seguridad de todo
+            </Boton>
+          )}
+          <BotonRestaurarCopia variante="fantasma" />
+          <Boton tam="sm" variante="fantasma" icono={<Trash2 className="size-3.5" />} onClick={() => setPapelera(true)}>
+            Papelera
+          </Boton>
+        </div>
 
         {asignaturas.length === 0 ? (
           <Vacio
@@ -54,6 +74,7 @@ export function VistaInicio() {
         )}
       </div>
       <ModalNuevaAsignatura abierto={nueva} onCerrar={() => setNueva(false)} />
+      <ModalPapelera abierto={papelera} onCerrar={() => setPapelera(false)} />
     </div>
   );
 }
