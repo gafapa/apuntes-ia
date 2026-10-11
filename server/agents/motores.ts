@@ -46,6 +46,9 @@ function enPath(motor: Motor): string | undefined {
 const rutasCache = new Map<Motor, string | undefined>();
 
 export function rutaMotor(motor: Motor): string | undefined {
+  // Para las pruebas automáticas: un motor falso (APUNTES_MOTOR_CLAUDE / APUNTES_MOTOR_CODEX)
+  const forzada = process.env[`APUNTES_MOTOR_${motor.toUpperCase()}`];
+  if (forzada) return forzada;
   if (!rutasCache.has(motor)) {
     const ruta = enPath(motor) ?? candidatas(motor).find((p) => existsSync(p));
     rutasCache.set(motor, ruta && motor === 'codex' ? (binarioNativoCodex(ruta) ?? ruta) : ruta);

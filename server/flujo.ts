@@ -121,6 +121,7 @@ export class Flujo {
     dep.cola.manejadores = {
       alTerminar: (t, post) => this.postprocesar(t, post),
       alFallar: (t, post) => this.alFallarPost(t, post),
+      alReintentar: (t, post) => this.alReintentarPost(t, post),
     };
   }
 
@@ -1910,6 +1911,25 @@ Solo escribe en \`glosario.md\`; no modifiques los documentos.`,
       estado: 'error',
       error: t.estado === 'cancelado' ? 'Cancelado' : ultimoError ?? 'No se pudo generar',
     }).catch(() => {});
+  }
+
+  /** Antes de reintentar un trabajo fallido: lo que alFallarPost marcó como error vuelve a «en curso». */
+  private async alReintentarPost(t: Trabajo, post: Postproceso) {
+    if (!t.documento) return;
+    const { asignatura: asig, documento: doc } = t;
+    if (post.tipo === 'ambito') {
+      // Nueva copia de partida para deshacer lo que toque fuera de la pestaña
+      this.instantaneas.set(t.id, await instantaneaDocumento(this.almacen.dirDocumento(asig, doc)));
+    } else if (post.tipo === 'actividad') {
+      await this.cambiarActividades(asig, doc, (l) => {
+        const b = l.find((x) => x.id === String(post.datos?.id));
+        if (b) Object.assign(b, { estado: 'generando', error: undefined });
+      });
+    } else if (post.tipo === 'investigacion') {
+      await this.marcarPreguntas(asig, doc, (post.datos?.preguntas as string[]) ?? [], 'investigando');
+    } else if (['diagrama', 'grafica', 'mapa', 'molecula', 'imagen-ia', 'imagen-web'].includes(post.tipo)) {
+      await this.cambiarPropuesta(asig, doc, String(post.datos?.id), { estado: 'generando', error: undefined });
+    }
   }
 
   private async postInvestigacion(t: Trabajo, datos: Record<string, unknown>): Promise<string | void> {

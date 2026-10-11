@@ -75,10 +75,15 @@ export async function crearServidor(op: OpcionesServidor) {
 
   // ---------- Seguridad: solo peticiones desde la propia app ----------
   // Una web cualquiera abierta en el navegador podría intentar llamar a localhost.
+  // Y una web cuyo dominio apunte a 127.0.0.1 (DNS rebinding) pasaría por «propia»: el Host tiene que
+  // ser local.
   app.addHook('onRequest', async (req, rep) => {
+    const host = req.headers.host ?? '';
+    if (!/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test(host)) {
+      return rep.code(403).send({ error: 'Host no permitido' });
+    }
     const origen = req.headers.origin;
     if (!origen) return;
-    const host = req.headers.host ?? '';
     const web = process.env.APUNTES_PUERTO_WEB ?? '5173'; // interfaz de Vite en desarrollo
     const permitido = [`http://${host}`, `http://localhost:${web}`, `http://127.0.0.1:${web}`];
     if (!permitido.includes(origen)) {
@@ -354,6 +359,22 @@ export async function crearServidor(op: OpcionesServidor) {
     } catch (e) {
       throw new ErrorUsuario((e as Error).message);
     }
+  });
+  app.post('/api/trabajos/:id/reintentar', async (req) => {
+    try {
+      return await cola.reintentar((req.params as { id: string }).id);
+    } catch (e) {
+      throw new ErrorUsuario((e as Error).message);
+    }
+  });
+  app.post('/api/trabajos/:id/esperar', async (req) => {
+    cola.seguirEsperando((req.params as { id: string }).id);
+    return { ok: true };
+  });
+  // Seguir sin esperar a que se renueve el límite de uso (p. ej. tras ampliar el plan)
+  app.post('/api/cola/reanudar', async () => {
+    cola.reanudarCola();
+    return cola.uso;
   });
   app.post('/api/trabajos/limpiar', async () => {
     cola.limpiar();

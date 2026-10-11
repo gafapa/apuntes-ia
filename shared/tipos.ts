@@ -193,6 +193,7 @@ export interface Trabajo {
   ref?: string; // elemento relacionado (p. ej. id de una propuesta visual)
   sesion?: string; // id de la sesión del motor, para poder continuar la conversación
   tokens?: Tokens; // consumo acumulado (incluidas las respuestas del usuario)
+  inactivo?: number; // mientras se ejecuta: sin dar señales desde entonces (epoch ms)
   eventos: EventoTrabajo[];
 }
 
@@ -210,6 +211,9 @@ export interface UsoSuscripcion {
   cincoHoras?: number;
   semanal?: number;
   reinicio?: number; // epoch (s) del reinicio de la ventana de 5 h
+  // Motores en pausa por haber agotado el límite de uso de la suscripción: hasta cuándo (epoch ms).
+  // Sus trabajos esperan en la cola y continúan solos al renovarse el límite.
+  pausas?: Partial<Record<Motor, number>>;
   actualizado: number;
 }
 

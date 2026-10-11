@@ -235,6 +235,9 @@ export const api = {
     pedir<Trabajo>('POST', '/api/trabajos', datos),
   responder: (id: string, texto: string) => pedir<Trabajo>('POST', `/api/trabajos/${e(id)}/responder`, { texto }),
   cancelar: (id: string) => pedir('POST', `/api/trabajos/${e(id)}/cancelar`),
+  reintentar: (id: string) => pedir<Trabajo>('POST', `/api/trabajos/${e(id)}/reintentar`),
+  seguirEsperando: (id: string) => pedir('POST', `/api/trabajos/${e(id)}/esperar`),
+  reanudarCola: () => pedir<UsoSuscripcion>('POST', '/api/cola/reanudar'),
   limpiarTrabajos: () => pedir<Trabajo[]>('POST', '/api/trabajos/limpiar'),
 };
 

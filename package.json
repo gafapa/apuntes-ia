@@ -16,6 +16,7 @@
     "build:main": "node scripts/build-main.mjs",
     "build": "npm run build:web && npm run build:main",
     "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test \"tests/**/*.test.ts\"",
     "fetch-bin": "node scripts/fetch-bin.mjs",
     "dist": "npm run build && npm run fetch-bin && electron-builder",
     "start": "npm run build && electron .",

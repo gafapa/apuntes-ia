@@ -14,7 +14,9 @@ import type { ChildProcess } from 'node:child_process';
 import treeKill from 'tree-kill';
 import type { Esfuerzo, EventoTrabajo, Motor, PasoFlujo, Tokens, Trabajo, UsoSuscripcion } from '../../shared/tipos';
 
-type Traduccion = { mensaje?: string; resultado?: string; error?: string; final?: 'ok' | 'error'; tokens?: Tokens };
+type Traduccion = { mensaje?: string; resultado?: string; error?: string; final?: 'ok' | 'error'; tokens?: Tokens; limite?: Limite };
+/** Límite de uso de la suscripción agotado; `hasta`, cuándo se renueva (epoch ms), si se sabe. */
+type Limite = { hasta?: number };
 import { lanzar, rutaMotor } from './motores';
 
 /**
@@ -68,6 +70,8 @@ export interface Manejadores {
   alTerminar(t: Trabajo, post: Postproceso): Promise<string | void>;
   /** Se ejecuta si el trabajo falla o se cancela. */
   alFallar(t: Trabajo, post: Postproceso): Promise<void> | void;
+  /** Se ejecuta antes de reintentar desde el principio un trabajo fallido (deshace lo de alFallar). */
+  alReintentar?(t: Trabajo, post: Postproceso): Promise<void> | void;
 }
 
 /**
@@ -98,8 +102,15 @@ interface Registro {
 const MAX_EVENTOS = 400;
 const CONTINUAR =
   'La aplicación se cerró mientras trabajabas y se ha vuelto a abrir. Continúa la tarea donde la dejaste y termínala (revisa qué archivos llegaste a escribir).';
+const CONTINUAR_LIMITE =
+  'Se agotó el límite de uso de la suscripción mientras trabajabas y ya se ha renovado. Continúa la tarea donde la dejaste y termínala (revisa qué archivos llegaste a escribir).';
 const MAX_TRABAJOS = 200;
 const DIAS_CONSERVAR = 7;
+/** Sin ninguna señal del agente durante este tiempo, se avisa (puede haberse quedado bloqueado). */
+const INACTIVIDAD_MS = 12 * 60_000;
+/** Límite agotado sin hora de renovación conocida: se vuelve a probar pasado este tiempo. */
+const ESPERA_SIN_HORA_MS = 15 * 60_000;
+const NOMBRE_MOTOR: Record<Motor, string> = { claude: 'Claude', codex: 'Codex' };
 
 interface Seguimiento {
   proc: ChildProcess;
@@ -112,6 +123,8 @@ interface Seguimiento {
   final: 'ok' | 'error' | undefined; // evento de fin visto en la salida
   sondeo?: NodeJS.Timeout;
   cerrando?: boolean;
+  ultimaActividad: number; // última vez que escribió algo en su salida
+  limite?: Limite; // ha avisado de que se agotó el límite de uso
 }
 
 export class Cola extends EventEmitter {
@@ -122,6 +135,11 @@ export class Cola extends EventEmitter {
   private temporizadorGuardado?: NodeJS.Timeout;
   manejadores?: Manejadores;
   uso: UsoSuscripcion = { actualizado: 0 };
+  /** Motores con el límite de uso agotado: hasta cuándo no se lanza nada con ellos (epoch ms). */
+  private pausas = new Map<Motor, number>();
+  private temporizadorPausa?: NodeJS.Timeout;
+  /** Tiempos de espera (modificables en las pruebas). */
+  tiempos = { inactividad: INACTIVIDAD_MS, esperaSinHora: ESPERA_SIN_HORA_MS, margenLimite: 30_000 };
 
   constructor(
     public maxSimultaneos: number,
@@ -141,8 +159,13 @@ export class Cola extends EventEmitter {
   /** Recupera los trabajos guardados y relanza los que quedaron a medias al cerrar la app. */
   async cargar() {
     const limite = Date.now() - DIAS_CONSERVAR * 86400_000;
+    try {
+      const guardadas = JSON.parse(await fsp.readFile(path.join(this.dir, 'pausas.json'), 'utf8')) as Partial<Record<Motor, number>>;
+      for (const [m, hasta] of Object.entries(guardadas)) if (hasta && hasta > Date.now()) this.pausas.set(m as Motor, hasta);
+    } catch {}
+    this.cambioPausas();
     for (const f of await fsp.readdir(this.dir)) {
-      if (!f.endsWith('.json') || f === 'servidor.json') continue;
+      if (!f.endsWith('.json') || f === 'servidor.json' || f === 'pausas.json') continue;
       const archivo = path.join(this.dir, f);
       let r: Registro;
       try {
@@ -197,7 +220,7 @@ export class Cola extends EventEmitter {
   }
 
   private borrarArchivos(id: string) {
-    for (const ext of ['json', 'prompt.txt', 'entrada.txt', 'sistema.txt', 'salida.jsonl', 'err.log']) fs.rm(this.ruta(id, ext), { force: true }, () => {});
+    for (const ext of ['json', 'prompt.txt', 'original.txt', 'entrada.txt', 'sistema.txt', 'salida.jsonl', 'err.log']) fs.rm(this.ruta(id, ext), { force: true }, () => {});
   }
 
   // ---------------------------------------------------------------------------
@@ -231,6 +254,8 @@ export class Cola extends EventEmitter {
     this.registros.set(t.id, { trabajo: t, peticion, ejecucion: 0 });
     this.prompts.set(t.id, prompt);
     fs.writeFileSync(this.ruta(t.id, 'prompt.txt'), prompt, 'utf8');
+    // prompt.txt pasa a ser la última respuesta si se continúa la conversación; el original, para reintentar
+    fs.writeFileSync(this.ruta(t.id, 'original.txt'), prompt, 'utf8');
     this.podar();
     this.emitir(t);
     this.siguiente();
@@ -262,6 +287,56 @@ export class Cola extends EventEmitter {
     t.creado = Date.now();
     this.evento(t, 'usuario', texto);
     this.emitir(t);
+    this.siguiente();
+  }
+
+  /**
+   * Vuelve a lanzar desde el principio (sin continuar su conversación) un trabajo que ha fallado,
+   * se ha cancelado o se ha quedado bloqueado.
+   */
+  async reintentar(id: string) {
+    const r = this.registros.get(id);
+    if (!r) throw new Error('Trabajo no encontrado');
+    const t = r.trabajo;
+    if (t.estado === 'en-cola') throw new Error('Este trabajo todavía no ha empezado');
+    const original =
+      (await fsp.readFile(this.ruta(id, 'original.txt'), 'utf8').catch(() => undefined)) ??
+      (await fsp.readFile(this.ruta(id, 'prompt.txt'), 'utf8').catch(() => undefined));
+    if (original === undefined) throw new Error('No se conserva la tarea original de este trabajo');
+    if (t.estado === 'ejecutando') this.cancelar(id);
+    if (r.peticion.post && this.manejadores?.alReintentar) await this.manejadores.alReintentar(t, r.peticion.post);
+    r.peticion = { ...r.peticion, reanudar: undefined };
+    r.automaticas = 0;
+    r.pid = undefined;
+    t.sesion = undefined;
+    t.estado = 'en-cola';
+    t.fin = undefined;
+    t.inicio = undefined;
+    t.resultado = undefined;
+    t.inactivo = undefined;
+    t.creado = Date.now();
+    this.prompts.set(id, original);
+    fs.writeFileSync(this.ruta(id, 'prompt.txt'), original, 'utf8');
+    this.evento(t, 'estado', 'Reintento desde el principio');
+    this.emitir(t);
+    this.siguiente();
+    return t;
+  }
+
+  /** «Seguir esperando» a un agente que llevaba rato sin dar señales. */
+  seguirEsperando(id: string) {
+    const t = this.obtener(id);
+    const s = this.seguimientos.get(id);
+    if (!t || !s) return;
+    s.ultimaActividad = Date.now();
+    t.inactivo = undefined;
+    this.emitir(t);
+  }
+
+  /** Quita las pausas por límite de uso (p. ej. si el usuario ha ampliado su plan) y sigue con la cola. */
+  reanudarCola() {
+    this.pausas.clear();
+    this.cambioPausas();
     this.siguiente();
   }
 
@@ -361,7 +436,7 @@ export class Cola extends EventEmitter {
     const enCurso = this.listar().filter((t) => t.estado === 'ejecutando').length;
     if (enCurso >= this.maxSimultaneos) return;
     const pendiente = this.listar()
-      .filter((t) => t.estado === 'en-cola' && this.prompts.has(t.id))
+      .filter((t) => t.estado === 'en-cola' && this.prompts.has(t.id) && !this.pausas.has(t.motor))
       .sort((a, b) => a.creado - b.creado)[0];
     if (!pendiente) return;
     this.ejecutar(pendiente);
@@ -476,11 +551,85 @@ ${prompt}` : prompt;
       ultimoMensaje: '',
       errorReportado: false,
       final: undefined,
+      ultimaActividad: Date.now(),
     };
     this.seguimientos.set(id, s);
     proc.on('error', (e) => this.terminar(t, 'error', `Error al ejecutar: ${e.message}`));
     proc.on('exit', (codigo) => setTimeout(() => this.alSalir(id, codigo), 150));
-    s.sondeo = setInterval(() => this.leer(id), 400);
+    s.sondeo = setInterval(() => {
+      this.leer(id);
+      this.vigilarInactividad(t, s);
+    }, 400);
+  }
+
+  /** Avisa si el agente lleva mucho sin dar señales (no se cierra solo: puede estar pensando). */
+  private vigilarInactividad(t: Trabajo, s: Seguimiento) {
+    if (t.inactivo || t.estado !== 'ejecutando' || Date.now() - s.ultimaActividad < this.tiempos.inactividad) return;
+    t.inactivo = s.ultimaActividad;
+    this.evento(t, 'estado', `Sin señales del agente desde hace ${Math.round(this.tiempos.inactividad / 60_000)} minutos: puede estar preparando una respuesta larga o haberse quedado bloqueado.`);
+    this.emitir(t);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Límite de uso de la suscripción
+
+  /**
+   * El agente ha agotado el límite de uso: el trabajo vuelve a la cola (continuará su conversación,
+   * si la tenía) y su motor queda en pausa hasta que se renueve el límite.
+   */
+  private esperarLimite(t: Trabajo, limite: Limite) {
+    const r = this.registros.get(t.id)!;
+    const motor = r.peticion.motor;
+    const ahora = Date.now();
+    const hasta = limite.hasta && limite.hasta > ahora ? limite.hasta + this.tiempos.margenLimite : ahora + this.tiempos.esperaSinHora;
+    this.pausas.set(motor, Math.max(this.pausas.get(motor) ?? 0, hasta));
+    let prompt: string | undefined;
+    if (t.sesion) {
+      r.peticion = { ...r.peticion, reanudar: t.sesion };
+      prompt = CONTINUAR_LIMITE;
+      fs.writeFileSync(this.ruta(t.id, 'prompt.txt'), prompt, 'utf8');
+    } else {
+      prompt = fs.existsSync(this.ruta(t.id, 'prompt.txt')) ? fs.readFileSync(this.ruta(t.id, 'prompt.txt'), 'utf8') : undefined;
+    }
+    const s = this.seguimientos.get(t.id);
+    if (s) clearInterval(s.sondeo);
+    this.seguimientos.delete(t.id);
+    r.pid = undefined;
+    if (prompt === undefined) return this.terminar(t, 'error', `Se ha agotado el límite de uso de ${NOMBRE_MOTOR[motor]}`);
+    this.prompts.set(t.id, prompt);
+    t.estado = 'en-cola';
+    t.inicio = undefined;
+    t.inactivo = undefined;
+    const hora = new Date(this.pausas.get(motor)!).toLocaleString('es', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+    this.evento(
+      t,
+      'estado',
+      `Se ha agotado el límite de uso de tu suscripción de ${NOMBRE_MOTOR[motor]}. ${t.sesion ? 'Continuará donde lo dejó' : 'Empezará'} automáticamente al renovarse (${limite.hasta ? '' : 'se volverá a probar '}${hora}).`,
+    );
+    this.emitir(t);
+    this.cambioPausas();
+    this.siguiente();
+  }
+
+  /** Guarda las pausas, las comunica a la interfaz y programa su fin. */
+  private cambioPausas() {
+    const ahora = Date.now();
+    for (const [m, hasta] of this.pausas) if (hasta <= ahora) this.pausas.delete(m);
+    const pausas = Object.fromEntries(this.pausas) as Partial<Record<Motor, number>>;
+    try {
+      fs.writeFileSync(path.join(this.dir, 'pausas.json'), JSON.stringify(pausas));
+    } catch {}
+    this.uso = { ...this.uso, pausas, actualizado: Date.now() };
+    this.emit('uso', this.uso);
+    if (this.temporizadorPausa) clearTimeout(this.temporizadorPausa);
+    this.temporizadorPausa = undefined;
+    const proxima = Math.min(...this.pausas.values());
+    if (Number.isFinite(proxima)) {
+      this.temporizadorPausa = setTimeout(() => {
+        this.cambioPausas();
+        this.siguiente();
+      }, Math.max(1000, proxima - ahora));
+    }
   }
 
   private leer(id: string, silencioso = false) {
@@ -494,6 +643,11 @@ ${prompt}` : prompt;
       return;
     }
     if (tam <= s.desplazamiento) return;
+    s.ultimaActividad = Date.now();
+    if (t.inactivo) {
+      t.inactivo = undefined;
+      this.emitir(t);
+    }
     const fd = fs.openSync(s.archivo, 'r');
     const buf = Buffer.alloc(tam - s.desplazamiento);
     fs.readSync(fd, buf, 0, buf.length, s.desplazamiento);
@@ -518,6 +672,7 @@ ${prompt}` : prompt;
     if (r?.mensaje) s.ultimoMensaje = r.mensaje;
     if (r?.resultado !== undefined) t.resultado = r.resultado;
     if (r?.final) s.final = r.final;
+    if (r?.limite) s.limite = { hasta: r.limite.hasta ?? s.limite?.hasta };
     if (r?.tokens && (r.tokens.entrada || r.tokens.salida)) {
       const previo = t.tokens ?? { entrada: 0, salida: 0, cache: 0 };
       t.tokens = { entrada: previo.entrada + r.tokens.entrada, salida: previo.salida + r.tokens.salida, cache: previo.cache + r.tokens.cache };
@@ -554,6 +709,9 @@ ${prompt}` : prompt;
         .slice(-3)
         .join('\n');
     } catch {}
+    // Límite de uso agotado (avisado en la salida o en los errores): a esperar, no es un fallo
+    const limite = s.limite ?? (!bien ? limiteEnTexto(detalle) : undefined);
+    if (limite) return this.esperarLimite(t, limite);
     this.terminar(
       t,
       'error',
@@ -606,14 +764,18 @@ ${prompt}` : prompt;
         return { mensaje };
       }
       case 'rate_limit_event': {
-        const w = ev.rate_limit_info?.unifiedWindows ?? {};
+        const info = ev.rate_limit_info ?? {};
+        const w = info.unifiedWindows ?? {};
         this.uso = {
           cincoHoras: w.five_hour?.utilization,
           semanal: w.seven_day?.utilization,
-          reinicio: w.five_hour?.resetsAt ?? ev.rate_limit_info?.resetsAt,
+          reinicio: w.five_hour?.resetsAt ?? info.resetsAt,
+          pausas: this.uso.pausas,
           actualizado: Date.now(),
         };
         if (!sil) this.emit('uso', this.uso);
+        // Rechazada por el límite: se renueva en resetsAt (s)
+        if (info.status === 'rejected') return { limite: { hasta: info.resetsAt ? Number(info.resetsAt) * 1000 : undefined } };
         return;
       }
       case 'result': {
@@ -624,7 +786,7 @@ ${prompt}` : prompt;
           salida: Number(u.output_tokens ?? 0),
           cache,
         };
-        if (ev.is_error) return { error: String(ev.result ?? 'Error del agente'), final: 'error', tokens };
+        if (ev.is_error) return { error: String(ev.result ?? 'Error del agente'), final: 'error', tokens, limite: limiteEnTexto(String(ev.result ?? '')) };
         return { resultado: typeof ev.result === 'string' ? ev.result : undefined, final: 'ok', tokens };
       }
     }
@@ -653,7 +815,7 @@ ${prompt}` : prompt;
         } else if (item?.type === 'image_generation' || /image/i.test(item?.type ?? '')) {
           this.evento(t, 'herramienta', 'Imagen generada', sil);
         } else if (item?.type === 'error') {
-          return { error: item.message ?? 'Error de Codex' };
+          return { error: item.message ?? 'Error de Codex', limite: limiteEnTexto(String(item.message ?? '')) };
         }
         return;
       case 'turn.completed': {
@@ -665,10 +827,56 @@ ${prompt}` : prompt;
         };
       }
       case 'turn.failed':
-      case 'error':
-        return { error: ev.error?.message ?? ev.message ?? 'Error de Codex', final: 'error' };
+      case 'error': {
+        const mensaje = String(ev.error?.message ?? ev.message ?? 'Error de Codex');
+        return { error: mensaje, final: 'error', limite: limiteEnTexto(mensaje) };
+      }
     }
   }
+}
+
+/**
+ * ¿Es un aviso de límite de uso agotado? Claude: «Claude AI usage limit reached|1760000000» o
+ * «You've hit your limit · resets 5pm»; Codex: «You've hit your usage limit… try again at 3:05 PM».
+ * Si trae la hora de renovación, la devuelve.
+ */
+export function limiteEnTexto(texto: string, ahora = new Date()): Limite | undefined {
+  const delPlan = /usage limit|hit your (usage )?limit|limit reached|quota exceeded|l[ií]mite de uso/i.test(texto);
+  // Demasiadas peticiones seguidas (no es el límite del plan): basta con esperar un poco
+  if (!delPlan) return /rate limit|too many requests|\b429\b/i.test(texto) ? { hasta: ahora.getTime() + 2 * 60_000 } : undefined;
+  const epoch = texto.match(/\|(\d{10})\b/);
+  if (epoch) return { hasta: Number(epoch[1]) * 1000 };
+  // «try again in 2 hours 5 minutes», «in 35 minutes»
+  const en = texto.match(/\bin\s+(?:(\d+)\s*h(?:ours?|rs?)?)?[\s,]*(?:(\d+)\s*m(?:in(?:ute)?s?)?)?\b/i);
+  if (en && (en[1] || en[2])) return { hasta: ahora.getTime() + (Number(en[1] ?? 0) * 60 + Number(en[2] ?? 0)) * 60_000 };
+  // Fecha completa: «try again at Oct 12th, 2026 3:05 PM»
+  const fecha = texto.match(/again at\s+([A-Za-z]{3,9}\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4},?\s+\d{1,2}(?::\d{2})?\s*[AaPp]\.?[Mm]\.?)/);
+  if (fecha) {
+    const t = Date.parse(fecha[1].replace(/(\d)(st|nd|rd|th)/, '$1').replace(/,/g, '').replace(/\./g, ''));
+    if (Number.isFinite(t)) return { hasta: t };
+  }
+  // Día sin año: «resets Oct 13, 10am» (límite semanal)
+  const dia = texto.match(/resets\s+([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m/i);
+  if (dia) {
+    const t = Date.parse(`${dia[1]} ${dia[2]} ${ahora.getFullYear()} ${dia[3]}:${dia[4] ?? '00'} ${dia[5]}M`);
+    if (Number.isFinite(t)) return { hasta: t < ahora.getTime() - 86400_000 ? new Date(t).setFullYear(ahora.getFullYear() + 1) : t };
+  }
+  // Solo la hora: «resets 5pm», «resets 5:30pm (Europe/Madrid)», «try again at 3:05 PM»
+  const hora = texto.match(/(?:resets(?: at)?|again at)\s+(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m\.?)?/i);
+  if (hora) {
+    let h = Number(hora[1]);
+    const m = Number(hora[2] ?? 0);
+    const ampm = hora[3]?.toLowerCase().replace(/\./g, '');
+    if (ampm === 'pm' && h < 12) h += 12;
+    if (ampm === 'am' && h === 12) h = 0;
+    if (h < 24 && m < 60) {
+      const d = new Date(ahora);
+      d.setHours(h, m, 0, 0);
+      if (d.getTime() <= ahora.getTime()) d.setDate(d.getDate() + 1);
+      return { hasta: d.getTime() };
+    }
+  }
+  return {};
 }
 
 /** ¿Sigue vivo el proceso? */

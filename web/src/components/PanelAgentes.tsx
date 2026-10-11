@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Check, Crosshair, TextSelect, X, ChevronDown, CircleStop, Eraser, Globe, FileEdit, Landmark, Library, Loader2, PanelRightClose, PanelRightOpen, Search, Send, Sparkles, Wrench } from 'lucide-react';
+import { Bot, Check, Clock, Crosshair, RotateCcw, TextSelect, X, ChevronDown, CircleStop, Eraser, Globe, FileEdit, Landmark, Library, Loader2, PanelRightClose, PanelRightOpen, Search, Send, Sparkles, Wrench } from 'lucide-react';
 import type { HerramientasChat, Motor, Trabajo } from '../../../shared/tipos';
 import { api } from '../lib/api';
 import { useEstado } from '../lib/estado';
@@ -145,6 +145,8 @@ export function PanelAgentes() {
         </div>
       </div>
 
+      <AvisoLimite />
+
       {/* Petición */}
       <div className="border-b border-borde p-3">
         {nombreAmbito && (
@@ -286,13 +288,54 @@ export function PanelAgentes() {
   );
 }
 
+const NOMBRE_MOTOR: Record<Motor, string> = { claude: 'Claude', codex: 'Codex' };
+
+function horaCorta(ms: number) {
+  const d = new Date(ms);
+  const hoy = d.toDateString() === new Date().toDateString();
+  return d.toLocaleString('es', hoy ? { hour: '2-digit', minute: '2-digit' } : { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+/** Motores con el límite de uso de la suscripción agotado: sus agentes esperan y siguen solos. */
+function AvisoLimite() {
+  const { uso, trabajos, avisar } = useEstado();
+  const pausas = Object.entries(uso?.pausas ?? {}).filter(([, hasta]) => hasta && hasta > Date.now()) as [Motor, number][];
+  if (!pausas.length) return null;
+  return (
+    <div className="space-y-1.5 border-b border-borde bg-aviso/10 px-4 py-2.5 text-[12.5px]">
+      {pausas.map(([m, hasta]) => {
+        const esperando = Object.values(trabajos).filter((t) => t.motor === m && t.estado === 'en-cola').length;
+        return (
+          <div key={m} className="flex items-start gap-2">
+            <Clock className="mt-0.5 size-3.5 shrink-0 text-aviso" />
+            <div className="min-w-0 flex-1">
+              <b>Límite de uso de {NOMBRE_MOTOR[m]} agotado.</b>{' '}
+              {esperando ? `${esperando === 1 ? 'Un agente espera' : `${esperando} agentes esperan`} y seguirá${esperando === 1 ? '' : 'n'}` : 'Los agentes seguirán'} solos a las {horaCorta(hasta)}.
+            </div>
+          </div>
+        );
+      })}
+      <button
+        className="text-[12px] font-medium text-acento hover:underline cursor-pointer"
+        title="Por ejemplo, si has ampliado tu plan o comprado más uso"
+        onClick={() => api.reanudarCola().catch((e) => avisar((e as Error).message, 'error'))}
+      >
+        Seguir ya, sin esperar
+      </button>
+    </div>
+  );
+}
+
 function duracion(ms: number) {
   const s = Math.max(0, Math.round(ms / 1000));
   return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`;
 }
 
 function TarjetaTrabajo({ t }: { t: Trabajo }) {
+  const { uso, avisar } = useEstado();
   const activo = t.estado === 'ejecutando' || t.estado === 'en-cola';
+  const pausa = t.estado === 'en-cola' ? uso?.pausas?.[t.motor] : undefined;
+  const reintentar = () => api.reintentar(t.id).catch((e) => avisar((e as Error).message, 'error'));
   const [abierto, setAbierto] = useState(activo);
   useEffect(() => {
     if (activo) setAbierto(true);
@@ -337,7 +380,14 @@ function TarjetaTrabajo({ t }: { t: Trabajo }) {
               </>
             )}
           </div>
-          {activo && ultima && !abierto && <div className="mt-1 truncate text-[11.5px] text-acento">{ultima.texto}</div>}
+          {pausa && pausa > Date.now() ? (
+            <div className="mt-1 truncate text-[11.5px] text-aviso">Esperando a que se renueve el límite ({horaCorta(pausa)})</div>
+          ) : (
+            activo && ultima && !abierto && !t.inactivo && <div className="mt-1 truncate text-[11.5px] text-acento">{ultima.texto}</div>
+          )}
+          {t.inactivo && t.estado === 'ejecutando' && !abierto && (
+            <div className="mt-1 truncate text-[11.5px] text-aviso">Sin señales desde las {horaCorta(t.inactivo)}</div>
+          )}
         </div>
         <ChevronDown className={cx('mt-0.5 size-4 shrink-0 text-texto-3 transition-transform', abierto && 'rotate-180')} />
       </button>
@@ -370,6 +420,21 @@ function TarjetaTrabajo({ t }: { t: Trabajo }) {
           {t.resultado && (
             <div className="apunte mt-3 rounded-lg bg-panel-2 px-3 py-2 !text-[13px] !leading-relaxed" dangerouslySetInnerHTML={{ __html: renderizar(t.resultado) }} />
           )}
+          {t.inactivo && t.estado === 'ejecutando' && (
+            <div className="mt-2.5 rounded-lg bg-aviso/10 px-3 py-2 text-[12px]">
+              <p>
+                No da señales desde las {horaCorta(t.inactivo)}. Puede estar preparando una respuesta larga o haberse quedado bloqueado.
+              </p>
+              <div className="mt-1.5 flex gap-3">
+                <button className="font-medium text-acento hover:underline cursor-pointer" onClick={() => api.seguirEsperando(t.id)}>
+                  Seguir esperando
+                </button>
+                <button className="font-medium text-acento hover:underline cursor-pointer" onClick={reintentar}>
+                  Detener y empezar de nuevo
+                </button>
+              </div>
+            </div>
+          )}
           {!activo && t.sesion && <Responder id={t.id} />}
           {activo && (
             <button
@@ -378,6 +443,16 @@ function TarjetaTrabajo({ t }: { t: Trabajo }) {
             >
               <CircleStop className="size-3.5" />
               Detener
+            </button>
+          )}
+          {(t.estado === 'error' || t.estado === 'cancelado') && (
+            <button
+              onClick={reintentar}
+              title="Vuelve a lanzar la tarea desde el principio, como una nueva"
+              className="mt-2 flex items-center gap-1.5 text-[12px] text-texto-3 hover:text-acento cursor-pointer"
+            >
+              <RotateCcw className="size-3.5" />
+              Reintentar desde el principio
             </button>
           )}
         </div>
