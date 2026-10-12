@@ -1,7 +1,7 @@
 // Motor falso para las pruebas: imita la salida stream-json de `claude -p`. Lo que hace depende del
 // prompt (stdin):
 //   MODO:OK      → termina bien
-//   MODO:LIMITE  → la primera vez agota el límite de uso (se renueva en 1 s); al continuar, termina bien
+//   MODO:LIMITE  → first attempt reaches the limit; renewal leaves at least two seconds to observe it.
 //   MODO:FALLA   → la primera vez falla; la siguiente, termina bien
 //   MODO:CUELGA  → no da señales durante 60 s
 // FALSO_DIR: carpeta donde anota cuántas veces ha recibido cada prompt.
@@ -29,9 +29,9 @@ salida({ type: 'system', subtype: 'init', session_id: sesion, model: 'falso' });
 salida({ type: 'assistant', message: { content: [{ type: 'text', text: reanudar ? 'Continúo.' : 'Empiezo.' }] } });
 
 if (prompt.includes('MODO:LIMITE') && !reanudar) {
-  const renueva = Math.floor(Date.now() / 1000) + 1;
-  salida({ type: 'rate_limit_event', rate_limit_info: { status: 'rejected', resetsAt: renueva, unifiedWindows: { five_hour: { utilization: 1, resetsAt: renueva } } } });
-  fin(`Claude AI usage limit reached|${renueva}`, true);
+  const resetAt = Math.ceil(Date.now() / 1000) + 2;
+  salida({ type: 'rate_limit_event', rate_limit_info: { status: 'rejected', resetsAt: resetAt, unifiedWindows: { five_hour: { utilization: 1, resetsAt: resetAt } } } });
+  fin(`Claude AI usage limit reached|${resetAt}`, true);
 } else if (prompt.includes('MODO:FALLA') && veces === 1) {
   fin('Algo ha fallado', true);
 } else if (prompt.includes('MODO:CUELGA')) {
