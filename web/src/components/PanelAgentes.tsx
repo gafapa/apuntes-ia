@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Check, Clock, Crosshair, RotateCcw, TextSelect, X, ChevronDown, CircleStop, Eraser, Globe, FileEdit, Landmark, Library, Loader2, PanelRightClose, PanelRightOpen, Search, Send, Sparkles, Wrench } from 'lucide-react';
+import { Bot, Check, Clock, Crosshair, RotateCcw, TextSelect, X, ChevronDown, CircleStop, Eraser, Globe, FileEdit, Landmark, Library, Loader2, PanelRightClose, PanelRightOpen, Search, Send, Wrench } from 'lucide-react';
 import type { HerramientasChat, Motor, Trabajo } from '../../../shared/tipos';
 import { api } from '../lib/api';
 import { useEstado } from '../lib/estado';
 import { renderizar } from '../lib/markdown';
 import { usePermisos } from '../lib/permisos';
 import { PASOS, VISTAS_DOCUMENTO, useVistaDocumento } from './flujo/pasos';
-import { BotonIcono, Insignia, cx } from './ui';
+import { Boton, BotonIcono, Insignia, cx } from './ui';
+import { Estrella } from './Logo';
 import { ParTokens } from './ContadorTokens';
 
 /** Herramientas que se pueden activar para una petición desde el panel. */
@@ -38,6 +39,7 @@ export function PanelAgentes() {
   const [tarea, setTarea] = useState('');
   const [motor, setMotor] = useState<Motor>();
   const [enviando, setEnviando] = useState(false);
+  const [clearingFinished, setClearingFinished] = useState(false);
   const [soloEste, setSoloEste] = useState(true);
   const [herramientas, setHerramientas] = useState(leerHerramientas);
   // El agente solo actúa sobre la pestaña abierta en la zona central (y, en Apuntes, sobre la sección abierta)
@@ -84,6 +86,17 @@ export function PanelAgentes() {
     [trabajos, seleccion, soloEste],
   );
   const enCurso = Object.values(trabajos).filter((t) => t.estado === 'ejecutando' || t.estado === 'en-cola').length;
+  const clearFinished = async () => {
+    if (clearingFinished) return;
+    const candidates = new Set(Object.values(trabajos).filter(job => job.estado !== 'en-cola' && job.estado !== 'ejecutando').map(job => job.id));
+    setClearingFinished(true);
+    try {
+      const remaining = new Set((await api.limpiarTrabajos()).map(job => job.id));
+      useEstado.setState(state => ({ trabajos: Object.fromEntries(Object.entries(state.trabajos).filter(([id]) => !candidates.has(id) || remaining.has(id))) }));
+    } catch (error) {
+      avisar((error as Error).message, 'error');
+    } finally { setClearingFinished(false); }
+  };
 
   const alternar = () => {
     const v = !abierto;
@@ -132,12 +145,12 @@ export function PanelAgentes() {
   return (
     <aside className="flex w-[380px] shrink-0 flex-col border-l border-borde bg-panel">
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-borde px-4">
-        <Sparkles className="size-4 text-acento" />
-        <span className="font-semibold">Agentes</span>
+        <Estrella className="size-4 text-estrella" />
+        <h2 className="text-[17px] font-bold">Agentes</h2>
         {enCurso > 0 && <Insignia color="acento">{enCurso} en curso</Insignia>}
         <div className="ml-auto flex items-center">
-          <BotonIcono titulo="Quitar terminados" onClick={() => api.limpiarTrabajos()}>
-            <Eraser className="size-4" />
+          <BotonIcono titulo="Quitar terminados" onClick={clearFinished} disabled={clearingFinished}>
+            {clearingFinished ? <Loader2 className="size-4 animate-spin" /> : <Eraser className="size-4" />}
           </BotonIcono>
           <BotonIcono titulo="Ocultar panel" onClick={alternar}>
             <PanelRightClose className="size-4" />
@@ -151,15 +164,15 @@ export function PanelAgentes() {
       <div className="border-b border-borde p-3">
         {nombreAmbito && (
           <div className="mb-2 flex items-center gap-1.5 text-[12px] text-texto-3" title="El agente solo puede trabajar sobre lo que tienes abierto en la zona central">
-            <Crosshair className="size-3.5 shrink-0 text-acento" />
+            <Crosshair className="size-3.5 shrink-0 text-acento-texto" />
             Actúa sobre: <span className="truncate font-medium text-texto-2">{nombreAmbito}</span>
           </div>
         )}
         {seleccionTexto && (
           <div className="mb-2 flex items-start gap-2 rounded-lg border border-acento/30 bg-acento-suave px-2.5 py-1.5 text-[12px]">
-            <TextSelect className="mt-0.5 size-3.5 shrink-0 text-acento" />
+            <TextSelect className="mt-0.5 size-3.5 shrink-0 text-acento-texto" />
             <div className="min-w-0 flex-1">
-              <div className="font-medium text-acento">Solo sobre la selección</div>
+              <div className="font-medium text-acento-texto">Solo sobre la selección</div>
               <div className="line-clamp-2 text-texto-2" title={seleccionTexto.fragmento}>
                 {seleccionTexto.texto || seleccionTexto.fragmento}
               </div>
@@ -173,7 +186,7 @@ export function PanelAgentes() {
             </button>
           </div>
         )}
-        <div className="relative rounded-xl border border-borde bg-fondo focus-within:border-acento focus-within:ring-3 focus-within:ring-acento/15">
+        <div className="relative rounded-2xl border border-borde bg-fondo focus-within:border-acento focus-within:ring-3 focus-within:ring-acento/15">
           <textarea
             value={tarea}
             onChange={(e) => setTarea(e.target.value)}
@@ -221,7 +234,7 @@ export function PanelAgentes() {
               >
                 <Wrench className="size-3.5" />
                 {HERRAMIENTAS.filter((h) => activa(h.id)).map((h) => (
-                  <h.icono key={h.id} className="size-3.5 text-acento" aria-label={h.corto} />
+                  <h.icono key={h.id} className="size-3.5 text-acento-texto" aria-label={h.corto} />
                 ))}
               </button>
               {menuHerramientas && (
@@ -234,7 +247,7 @@ export function PanelAgentes() {
                       onClick={() => alternarHerramienta(h.id)}
                       className="flex w-full items-start gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-panel-2 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
                     >
-                      <h.icono className={cx('mt-0.5 size-4 shrink-0', activa(h.id) ? 'text-acento' : 'text-texto-3')} />
+                      <h.icono className={cx('mt-0.5 size-4 shrink-0', activa(h.id) ? 'text-acento-texto' : 'text-texto-3')} />
                       <span className="min-w-0 flex-1">
                         <span className="block text-[13px]">{h.nombre}</span>
                         <span className="block text-[11.5px] leading-snug text-texto-3">
@@ -259,7 +272,7 @@ export function PanelAgentes() {
               onClick={enviar}
               disabled={!tarea.trim() || enviando}
               title="Enviar (Ctrl+Enter)"
-              className="ml-auto flex size-8 items-center justify-center rounded-lg bg-acento text-white transition-colors hover:bg-acento-2 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+              className="ml-auto flex size-9 items-center justify-center rounded-xl bg-acento text-white transition-colors hover:bg-acento-2 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
             >
               {enviando ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
             </button>
@@ -268,8 +281,8 @@ export function PanelAgentes() {
       </div>
 
       <div className="flex items-center justify-between px-4 pt-3 pb-1">
-        <span className="text-[11px] font-semibold tracking-wider text-texto-3 uppercase">Actividad</span>
-        <button onClick={() => setSoloEste(!soloEste)} className="text-[11.5px] text-texto-3 hover:text-acento cursor-pointer">
+        <span className="text-[11.5px] font-bold tracking-wider text-texto-3 uppercase">Actividad</span>
+        <button onClick={() => setSoloEste(!soloEste)} className="text-[11.5px] text-texto-3 hover:text-acento-texto cursor-pointer">
           {soloEste ? 'Ver todo' : `Solo ${seleccion.documento ? 'este documento' : 'esta asignatura'}`}
         </button>
       </div>
@@ -302,12 +315,12 @@ function AvisoLimite() {
   const pausas = Object.entries(uso?.pausas ?? {}).filter(([, hasta]) => hasta && hasta > Date.now()) as [Motor, number][];
   if (!pausas.length) return null;
   return (
-    <div className="space-y-1.5 border-b border-borde bg-aviso/10 px-4 py-2.5 text-[12.5px]">
+    <div role="status" className="mx-3 mt-3 space-y-2.5 rounded-2xl bg-aviso/12 px-4 py-3 text-[13px]">
       {pausas.map(([m, hasta]) => {
         const esperando = Object.values(trabajos).filter((t) => t.motor === m && t.estado === 'en-cola').length;
         return (
           <div key={m} className="flex items-start gap-2">
-            <Clock className="mt-0.5 size-3.5 shrink-0 text-aviso" />
+            <Clock className="mt-0.5 size-4 shrink-0 text-aviso" />
             <div className="min-w-0 flex-1">
               <b>Límite de uso de {NOMBRE_MOTOR[m]} agotado.</b>{' '}
               {esperando ? `${esperando === 1 ? 'Un agente espera' : `${esperando} agentes esperan`} y seguirá${esperando === 1 ? '' : 'n'}` : 'Los agentes seguirán'} solos a las {horaCorta(hasta)}.
@@ -315,13 +328,13 @@ function AvisoLimite() {
           </div>
         );
       })}
-      <button
-        className="text-[12px] font-medium text-acento hover:underline cursor-pointer"
+      <Boton
+        tam="sm"
         title="Por ejemplo, si has ampliado tu plan o comprado más uso"
         onClick={() => api.reanudarCola().catch((e) => avisar((e as Error).message, 'error'))}
       >
         Seguir ya, sin esperar
-      </button>
+      </Boton>
     </div>
   );
 }
@@ -366,12 +379,12 @@ function TarjetaTrabajo({ t }: { t: Trabajo }) {
   const ultima = herramientas[herramientas.length - 1];
 
   return (
-    <div className={cx('aparecer rounded-xl border bg-panel transition-colors', activo ? 'border-acento/40' : 'border-borde')}>
-      <button onClick={() => setAbierto(!abierto)} className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left cursor-pointer">
+    <div className={cx('aparecer rounded-2xl border bg-panel transition-colors', activo ? 'border-acento/40' : 'border-borde')}>
+      <button onClick={() => setAbierto(!abierto)} className="flex w-full items-start gap-2.5 px-3.5 py-3 text-left cursor-pointer">
         <EstadoIcono estado={t.estado} />
         <div className="min-w-0 flex-1">
-          <div className="line-clamp-2 text-[13px] leading-snug font-medium">{t.titulo}</div>
-          <div className="mt-1 flex items-center gap-1.5 text-[11.5px] text-texto-3">
+          <div className="line-clamp-2 text-[13.5px] leading-snug font-semibold">{t.titulo}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-1.5 whitespace-nowrap text-[11.5px] text-texto-3">
             <span>{t.nombreAgente}</span>·<span>{t.motor === 'claude' ? 'Claude' : 'Codex'}</span>
             {tiempo && <>· <span className="tabular-nums">{tiempo}</span></>}
             {t.tokens && (
@@ -381,19 +394,25 @@ function TarjetaTrabajo({ t }: { t: Trabajo }) {
             )}
           </div>
           {pausa && pausa > Date.now() ? (
-            <div className="mt-1 truncate text-[11.5px] text-aviso">Esperando a que se renueve el límite ({horaCorta(pausa)})</div>
+            <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-aviso/12 px-2.5 py-0.5 text-[12px] font-semibold text-aviso">
+              <Clock className="size-3" />
+              En pausa hasta las {horaCorta(pausa)}
+            </span>
           ) : (
-            activo && ultima && !abierto && !t.inactivo && <div className="mt-1 truncate text-[11.5px] text-acento">{ultima.texto}</div>
+            activo && ultima && !abierto && !t.inactivo && <div className="mt-1 truncate text-[11.5px] text-acento-texto">{ultima.texto}</div>
           )}
           {t.inactivo && t.estado === 'ejecutando' && !abierto && (
-            <div className="mt-1 truncate text-[11.5px] text-aviso">Sin señales desde las {horaCorta(t.inactivo)}</div>
+            <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-aviso/12 px-2.5 py-0.5 text-[12px] font-semibold text-aviso">
+              Sin señales desde las {horaCorta(t.inactivo)}
+            </span>
           )}
         </div>
+        {t.estado === 'error' && !abierto && <Insignia color="error">Ha fallado</Insignia>}
         <ChevronDown className={cx('mt-0.5 size-4 shrink-0 text-texto-3 transition-transform', abierto && 'rotate-180')} />
       </button>
 
       {abierto && (
-        <div className="border-t border-borde px-3 py-2.5">
+        <div className="border-t border-borde px-3.5 py-3">
           <div className="max-h-72 space-y-1.5 overflow-y-auto">
             {t.eventos.map((e, i) =>
               e.tipo === 'usuario' ? (
@@ -421,17 +440,17 @@ function TarjetaTrabajo({ t }: { t: Trabajo }) {
             <div className="apunte mt-3 rounded-lg bg-panel-2 px-3 py-2 !text-[13px] !leading-relaxed" dangerouslySetInnerHTML={{ __html: renderizar(t.resultado) }} />
           )}
           {t.inactivo && t.estado === 'ejecutando' && (
-            <div className="mt-2.5 rounded-lg bg-aviso/10 px-3 py-2 text-[12px]">
+            <div className="mt-3 rounded-xl bg-aviso/12 px-3 py-2.5 text-[12.5px]">
               <p>
                 No da señales desde las {horaCorta(t.inactivo)}. Puede estar preparando una respuesta larga o haberse quedado bloqueado.
               </p>
-              <div className="mt-1.5 flex gap-3">
-                <button className="font-medium text-acento hover:underline cursor-pointer" onClick={() => api.seguirEsperando(t.id)}>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Boton tam="sm" variante="primario" onClick={() => api.seguirEsperando(t.id)}>
                   Seguir esperando
-                </button>
-                <button className="font-medium text-acento hover:underline cursor-pointer" onClick={reintentar}>
+                </Boton>
+                <Boton tam="sm" onClick={reintentar}>
                   Detener y empezar de nuevo
-                </button>
+                </Boton>
               </div>
             </div>
           )}
@@ -446,14 +465,16 @@ function TarjetaTrabajo({ t }: { t: Trabajo }) {
             </button>
           )}
           {(t.estado === 'error' || t.estado === 'cancelado') && (
-            <button
+            <Boton
+              tam="sm"
+              variante={t.estado === 'error' ? 'primario' : 'secundario'}
               onClick={reintentar}
               title="Vuelve a lanzar la tarea desde el principio, como una nueva"
-              className="mt-2 flex items-center gap-1.5 text-[12px] text-texto-3 hover:text-acento cursor-pointer"
+              icono={<RotateCcw className="size-3.5" />}
+              className="mt-3"
             >
-              <RotateCcw className="size-3.5" />
               Reintentar desde el principio
-            </button>
+            </Boton>
           )}
         </div>
       )}
@@ -478,7 +499,7 @@ function Responder({ id }: { id: string }) {
     }
   };
   return (
-    <div className="mt-2.5 flex items-end gap-1.5 rounded-lg border border-borde bg-fondo p-1.5 focus-within:border-acento">
+    <div className="mt-2.5 flex items-end gap-1.5 rounded-xl border border-borde bg-fondo p-1.5 focus-within:border-acento">
       <textarea
         value={texto}
         onChange={(e) => setTexto(e.target.value)}
@@ -506,7 +527,7 @@ function Responder({ id }: { id: string }) {
 
 function EstadoIcono({ estado }: { estado: Trabajo['estado'] }) {
   const base = 'mt-0.5 size-4 shrink-0';
-  if (estado === 'ejecutando') return <Loader2 className={cx(base, 'animate-spin text-acento')} />;
+  if (estado === 'ejecutando') return <Loader2 className={cx(base, 'animate-spin text-acento-texto')} />;
   if (estado === 'en-cola') return <span className={cx(base, 'rounded-full border-2 border-dashed border-texto-3')} title="En cola" />;
   const color = estado === 'ok' ? 'bg-ok' : estado === 'error' ? 'bg-error' : 'bg-texto-3';
   return (
@@ -521,6 +542,6 @@ function IconoEvento({ texto, tipo }: { texto: string; tipo: string }) {
   if (tipo === 'estado') return <span className={cx(c, 'flex items-center justify-center')}><span className="size-1.5 rounded-full bg-texto-3" /></span>;
   if (/^Buscando en la web|^Consultando/.test(texto)) return <Globe className={cx(c, 'text-sky-500')} />;
   if (/^Buscando en tus fuentes|^Repasando la lista de fuentes/.test(texto)) return <Search className={cx(c, 'text-ok')} />;
-  if (/^(Escribiendo|Editando|Modificando)/.test(texto)) return <FileEdit className={cx(c, 'text-acento')} />;
+  if (/^(Escribiendo|Editando|Modificando)/.test(texto)) return <FileEdit className={cx(c, 'text-acento-texto')} />;
   return <Wrench className={cx(c, 'text-texto-3')} />;
 }

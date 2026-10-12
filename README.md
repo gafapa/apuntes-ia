@@ -80,6 +80,7 @@ npm run dev          # servidor (:4317) + interfaz con recarga en caliente (http
 npm run typecheck
 npm test             # pruebas (tests/): cola de agentes con un motor falso, importar/exportar, gestión
 npm start            # compila y abre la app en Electron
+npm run iconos       # regenera los iconos (app, instalador, web) desde build/icono.svg
 ```
 
 Las pruebas de importar y exportar necesitan Pandoc en `resources-bin/` (`npm run fetch-bin`); sin él

@@ -73,7 +73,7 @@ export function PanelDiagnostico({ a, d, estado, trabajos, conImportacion }: { a
   if (!diag && !activos.length) {
     return (
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-borde bg-fondo/40 px-4 py-3">
-        <Stethoscope className="size-5 shrink-0 text-acento" />
+        <Stethoscope className="size-5 shrink-0 text-acento-texto" />
         <div className="min-w-60 flex-1">
           <div className="text-[13.5px] font-medium">Diagnóstico general</div>
           <div className="text-[12.5px] text-texto-2">
@@ -99,7 +99,7 @@ export function PanelDiagnostico({ a, d, estado, trabajos, conImportacion }: { a
     <div className="rounded-lg border border-borde bg-fondo/40">
       <div className="flex items-center gap-2 px-4 py-3">
         <button className="flex min-w-0 flex-1 items-center gap-2 text-left cursor-pointer" onClick={() => setAbierto(!abierto)}>
-          <Stethoscope className="size-4 shrink-0 text-acento" />
+          <Stethoscope className="size-4 shrink-0 text-acento-texto" />
           <span className="text-[13.5px] font-medium">Diagnóstico</span>
           {diag && (
             <span className="text-[12px] text-texto-3">
@@ -155,7 +155,7 @@ export function PanelDiagnostico({ a, d, estado, trabajos, conImportacion }: { a
                       {p.seccion && (
                         <button
                           onClick={() => useEstado.setState({ irASeccion: p.seccion })}
-                          className="mb-0.5 flex items-center gap-1 text-[11.5px] font-semibold tracking-wide text-texto-3 uppercase hover:text-acento cursor-pointer"
+                          className="mb-0.5 flex items-center gap-1 text-[11.5px] font-semibold tracking-wide text-texto-3 uppercase hover:text-acento-texto cursor-pointer"
                         >
                           {titulos.get(p.seccion) ?? p.seccion}
                           <ExternalLink className="size-3" />
@@ -178,7 +178,7 @@ export function PanelDiagnostico({ a, d, estado, trabajos, conImportacion }: { a
                 ))}
               </ul>
               {!verTodos && problemas.length > Math.max(6, problemas.filter((p) => p.gravedad === 'alta').length) && (
-                <button className="text-[12.5px] font-medium text-acento hover:underline cursor-pointer" onClick={() => setVerTodos(true)}>
+                <button className="text-[12.5px] font-medium text-acento-texto hover:underline cursor-pointer" onClick={() => setVerTodos(true)}>
                   Ver los {problemas.length - Math.max(6, problemas.filter((p) => p.gravedad === 'alta').length)} restantes
                 </button>
               )}

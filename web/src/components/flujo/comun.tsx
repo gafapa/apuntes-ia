@@ -69,17 +69,17 @@ export function Paso({
           {/* El título conserva un ancho mínimo; si las acciones no caben a su lado, pasan debajo */}
           <div className="min-w-72 flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-[12px] font-medium text-texto-3">Fase {numero}</span>
+              <span className="font-mono text-[12px] text-texto-3">Fase {numero}</span>
               {opcional && <Insignia>Opcional</Insignia>}
               {hecho && <Insignia color="ok">Hecha</Insignia>}
               {trabajando && <Insignia color="acento">En curso</Insignia>}
             </div>
-            <h2 className="mt-0.5 text-xl font-semibold tracking-tight">{titulo}</h2>
-            <p className="mt-1 text-sm text-texto-2">{descripcion}</p>
+            <h2 className="mt-1 text-[30px] leading-tight font-bold tracking-tight">{titulo}</h2>
+            <p className="mt-1.5 text-[14.5px] text-texto-2">{descripcion}</p>
           </div>
           {acciones && <div className="flex shrink-0 flex-wrap items-start justify-end gap-2">{acciones}</div>}
         </div>
-        {children && <div className={cx('rounded-xl border bg-panel p-5 shadow-suave', trabajando ? 'border-acento/40' : 'border-borde')}>{children}</div>}
+        {children && <div className={cx('rounded-2xl border bg-panel p-5 shadow-suave', trabajando ? 'border-acento/40' : 'border-borde')}>{children}</div>}
       </section>
     );
   }
@@ -88,12 +88,12 @@ export function Paso({
       <div
         className={cx(
           'absolute top-4 left-0 flex size-8 items-center justify-center rounded-full border-2 text-sm font-semibold',
-          hecho ? 'border-ok bg-ok text-white' : trabajando ? 'border-acento bg-acento-suave text-acento' : 'border-borde bg-panel text-texto-3',
+          hecho ? 'border-ok bg-ok text-white' : trabajando ? 'border-acento bg-acento-suave text-acento-texto' : 'border-borde bg-panel text-texto-3',
         )}
       >
         {trabajando ? <Loader2 className="size-4 animate-spin" /> : hecho ? <Check className="size-4" /> : numero}
       </div>
-      <div className={cx('rounded-xl border bg-panel shadow-suave', trabajando ? 'border-acento/40' : 'border-borde')}>
+      <div className={cx('rounded-2xl border bg-panel shadow-suave', trabajando ? 'border-acento/40' : 'border-borde')}>
         <div className="flex items-start gap-3 px-5 py-4">
           <button
             className={cx('min-w-0 flex-1 text-left', plegable && children && 'cursor-pointer')}
@@ -156,7 +156,7 @@ export function BotonAgente({
       <div className="flex items-center gap-1">
         {previstos > 0 && !disabled && (
           <span
-            className="mr-1 text-[12px] whitespace-nowrap text-texto-3 tabular-nums"
+            className="mr-1 font-mono text-[12px] whitespace-nowrap text-texto-3"
             title="Tokens (entrada + salida) que gastará aproximadamente, según lo que han gastado antes estos agentes. Depende de la extensión de los apuntes y de las fuentes."
           >
             ≈ {abreviar(previstos)} tokens
@@ -166,8 +166,8 @@ export function BotonAgente({
           title="Añadir indicaciones"
           onClick={() => setConIndicaciones(!conIndicaciones)}
           className={cx(
-            'flex size-9 items-center justify-center rounded-lg transition-colors cursor-pointer',
-            conIndicaciones ? 'bg-acento-suave text-acento' : 'text-texto-3 hover:bg-panel-2 hover:text-texto',
+            'flex size-10 items-center justify-center rounded-xl transition-colors cursor-pointer',
+            conIndicaciones ? 'bg-acento-suave text-acento-texto' : 'text-texto-3 hover:bg-panel-2 hover:text-texto',
           )}
         >
           <MessageSquarePlus className="size-4" />
@@ -197,9 +197,9 @@ export function BotonAgente({
 export function ActividadAgente({ t }: { t: Trabajo }) {
   const ultimo = [...t.eventos].reverse().find((e) => e.tipo === 'herramienta' || e.tipo === 'estado');
   return (
-    <div className="flex items-center gap-2 rounded-lg bg-acento-suave/60 px-3 py-2 text-[12.5px]">
-      <Loader2 className="size-3.5 shrink-0 animate-spin text-acento" />
-      <span className="font-medium text-acento">{t.nombreAgente}</span>
+    <div className="flex items-center gap-2 rounded-xl bg-acento-suave/70 px-3 py-2 text-[12.5px]">
+      <Loader2 className="size-3.5 shrink-0 animate-spin text-acento-texto" />
+      <span className="font-medium text-acento-texto">{t.nombreAgente}</span>
       <span className="min-w-0 truncate text-texto-2">{t.estado === 'en-cola' ? 'En cola…' : ultimo?.texto ?? 'Trabajando…'}</span>
     </div>
   );

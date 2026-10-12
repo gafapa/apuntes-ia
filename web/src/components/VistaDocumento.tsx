@@ -34,6 +34,7 @@ import { GaleriaRecursos } from './GaleriaRecursos';
 import { HistorialSeccion } from './HistorialSeccion';
 import { VistaPaso } from './flujo/VistaFlujo';
 import { PASOS, useFlujoActual, useVistaDocumento } from './flujo/pasos';
+import { ImportReviewModal } from './ImportNotes';
 
 type Modo = 'editar' | 'dividido' | 'vista';
 const TODO = '__todo__';
@@ -42,6 +43,7 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
   const { asignaturas, seleccionar, avisar, cargarAsignaturas } = useEstado();
   const asig = asignaturas.find((a) => a.id === asignatura);
   const [doc, setDoc] = useState<Documento>();
+  const [importOpen, setImportOpen] = useState(false);
   const flujo = useFlujoActual();
   const [vista, elegir] = useVistaDocumento();
   const irASeccion = useEstado((s) => s.irASeccion);
@@ -93,6 +95,7 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
           )}
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-4">
+          {doc.importado && <Boton tam="sm" onClick={() => setImportOpen(true)}>Importación</Boton>}
           <GastoTokens asignatura={asignatura} documento={documento} etiqueta="Tokens" className="text-[12px]" />
           {vista !== 'exportar' && (
             <Boton tam="sm" icono={<Download className="size-3.5" />} onClick={() => elegir('exportar')}>
@@ -101,6 +104,7 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
           )}
         </div>
       </header>
+      <ImportReviewModal assignment={asignatura} document={importOpen ? { id: documento, title: doc.titulo } : undefined} onClose={() => setImportOpen(false)} />
 
       {paso && <VistaPaso id={paso.id} a={asignatura} d={documento} estado={flujo.estado} trabajos={flujo.trabajos} recargar={flujo.recargar} onIr={elegir} />}
       {vista === 'apuntes' && <Apuntes asignatura={asignatura} documento={documento} />}
@@ -325,7 +329,7 @@ function Apuntes({ asignatura, documento }: { asignatura: string; documento: str
             onClick={() => abrir(TODO)}
             className={cx(
               'mb-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] cursor-pointer',
-              activa === TODO ? 'bg-acento-suave text-acento font-medium' : 'text-texto-2 hover:bg-panel-2',
+              activa === TODO ? 'bg-acento-suave text-acento-texto font-medium' : 'text-texto-2 hover:bg-panel-2',
             )}
           >
             <BookOpenText className="size-4" />
@@ -342,7 +346,7 @@ function Apuntes({ asignatura, documento }: { asignatura: string; documento: str
               <button onClick={() => abrir(s.archivo)} className="flex min-w-0 flex-1 items-baseline gap-2 px-2.5 py-2 text-left cursor-pointer">
                 <span className="w-4 shrink-0 text-right text-[11px] tabular-nums text-texto-3">{i + 1}</span>
                 <span className="min-w-0">
-                  <span className={cx('block truncate text-[13px]', activa === s.archivo ? 'text-acento font-medium' : 'text-texto')}>{s.titulo}</span>
+                  <span className={cx('block truncate text-[13px]', activa === s.archivo ? 'text-acento-texto font-medium' : 'text-texto')}>{s.titulo}</span>
                   <span className="text-[11px] text-texto-3">{s.palabras} palabras</span>
                 </span>
               </button>
@@ -575,7 +579,7 @@ function FichaDocumento({
               onClick={() => setF({ ...f, presupuesto: n })}
               className={cx(
                 'rounded-lg border px-2.5 py-1 text-[13px] transition-colors cursor-pointer',
-                f.presupuesto === n ? 'border-acento bg-acento-suave text-acento' : 'border-borde hover:bg-panel-2',
+                f.presupuesto === n ? 'border-acento bg-acento-suave text-acento-texto' : 'border-borde hover:bg-panel-2',
                 n > 0 && n <= gastado && 'text-texto-3 line-through',
               )}
             >

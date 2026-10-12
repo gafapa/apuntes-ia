@@ -28,15 +28,15 @@ export function TarjetaMotor({ estado }: { estado?: EstadoMotor & { motor: Motor
   };
 
   return (
-    <div className="rounded-xl border border-borde bg-panel p-4">
+    <div className="rounded-2xl border border-borde bg-panel p-5">
       <div className="flex items-start gap-3">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-panel-2 text-sm font-bold">{motor === 'claude' ? 'C' : 'Cx'}</div>
+        <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-panel-2 font-titulo text-[18px] font-extrabold">{motor === 'claude' ? 'C' : 'Cx'}</div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="font-semibold">{info.nombre}</span>
+            <span className="text-[16px] font-semibold">{info.nombre}</span>
             <span className="text-xs text-texto-3">de {info.empresa}</span>
           </div>
-          <div className="text-[12.5px] text-texto-2">{info.uso}</div>
+          <div className="text-[13.5px] text-texto-2">{info.uso}</div>
           {estado?.version && <div className="mt-0.5 text-[11.5px] text-texto-3">{estado.version}</div>}
         </div>
         {listo ? (
@@ -51,7 +51,7 @@ export function TarjetaMotor({ estado }: { estado?: EstadoMotor & { motor: Motor
       </div>
 
       {!listo && comandos && (
-        <div className="mt-3 space-y-2">
+        <div className="mt-4 space-y-2.5 border-t border-borde pt-4">
           {!estado?.instalado ? (
             <>
               <p className="text-[12.5px] text-texto-2">
@@ -59,7 +59,7 @@ export function TarjetaMotor({ estado }: { estado?: EstadoMotor & { motor: Motor
                   ? 'Se instala con npm (necesita Node.js). Pulsa «Instalar» para abrir una terminal que lo hace por ti.'
                   : 'Pulsa «Instalar» para abrir una terminal con el instalador oficial.'}
               </p>
-              <div className="flex items-center gap-2 rounded-lg bg-panel-2 px-3 py-2 font-mono text-[12px]">
+              <div className="flex items-center gap-2 rounded-xl bg-panel-2 px-3 py-2 font-mono text-[12px]">
                 <span className="min-w-0 flex-1 truncate">{comandos.instalar}</span>
                 <button onClick={() => copiar(comandos.instalar)} title="Copiar" className="text-texto-3 hover:text-texto cursor-pointer">
                   {copiado ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}

@@ -47,6 +47,8 @@ export interface OpcionesActividad {
 }
 
 export interface BloqueActividad {
+  /** Original imported Markdown, preserved independently of generated question formatting. */
+  importedContent?: { markdown: string; solutionsMarkdown?: string };
   id: string;
   titulo: string;
   opciones: OpcionesActividad;
@@ -86,6 +88,10 @@ export function resumenTipos(op: OpcionesActividad): string {
 
 /** Markdown de un bloque: preguntas y, si se piden, sus soluciones en un bloque «::: solucion». */
 export function bloqueAMarkdown(b: BloqueActividad, nivel = 2): string {
+  if (b.importedContent) {
+    const solutions = b.opciones.soluciones && b.importedContent.solutionsMarkdown;
+    return `${'#'.repeat(nivel)} ${b.titulo}\n\n${b.importedContent.markdown}${solutions ? `\n\n::: solucion\n${b.importedContent.solutionsMarkdown}\n:::` : ''}`;
+  }
   const partes: string[] = [`${'#'.repeat(nivel)} ${b.titulo}`];
   const soluciones: string[] = [];
   // Con varios tipos, cada grupo lleva su rótulo (las preguntas se numeran seguidas en todo el bloque)

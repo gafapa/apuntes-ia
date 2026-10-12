@@ -92,7 +92,7 @@ export function PasoActividades({ a, d, estado, trabajos }: { a: string; d: stri
                     </span>
                   </button>
                   {b.estado === 'generando' && (
-                    <span className="flex shrink-0 items-center gap-1.5 text-[12px] text-acento">
+                    <span className="flex shrink-0 items-center gap-1.5 text-[12px] text-acento-texto">
                       <Loader2 className="size-3.5 animate-spin" /> {t?.estado === 'en-cola' ? 'En cola…' : 'Generando…'}
                     </span>
                   )}
@@ -259,7 +259,7 @@ function ModalBloque({
         <div>
           <div className="mb-1 flex items-center gap-2 text-[12.5px] font-medium text-texto-2">
             Sobre qué secciones
-            <button className={cx('rounded px-1.5 text-[11.5px] font-normal cursor-pointer', todas ? 'bg-acento-suave text-acento' : 'text-texto-3 hover:text-texto')} onClick={() => setElegidas(new Set())}>
+            <button className={cx('rounded px-1.5 text-[11.5px] font-normal cursor-pointer', todas ? 'bg-acento-suave text-acento-texto' : 'text-texto-3 hover:text-texto')} onClick={() => setElegidas(new Set())}>
               Todo el documento
             </button>
           </div>

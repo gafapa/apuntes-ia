@@ -64,7 +64,7 @@ export function BuscadorImagenes({ a, d, onGuardada }: { a: string; d: string; o
   return (
     <div className="mb-6 rounded-xl border border-borde bg-panel p-4">
       <div className="mb-3 flex items-center gap-2">
-        <Landmark className="size-4 text-acento" />
+        <Landmark className="size-4 text-acento-texto" />
         <h3 className="text-sm font-semibold">Buscar en museos, bibliotecas y archivos</h3>
       </div>
       <form

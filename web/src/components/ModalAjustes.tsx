@@ -64,7 +64,7 @@ export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar
               onClick={() => setPestana(id)}
               className={cx(
                 '-mb-px border-b-2 px-3 py-2 text-sm font-medium cursor-pointer',
-                pestana === id ? 'border-acento text-acento' : 'border-transparent text-texto-2 hover:text-texto',
+                pestana === id ? 'border-acento text-acento-texto' : 'border-transparent text-texto-2 hover:text-texto',
               )}
             >
               {txt}
@@ -123,14 +123,14 @@ export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="text-[12.5px] text-texto-2">
               Europeana (incluye Hispana y fondos españoles) ·{' '}
-              <a className="text-acento hover:underline" href="https://pro.europeana.eu/page/get-api" target="_blank" rel="noreferrer">
+              <a className="text-acento-texto hover:underline" href="https://pro.europeana.eu/page/get-api" target="_blank" rel="noreferrer">
                 pedir clave
               </a>
               <Entrada className="mt-1 font-mono text-[12.5px]" value={claves.europeana ?? ''} placeholder="Clave de Europeana" onChange={(e) => setClaves({ ...claves, europeana: e.target.value.trim() })} />
             </label>
             <label className="text-[12.5px] text-texto-2">
               Smithsonian ·{' '}
-              <a className="text-acento hover:underline" href="https://api.data.gov/signup/" target="_blank" rel="noreferrer">
+              <a className="text-acento-texto hover:underline" href="https://api.data.gov/signup/" target="_blank" rel="noreferrer">
                 pedir clave
               </a>
               <Entrada className="mt-1 font-mono text-[12.5px]" value={claves.smithsonian ?? ''} placeholder="Clave de api.data.gov" onChange={(e) => setClaves({ ...claves, smithsonian: e.target.value.trim() })} />

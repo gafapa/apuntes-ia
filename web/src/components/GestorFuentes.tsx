@@ -15,7 +15,7 @@ function tamano(b: number) {
 
 function IconoArchivo({ nombre }: { nombre: string }) {
   if (/\.(png|jpe?g|gif|webp|svg)$/i.test(nombre)) return <FileImage className="size-4 text-sky-500" />;
-  if (/\.(pdf|docx?|odt|pptx?|md|txt)$/i.test(nombre)) return <FileText className="size-4 text-acento" />;
+  if (/\.(pdf|docx?|odt|pptx?|md|txt)$/i.test(nombre)) return <FileText className="size-4 text-acento-texto" />;
   return <File className="size-4 text-texto-3" />;
 }
 
@@ -82,7 +82,7 @@ export function GestorFuentes({ asignatura, documento, descripcion }: { asignatu
           arrastrando ? 'border-acento bg-acento-suave' : 'border-borde hover:border-acento/60',
         )}
       >
-        <Upload className={cx('size-6', arrastrando ? 'text-acento' : 'text-texto-3')} />
+        <Upload className={cx('size-6', arrastrando ? 'text-acento-texto' : 'text-texto-3')} />
         <div className="text-sm font-medium">{subiendo ? 'Subiendo…' : 'Arrastra aquí apuntes, PDF, diapositivas o imágenes'}</div>
         <div className="text-xs text-texto-3">o haz clic para elegir archivos</div>
         <input
@@ -109,7 +109,7 @@ export function GestorFuentes({ asignatura, documento, descripcion }: { asignatu
           {fuentes.filter((f) => f.nombre.toLowerCase().includes(filtro.trim().toLowerCase())).map((f) => (
             <div key={f.nombre} className="group flex items-center gap-3 px-4 py-2.5">
               <IconoArchivo nombre={f.nombre} />
-              <a href={urlDatos(...base, f.nombre)} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-sm hover:text-acento">
+              <a href={urlDatos(...base, f.nombre)} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate text-sm hover:text-acento-texto">
                 {f.nombre}
               </a>
               {indice[f.nombre] && (

@@ -9,7 +9,7 @@ import JSZip from 'jszip';
 import type { Apartado, FormatoImportado } from '../shared/tipos';
 import { ejecutarBinario, rutaPandoc } from './conversion';
 import { ErrorUsuario, slug } from './store';
-import { textoPdf } from './rag';
+import { extractPdfImages, type ImportedPdfImage } from './pdfImages';
 import { ajustarAst } from './formatoImportado';
 
 export const EXTENSIONES_IMPORTABLES = ['.docx', '.odt', '.md', '.markdown', '.txt', '.zip', '.pdf'];
@@ -258,7 +258,7 @@ function partirPorEncabezados(md: string, tituloPorDefecto: string): { titulo?: 
     .join('\n')
     .trim();
   const palabrasPrevio = previo.replace(/^#.*$/gm, '').split(/\s+/).filter(Boolean).length;
-  if (palabrasPrevio >= 40) {
+  if (palabrasPrevio >= 40 || /!\[[^\]]*\]\(/.test(previo)) {
     secciones.push(crearSeccion('Introducción', previo, desplazar, corte));
   } else if (palabrasPrevio && !titulo) {
     // Portada (título, asignatura, fecha…): no es una sección, pero da el título del documento
@@ -304,18 +304,36 @@ function crearSeccion(titulo: string, cuerpo: string, desplazar: number, corte: 
 const idCorto = () => Math.random().toString(36).slice(2, 10);
 
 /** Comprueba que un PDF tiene texto (y no es un escaneo) y lo devuelve por páginas. */
-export async function leerPdf(ruta: string): Promise<{ paginas: number; texto: string }> {
-  let paginas: { pagina: number; texto: string }[];
+export interface ImportedPdf {
+  paginas: number;
+  texto: string;
+  images: ImportedPdfImage[];
+  warnings: string[];
+}
+
+export async function leerPdf(ruta: string, imageDirectory?: string): Promise<ImportedPdf> {
+  const loadModule = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<any>;
+  let task: any;
   try {
-    paginas = await textoPdf(ruta);
+    const pdfjs = await loadModule('pdfjs-dist/legacy/build/pdf.mjs');
+    task = pdfjs.getDocument({ data: new Uint8Array(await fs.readFile(ruta)), useSystemFonts: true, disableFontFace: true, isOffscreenCanvasSupported: false, isImageDecoderSupported: false, verbosity: 0 });
+    const document = await task.promise;
+    const pages: string[] = [];
+    let characters = 0;
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber++) {
+      const page = await document.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const text = content.items.map((item: { str?: string; hasEOL?: boolean }) => (item.str ?? '') + (item.hasEOL ? '\n' : ' ')).join('').trim();
+      characters += text.replace(/\s/g, '').length;
+      pages.push(`<!-- página ${pageNumber} -->\n${text}`);
+    }
+    if (!document.numPages || characters / document.numPages < 120) throw new ErrorUsuario('El PDF parece escaneado (son imágenes de páginas, sin texto). Pásalo antes por un programa de reconocimiento de texto (OCR) o importa el Word original.');
+    const extracted = imageDirectory ? await extractPdfImages(document, pdfjs, imageDirectory) : { images: [], warnings: [] };
+    return { paginas: document.numPages, texto: pages.join('\n\n'), ...extracted };
   } catch (e) {
+    if (e instanceof ErrorUsuario) throw e;
     throw new ErrorUsuario(`No se ha podido leer el PDF: ${(e as Error).message}`);
+  } finally {
+    await task?.destroy();
   }
-  const caracteres = paginas.reduce((n, p) => n + p.texto.replace(/\s/g, '').length, 0);
-  if (!paginas.length || caracteres / paginas.length < 120) {
-    throw new ErrorUsuario(
-      'El PDF parece escaneado (son imágenes de páginas, sin texto). Pásalo antes por un programa de reconocimiento de texto (OCR) o importa el Word original.',
-    );
-  }
-  return { paginas: paginas.length, texto: paginas.map((p) => `<!-- página ${p.pagina} -->\n${p.texto}`).join('\n\n') };
 }

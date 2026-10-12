@@ -208,7 +208,14 @@ export interface EstadoMotor {
   detalle?: string;
 }
 
+export interface CodexUsage {
+  windows: { usedPercent: number; durationMinutes?: number; resetsAt?: number }[];
+  updatedAt: number;
+  unavailable?: boolean;
+}
+
 export interface UsoSuscripcion {
+  codex?: CodexUsage;
   // Fracción de uso (0-1) de las ventanas de límite de Claude, si se conocen
   cincoHoras?: number;
   semanal?: number;
@@ -422,6 +429,7 @@ export interface PreguntaInvestigacion {
 }
 
 export interface EstadoFlujo {
+  imported?: boolean;
   investigacion?: { palabras: number; actualizado: string };
   preguntas: PreguntaInvestigacion[];
   indice?: Indice;
@@ -446,6 +454,7 @@ export interface OpcionesExportacion {
 }
 
 export type MensajeWS =
+  | { tipo: 'trabajos-eliminados'; ids: string[] }
   | { tipo: 'trabajo'; trabajo: Trabajo }
   | { tipo: 'evento'; id: string; evento: EventoTrabajo }
   | { tipo: 'uso'; uso: UsoSuscripcion }

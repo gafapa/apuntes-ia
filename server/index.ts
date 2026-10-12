@@ -12,6 +12,7 @@ import type { WebSocket } from 'ws';
 import type { Ajustes, EstadoMotor, HerramientasChat, PerfilGasto, SeleccionTexto, Trabajo, Indice, MensajeWS, MezclaVisuales, ModoMejora, Motor, OpcionesExportacion, PropuestaVisual, TipoBusqueda, TipoRevision } from '../shared/tipos';
 import { Almacen, ErrorUsuario } from './store';
 import { Cola } from './agents/cola';
+import { readCodexUsage } from './agents/codexUsage';
 import { AGENTES } from './agents/agentes';
 import { abrirArchivo, abrirCarpeta, abrirTerminal, comandoInstalacion, comandoSesion, comprobarMotor } from './agents/motores';
 import { cargarAjustes, guardarAjustes } from './ajustes';
@@ -439,7 +440,8 @@ export async function crearServidor(op: OpcionesServidor) {
     return cola.uso;
   });
   app.post('/api/trabajos/limpiar', async () => {
-    cola.limpiar();
+    const removedIds = cola.limpiar();
+    difundir({ tipo: 'trabajos-eliminados', ids: removedIds });
     return cola.listar();
   });
 
@@ -586,6 +588,7 @@ export async function crearServidor(op: OpcionesServidor) {
         modo: campos.modo as ModoMejora,
         estiloOriginal: campos.estiloOriginal === 'true',
         diagnosticar: campos.diagnosticar !== 'false',
+        importOnly: campos.importOnly === 'true',
       });
     } finally {
       await fsp.rm(tmp, { recursive: true, force: true }).catch(() => {});
@@ -760,7 +763,30 @@ export async function crearServidor(op: OpcionesServidor) {
     });
   }
 
+  const usageController = new AbortController();
+  let usagePending = false;
+  const refreshCodexUsage = async () => {
+    if (usagePending || usageController.signal.aborted) return;
+    usagePending = true;
+    try {
+      const codex = await readCodexUsage({ signal: usageController.signal });
+      cola.uso = { ...cola.uso, codex, actualizado: Date.now() };
+    } catch {
+      cola.uso = { ...cola.uso, codex: { windows: [], updatedAt: Date.now(), unavailable: true }, actualizado: Date.now() };
+    } finally {
+      usagePending = false;
+    }
+    if (!usageController.signal.aborted) difundir({ tipo: 'uso', uso: cola.uso });
+  };
+  let usageTimer: NodeJS.Timeout | undefined;
+  app.addHook('onClose', async () => {
+    clearInterval(usageTimer);
+    usageController.abort();
+  });
   const direccion = await app.listen({ port: op.puerto ?? 0, host: op.host ?? '127.0.0.1' });
+  usageTimer = setInterval(() => { void refreshCodexUsage(); }, 60000);
+  usageTimer.unref();
+  void refreshCodexUsage();
   return {
     url: direccion.replace('[::1]', 'localhost'),
     avisarActualizacion(estado: 'disponible' | 'descargada', version: string) {

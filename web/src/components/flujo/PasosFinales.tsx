@@ -148,14 +148,14 @@ export function PasoVisuales({ a, d, estado, trabajos, recargar }: Props) {
               <button
                 key={p.id}
                 onClick={() => irASeccion(p.seccion)}
-                className="flex w-full items-center gap-2 py-0.5 text-left hover:text-acento cursor-pointer"
+                className="flex w-full items-center gap-2 py-0.5 text-left hover:text-acento-texto cursor-pointer"
               >
                 <Check className="size-3.5 text-ok" />
                 <span className="truncate">{p.titulo}</span>
                 <span className="shrink-0">· {titulos.get(p.seccion)}</span>
               </button>
             ))}
-            <button className="mt-1 hover:text-acento cursor-pointer" onClick={() => api.limpiarVisuales(a, d).then(recargar)}>
+            <button className="mt-1 hover:text-acento-texto cursor-pointer" onClick={() => api.limpiarVisuales(a, d).then(recargar)}>
               Limpiar historial
             </button>
           </div>
@@ -219,7 +219,7 @@ function TarjetaPropuesta({
   return (
     <div className={cx('aparecer rounded-lg border bg-fondo/40 p-3', generando ? 'border-acento/40' : 'border-borde')}>
       <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
-        <button onClick={() => irASeccion(p.seccion)} className="min-w-0 flex-1 basis-40 truncate text-left text-[12px] text-texto-3 hover:text-acento cursor-pointer">
+        <button onClick={() => irASeccion(p.seccion)} className="min-w-0 flex-1 basis-40 truncate text-left text-[12px] text-texto-3 hover:text-acento-texto cursor-pointer">
           {seccion}
         </button>
         <div className="ml-auto flex shrink-0 gap-0.5 rounded-lg bg-panel-2 p-0.5">
@@ -276,7 +276,7 @@ function TarjetaPropuesta({
       )}
       <div className="mt-2 flex items-center justify-end gap-1.5">
         {trabajo && (
-          <span className="mr-auto flex items-center gap-1.5 text-[12px] text-acento">
+          <span className="mr-auto flex items-center gap-1.5 text-[12px] text-acento-texto">
             <Loader2 className="size-3.5 animate-spin" />
             {trabajo.estado === 'en-cola' ? 'En cola…' : `${trabajo.nombreAgente} trabajando…`}
           </span>
@@ -420,7 +420,7 @@ export function PanelExportar({ a, d, estado, recargar }: { a: string; d: string
               op.formato === f.id ? 'border-acento bg-acento-suave' : 'border-borde hover:bg-panel-2',
             )}
           >
-            <FileText className={cx('mb-1.5 size-5', op.formato === f.id ? 'text-acento' : 'text-texto-3')} />
+            <FileText className={cx('mb-1.5 size-5', op.formato === f.id ? 'text-acento-texto' : 'text-texto-3')} />
             <div className="text-sm font-semibold">{f.nombre}</div>
             <div className="text-[12px] text-texto-3">{f.detalle}</div>
           </button>

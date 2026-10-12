@@ -131,12 +131,12 @@ export function EditorAgentes() {
                 elegido ? 'border-acento bg-acento-suave' : 'border-borde hover:border-acento/50',
               )}
             >
-              <span className="text-lg text-acento">{simbolo}</span>
+              <span className="text-lg text-acento-texto">{simbolo}</span>
               <span className="text-sm font-semibold">{nombre}</span>
               <span className="text-[12px] text-texto-3">
                 {ok ? (k === 'ambos' ? 'Cada agente con el motor que elijas' : 'Sesión disponible') : k === 'ambos' ? 'Necesita sesión en los dos' : 'Sin sesión iniciada'}
               </span>
-              {elegido && <CheckCircle2 className="absolute top-3 right-3 size-4 text-acento" />}
+              {elegido && <CheckCircle2 className="absolute top-3 right-3 size-4 text-acento-texto" />}
             </button>
           );
         })}
@@ -199,7 +199,7 @@ export function EditorAgentes() {
                     <ChevronDown className={cx('mt-0.5 size-3.5 shrink-0 text-texto-3 transition-transform', esteAbierto && 'rotate-180')} />
                     <span>
                       <span className="font-medium">{ag.nombre}</span>
-                      {instrucciones?.trim() && <span className="ml-1.5 text-[11px] text-acento">instrucciones propias</span>}
+                      {instrucciones?.trim() && <span className="ml-1.5 text-[11px] text-acento-texto">instrucciones propias</span>}
                       <span className="block text-[11.5px] text-texto-3">{ag.descripcion}</span>
                     </span>
                   </button>
@@ -280,7 +280,7 @@ export function EditorAgentes() {
                     {instrucciones?.trim() && (
                       <button
                         onClick={() => fijarAgente(ag.id, { instrucciones: undefined })}
-                        className="mt-2 flex items-center gap-1.5 text-[12px] text-texto-3 hover:text-acento cursor-pointer"
+                        className="mt-2 flex items-center gap-1.5 text-[12px] text-texto-3 hover:text-acento-texto cursor-pointer"
                       >
                         <RotateCcw className="size-3" /> Restaurar las instrucciones originales
                       </button>

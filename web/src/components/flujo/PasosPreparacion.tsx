@@ -112,7 +112,7 @@ function Preguntas({ a, d, estado, recargar, hayDossier }: { a: string; d: strin
                 <div className="flex items-start gap-2.5 px-3 py-2">
                   <span className="mt-1">
                     {p.estado === 'investigando' ? (
-                      <Loader2 className="size-3.5 animate-spin text-acento" />
+                      <Loader2 className="size-3.5 animate-spin text-acento-texto" />
                     ) : p.estado === 'respondida' ? (
                       <CheckCircle2 className="size-3.5 text-ok" />
                     ) : (
@@ -122,7 +122,7 @@ function Preguntas({ a, d, estado, recargar, hayDossier }: { a: string; d: strin
                   <button
                     disabled={!p.respuesta}
                     onClick={() => setAbierta(desplegada ? undefined : p.id)}
-                    className="min-w-0 flex-1 text-left text-[13.5px] enabled:cursor-pointer enabled:hover:text-acento"
+                    className="min-w-0 flex-1 text-left text-[13.5px] enabled:cursor-pointer enabled:hover:text-acento-texto"
                   >
                     {p.texto}
                     <span className="block text-[11.5px] text-texto-3">
@@ -566,7 +566,7 @@ function ArbolApartados({
       ))}
       <button
         onClick={() => onCambio([...lista, { id: nuevoId(), titulo: '', apartados: [] }])}
-        className={cx('flex items-center gap-1 py-0.5 text-[12px] text-texto-3 hover:text-acento cursor-pointer', esSub ? 'ml-11' : 'ml-11')}
+        className={cx('flex items-center gap-1 py-0.5 text-[12px] text-texto-3 hover:text-acento-texto cursor-pointer', esSub ? 'ml-11' : 'ml-11')}
       >
         <Plus className="size-3" /> {esSub ? 'Subapartado' : 'Apartado'}
       </button>

@@ -102,7 +102,7 @@ export function HistorialSeccion({
                   onClick={() => setElegida(v.id)}
                   className={cx(
                     'w-full rounded-lg px-3 py-2 text-left text-[13px] transition-colors cursor-pointer',
-                    elegida === v.id ? 'bg-acento-suave text-acento' : 'hover:bg-panel-2',
+                    elegida === v.id ? 'bg-acento-suave text-acento-texto' : 'hover:bg-panel-2',
                   )}
                 >
                   <div className="font-medium">{v.id === 'original' ? 'Original importado' : fecha(v.fecha)}</div>

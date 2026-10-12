@@ -15,8 +15,8 @@ const reanudar = args.includes('--resume');
 const sesion = reanudar ? args[args.indexOf('--resume') + 1] : randomUUID();
 const salida = (o) => process.stdout.write(JSON.stringify(o) + '\n');
 const fin = (texto, error = false) => {
-  salida({ type: 'result', is_error: error, result: texto, usage: { input_tokens: 10, output_tokens: 5 } });
-  process.exit(error ? 1 : 0);
+  // Flush the complete stream before exiting, including preceding rate-limit events.
+  process.stdout.write(JSON.stringify({ type: 'result', is_error: error, result: texto, usage: { input_tokens: 10, output_tokens: 5 } }) + '\n', () => process.exit(error ? 1 : 0));
 };
 
 const dir = process.env.FALSO_DIR ?? '.';

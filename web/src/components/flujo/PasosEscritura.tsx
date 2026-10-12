@@ -83,40 +83,49 @@ export function PasoRedaccion({ a, d, estado, trabajos }: Props) {
       ) : (
         <div className="space-y-1">
           <div className="mb-2 flex gap-3 text-[12px] text-texto-3">
-            <button className="hover:text-acento cursor-pointer" onClick={() => setElegidas(new Set(secciones.map((s) => s.archivo)))}>
+            <button className="hover:text-acento-texto cursor-pointer" onClick={() => setElegidas(new Set(secciones.map((s) => s.archivo)))}>
               Todas
             </button>
-            <button className="hover:text-acento cursor-pointer" onClick={() => setElegidas(new Set(vacias))}>
+            <button className="hover:text-acento-texto cursor-pointer" onClick={() => setElegidas(new Set(vacias))}>
               Solo vacías
             </button>
-            <button className="hover:text-acento cursor-pointer" onClick={() => setElegidas(new Set())}>
+            <button className="hover:text-acento-texto cursor-pointer" onClick={() => setElegidas(new Set())}>
               Ninguna
             </button>
           </div>
-          {secciones.map((s) => {
+          {secciones.map((s, i) => {
             const t = redactando.get(s.archivo);
+            const ultimo = t && [...t.eventos].reverse().find((e) => e.tipo === 'herramienta' || e.tipo === 'estado');
             return (
-              <div key={s.archivo} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-panel-2">
-                <input
-                  type="checkbox"
-                  className="size-4 accent-[var(--acento)]"
-                  checked={elegidas.has(s.archivo)}
-                  disabled={!!t}
-                  onChange={() => alternar(s.archivo)}
-                  aria-label={`Elegir ${s.titulo}`}
-                />
-                <button onClick={() => irASeccion(s.archivo)} className="min-w-0 flex-1 truncate text-left text-sm hover:text-acento cursor-pointer">
-                  {s.titulo}
-                </button>
-                {t ? (
-                  <span className="flex items-center gap-1.5 text-[12px] text-acento">
-                    <Loader2 className="size-3.5 animate-spin" />
-                    {t.estado === 'en-cola' ? 'En cola' : 'Redactando…'}
-                  </span>
-                ) : s.palabras >= MIN_PALABRAS ? (
-                  <Insignia color="ok">{s.palabras.toLocaleString('es')} palabras</Insignia>
-                ) : (
-                  <Insignia>Vacía</Insignia>
+              <div key={s.archivo} className={cx('rounded-xl px-2 py-1.5', t ? 'bg-acento-suave' : 'hover:bg-panel-2')}>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-[var(--acento)]"
+                    checked={elegidas.has(s.archivo)}
+                    disabled={!!t}
+                    onChange={() => alternar(s.archivo)}
+                    aria-label={`Elegir ${s.titulo}`}
+                  />
+                  <span className={cx('w-5 shrink-0 text-right font-mono text-[12px]', t ? 'text-acento-texto' : 'text-texto-3')}>{i + 1}</span>
+                  <button onClick={() => irASeccion(s.archivo)} className={cx('min-w-0 flex-1 truncate text-left text-sm hover:text-acento-texto cursor-pointer', t && 'font-semibold')}>
+                    {s.titulo}
+                  </button>
+                  {t ? (
+                    <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-acento-texto">
+                      <span className={cx('size-1.5 rounded-full bg-acento', t.estado !== 'en-cola' && 'animate-pulse')} />
+                      {t.estado === 'en-cola' ? 'En cola' : 'Escribiendo'}
+                    </span>
+                  ) : s.palabras >= MIN_PALABRAS ? (
+                    <Insignia color="ok">{s.palabras.toLocaleString('es')} palabras</Insignia>
+                  ) : (
+                    <Insignia>Vacía</Insignia>
+                  )}
+                </div>
+                {t && t.estado !== 'en-cola' && (
+                  <div className="mt-0.5 truncate pl-[60px] text-[12.5px] text-texto-2">
+                    {t.motor === 'claude' ? 'Claude' : 'Codex'} · {ultimo?.texto ?? 'Trabajando…'}
+                  </div>
                 )}
               </div>
             );
@@ -206,7 +215,7 @@ export function PasoRevision({ a, d, estado, trabajos, recargar }: Props) {
                 />
                 <span className="font-medium">{NOMBRES_REVISION[t].nombre}</span>
                 <span className="text-texto-3">{NOMBRES_REVISION[t].ayuda}</span>
-                {enCurso && <Loader2 className="size-3.5 animate-spin text-acento" />}
+                {enCurso && <Loader2 className="size-3.5 animate-spin text-acento-texto" />}
               </label>
             );
           })}
@@ -230,7 +239,7 @@ export function PasoRevision({ a, d, estado, trabajos, recargar }: Props) {
         )}
         {porSeccion.map(([seccion, lista]) => (
           <div key={seccion} className="space-y-2">
-            <button onClick={() => irASeccion(seccion)} className="flex items-center gap-1 text-[12px] font-semibold tracking-wide text-texto-3 uppercase hover:text-acento cursor-pointer">
+            <button onClick={() => irASeccion(seccion)} className="flex items-center gap-1 text-[12px] font-semibold tracking-wide text-texto-3 uppercase hover:text-acento-texto cursor-pointer">
               {titulos.get(seccion) ?? seccion}
               <ExternalLink className="size-3" />
             </button>
@@ -246,7 +255,7 @@ export function PasoRevision({ a, d, estado, trabajos, recargar }: Props) {
               {estado.sugerencias.filter((s) => s.estado === 'rechazada').length} rechazadas
               {estado.sugerencias.some((s) => s.estado === 'fallida') && ` · ${estado.sugerencias.filter((s) => s.estado === 'fallida').length} no aplicables`}
             </span>
-            <button className="hover:text-acento cursor-pointer" onClick={() => api.limpiarSugerencias(a, d).then(recargar)}>
+            <button className="hover:text-acento-texto cursor-pointer" onClick={() => api.limpiarSugerencias(a, d).then(recargar)}>
               Limpiar historial
             </button>
           </div>

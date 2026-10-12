@@ -125,7 +125,7 @@ export function PestanaPlantillas({ a }: { a: string }) {
       <div className="grid grid-cols-2 gap-3">
         {(['docx', 'odt'] as const).map((f) => (
           <div key={f} className="flex items-center gap-3 rounded-xl border border-borde bg-panel p-4">
-            <FileType className="size-6 text-acento" />
+            <FileType className="size-6 text-acento-texto" />
             <div className="flex-1">
               <div className="font-medium">{f === 'docx' ? 'Word (.docx)' : 'LibreOffice (.odt)'}</div>
               {plantillas?.[f] ? <Insignia color="ok">Plantilla propia</Insignia> : <span className="text-xs text-texto-3">Estilos por defecto</span>}

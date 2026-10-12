@@ -76,7 +76,7 @@ export function BuscadorFuentes({ asignatura, documento, onAnadida }: { asignatu
   return (
     <div className="rounded-xl border border-borde bg-panel p-4">
       <div className="mb-3 flex items-center gap-2">
-        <Search className="size-4 text-acento" />
+        <Search className="size-4 text-acento-texto" />
         <span className="text-sm font-semibold">Buscar fuentes</span>
         <span className="text-[12px] text-texto-3">Un agente busca en la web recursos fiables; tú eliges cuáles añadir.</span>
       </div>
@@ -124,9 +124,9 @@ export function BuscadorFuentes({ asignatura, documento, onAnadida }: { asignatu
             return (
               <li key={r.id} className="aparecer rounded-lg border border-borde bg-fondo/40 p-3">
                 <div className="flex items-start gap-2.5">
-                  <Icono className="mt-0.5 size-4 shrink-0 text-acento" />
+                  <Icono className="mt-0.5 size-4 shrink-0 text-acento-texto" />
                   <div className="min-w-0 flex-1">
-                    <a href={r.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-medium hover:text-acento">
+                    <a href={r.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-medium hover:text-acento-texto">
                       {r.titulo}
                       <ExternalLink className="size-3 shrink-0 text-texto-3" />
                     </a>
@@ -159,7 +159,7 @@ export function BuscadorFuentes({ asignatura, documento, onAnadida }: { asignatu
           <span className="flex items-center gap-1">
             <Check className="size-3.5 text-ok" /> {anadidas} añadida{anadidas === 1 ? '' : 's'} desde el buscador
           </span>
-          <button className="hover:text-acento cursor-pointer" onClick={() => api.limpiarBusqueda(asignatura, documento).then(cargar)}>
+          <button className="hover:text-acento-texto cursor-pointer" onClick={() => api.limpiarBusqueda(asignatura, documento).then(cargar)}>
             Limpiar resultados
           </button>
         </div>

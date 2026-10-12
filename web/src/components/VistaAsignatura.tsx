@@ -98,7 +98,7 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
               onClick={() => setPestana(id)}
               className={cx(
                 '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors cursor-pointer',
-                pestana === id ? 'border-acento text-acento' : 'border-transparent text-texto-2 hover:text-texto',
+                pestana === id ? 'border-acento text-acento-texto' : 'border-transparent text-texto-2 hover:text-texto',
               )}
             >
               {txt}
@@ -119,7 +119,7 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
                       Nuevo documento
                     </Boton>
                     <Boton icono={<FileUp className="size-4" />} onClick={() => setImportar(true)}>
-                      Mejorar apuntes existentes
+                Importar apuntes existentes
                     </Boton>
                   </div>
                 }
@@ -132,7 +132,7 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
                     onClick={() => seleccionar({ asignatura: a.id, documento: d.id })}
                     className="rounded-xl border border-borde bg-panel p-4 text-left shadow-suave transition-all hover:-translate-y-0.5 hover:border-acento/50 cursor-pointer"
                   >
-                    <FileText className="mb-3 size-5 text-acento" />
+                    <FileText className="mb-3 size-5 text-acento-texto" />
                     <div className="font-medium leading-snug">{d.titulo}</div>
                     {d.objetivo && <p className="mt-1 line-clamp-2 text-[13px] text-texto-2">{d.objetivo}</p>}
                     <div className="mt-3 flex items-center justify-between gap-2 text-xs text-texto-3">
@@ -143,17 +143,17 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
                 ))}
                 <button
                   onClick={() => setNuevoDoc(true)}
-                  className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-borde text-texto-3 transition-colors hover:border-acento hover:text-acento cursor-pointer"
+                  className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-borde text-texto-3 transition-colors hover:border-acento hover:text-acento-texto cursor-pointer"
                 >
                   <Plus className="size-5" />
                   Nuevo documento
                 </button>
                 <button
                   onClick={() => setImportar(true)}
-                  className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-borde px-4 text-center text-texto-3 transition-colors hover:border-acento hover:text-acento cursor-pointer"
+                  className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-borde px-4 text-center text-texto-3 transition-colors hover:border-acento hover:text-acento-texto cursor-pointer"
                 >
                   <FileUp className="size-5" />
-                  Mejorar apuntes existentes
+                  Importar apuntes existentes
                   <span className="text-[11.5px]">Word, LibreOffice, Markdown o PDF</span>
                 </button>
               </div>

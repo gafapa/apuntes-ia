@@ -71,7 +71,7 @@ function Avisos() {
           ) : a.tipo === 'error' ? (
             <XCircle className="size-4 shrink-0 text-error" />
           ) : (
-            <Info className="size-4 shrink-0 text-acento" />
+            <Info className="size-4 shrink-0 text-acento-texto" />
           )}
           <span className="text-left">{a.texto}</span>
         </button>

@@ -97,3 +97,25 @@ test('mensajes de límite de uso de Claude y Codex', () => {
   assert.equal(hora('rate limit exceeded (429)'), '14:02');
   assert.equal(limiteEnTexto('Error: file not found'), undefined);
 });
+
+test('Clearing finished jobs preserves running and queued work, and removes persisted terminal records', async () => {
+  const previousCapacity = cola.maxSimultaneos;
+  cola.maxSimultaneos = 1;
+  const running = encolar('MODO:CUELGA cleanup-running');
+  await esperar(() => running.estado === 'ejecutando');
+  const waiting = encolar('MODO:OK cleanup-waiting');
+  const finished = cola.listar().filter(job => job.estado !== 'en-cola' && job.estado !== 'ejecutando');
+  assert.ok(finished.length);
+  const removed = cola.limpiar();
+  assert.deepEqual(new Set(removed), new Set(finished.map(job => job.id)));
+  assert.equal(cola.obtener(running.id), running);
+  assert.equal(cola.obtener(waiting.id), waiting);
+  assert.equal(waiting.estado, 'en-cola');
+  await esperar(() => finished.every(job => !fs.existsSync(path.join(dir, 'trabajos', `${job.id}.json`))));
+  // A delayed save must not resurrect a removed record.
+  await new Promise(resolve => setTimeout(resolve, 500));
+  assert.ok(finished.every(job => !fs.existsSync(path.join(dir, 'trabajos', `${job.id}.json`))));
+  cola.cancelar(waiting.id);
+  cola.cancelar(running.id);
+  cola.maxSimultaneos = previousCapacity;
+});

@@ -355,12 +355,16 @@ export class Cola extends EventEmitter {
 
   /** Elimina de la lista los trabajos terminados. */
   limpiar() {
+    const removedIds: string[] = [];
     for (const [id, r] of this.registros) {
       if (r.trabajo.estado !== 'en-cola' && r.trabajo.estado !== 'ejecutando') {
         this.registros.delete(id);
+        this.guardadoPendiente.delete(id);
         this.borrarArchivos(id);
+        removedIds.push(id);
       }
     }
+    return removedIds;
   }
 
   /** Cancela todo lo pendiente (al cerrar la app de forma ordenada). */
@@ -767,6 +771,7 @@ ${prompt}` : prompt;
         const info = ev.rate_limit_info ?? {};
         const w = info.unifiedWindows ?? {};
         this.uso = {
+          ...this.uso,
           cincoHoras: w.five_hour?.utilization,
           semanal: w.seven_day?.utilization,
           reinicio: w.five_hour?.resetsAt ?? info.resetsAt,

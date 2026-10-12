@@ -249,6 +249,7 @@ export class FlujoBase {
       respuesta: respuestaEnDossier(dossier, p.texto),
     }));
     return {
+      imported: !!(await a.obtenerDocumento(asig, doc)).importado,
       investigacion: info ? { palabras: contarPalabras(dossier), actualizado: info.modificado } : undefined,
       preguntas,
       indice: (await a.leerJsonDoc<Indice | null>(asig, doc, 'indice.json', null)) ?? undefined,

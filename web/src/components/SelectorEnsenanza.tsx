@@ -114,7 +114,7 @@ function Combo({ valor, onCambio, sugerencias, placeholder }: { valor: string; o
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => elegir(s.nombre)}
                   onMouseEnter={() => setActivo(i)}
-                  className={cx('flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm cursor-pointer', i === activo && 'bg-acento-suave text-acento')}
+                  className={cx('flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm cursor-pointer', i === activo && 'bg-acento-suave text-acento-texto')}
                 >
                   <span className="flex-1">{s.nombre}</span>
                   {s.nombre === valor && <Check className="size-3.5" />}
@@ -155,7 +155,7 @@ export function SelectorEnsenanza({ valor, onCambio }: { valor: ValorEnsenanza; 
               onClick={() => e.id !== v.etapa && set({ etapa: e.id, curso: undefined, modalidad: undefined, familia: undefined, titulo: undefined })}
               className={cx(
                 'rounded-lg border px-2 py-2 text-left text-[12.5px] leading-tight transition-colors cursor-pointer',
-                v.etapa === e.id ? 'border-acento bg-acento-suave font-medium text-acento' : 'border-borde hover:bg-panel-2',
+                v.etapa === e.id ? 'border-acento bg-acento-suave font-medium text-acento-texto' : 'border-borde hover:bg-panel-2',
                 e.id === 'libre' && 'border-dashed',
               )}
             >
@@ -205,7 +205,7 @@ export function SelectorEnsenanza({ valor, onCambio }: { valor: ValorEnsenanza; 
             </div>
           )}
           {titulo && (
-            <a href={titulo.url} target="_blank" rel="noreferrer" className="-mt-1 flex items-center gap-1 text-[12px] text-texto-3 hover:text-acento">
+            <a href={titulo.url} target="_blank" rel="noreferrer" className="-mt-1 flex items-center gap-1 text-[12px] text-texto-3 hover:text-acento-texto">
               {titulo.horas ? `${titulo.horas} horas · ` : ''}
               {titulo.modulos.length} módulos · ficha oficial en TodoFP <ExternalLink className="size-3" />
             </a>

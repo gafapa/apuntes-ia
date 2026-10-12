@@ -158,6 +158,7 @@ ${pedidas.map(([t]) => `  {"tipo": "${t}", ${formato[t].slice(1)}`).join(',\n')}
       const b = l.find((x) => x.id === id);
       if (!b) return;
       b.preguntas = validas;
+      delete b.importedContent;
       b.estado = 'lista';
       b.error = undefined;
       if (!b.opciones.titulo && r.titulo?.trim()) b.titulo = r.titulo.trim().slice(0, 100);

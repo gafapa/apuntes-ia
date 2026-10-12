@@ -143,7 +143,7 @@ export const api = {
   importarApuntes: async (
     a: string,
     archivo: File,
-    campos: { titulo?: string; modo: ModoMejora; estiloOriginal: boolean; diagnosticar: boolean },
+    campos: { titulo?: string; modo: ModoMejora; estiloOriginal: boolean; diagnosticar: boolean; importOnly?: boolean },
   ) => {
     const fd = new FormData();
     // Los campos van antes que el archivo: el servidor los lee en orden
@@ -151,7 +151,7 @@ export const api = {
     fd.append('archivo', archivo, archivo.name);
     const r = await fetch(`${asig(a)}/importar`, { method: 'POST', body: fd });
     if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string; message?: string }).error ?? 'No se han podido importar los apuntes');
-    return (await r.json()) as { documento: Documento; secciones: number; imagenes: number; trabajos: number; avisos: string[] };
+    return (await r.json()) as { documento: Documento; secciones: number; actividades: number; imagenes: number; trabajos: number; avisos: string[] };
   },
   // Duplicar, papelera, copias de seguridad y exportar varios documentos
   duplicarAsignatura: (a: string, nombre?: string) => pedir<AsignaturaDetalle>('POST', `${asig(a)}/duplicar`, { nombre }),

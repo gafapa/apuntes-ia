@@ -1,5 +1,5 @@
 // Componentes básicos de la interfaz.
-import { forwardRef, useEffect, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react';
+import { forwardRef, useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react';
 import { create } from 'zustand';
 import { Loader2, X } from 'lucide-react';
 import clsx from 'clsx';
@@ -17,13 +17,13 @@ export const Boton = forwardRef<
       ref={ref}
       disabled={disabled || cargando}
       className={cx(
-        'inline-flex items-center justify-center gap-1.5 rounded-lg font-medium whitespace-nowrap transition-colors select-none',
+        'inline-flex items-center justify-center gap-1.5 rounded-xl font-semibold whitespace-nowrap transition-colors select-none',
         'disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer',
-        tam === 'sm' ? 'h-7 px-2.5 text-[13px]' : 'h-9 px-3.5 text-sm',
+        tam === 'sm' ? 'h-8 px-3 text-[13px]' : 'h-10 px-4 text-[14px]',
         variante === 'primario' && 'bg-acento text-white hover:bg-acento-2 shadow-sm',
         variante === 'secundario' && 'bg-panel border border-borde text-texto hover:bg-panel-2',
         variante === 'fantasma' && 'text-texto-2 hover:bg-panel-2 hover:text-texto',
-        variante === 'peligro' && 'bg-error text-white hover:opacity-90',
+        variante === 'peligro' && 'bg-error text-white hover:opacity-90 dark:text-fondo',
         className,
       )}
       {...resto}
@@ -45,7 +45,7 @@ export function BotonIcono({
       title={titulo}
       aria-label={titulo}
       className={cx(
-        'inline-flex size-7 items-center justify-center rounded-md text-texto-3 hover:bg-panel-2 hover:text-texto transition-colors cursor-pointer disabled:opacity-40',
+        'inline-flex size-8 items-center justify-center rounded-lg text-texto-3 hover:bg-panel-2 hover:text-texto transition-colors cursor-pointer disabled:opacity-40',
         className,
       )}
       {...resto}
@@ -56,13 +56,13 @@ export function BotonIcono({
 }
 
 const claseCampo =
-  'w-full rounded-lg border border-borde bg-panel px-3 text-sm text-texto placeholder:text-texto-3 outline-none transition-colors focus:border-acento focus:ring-3 focus:ring-acento/15';
+  'w-full rounded-xl border border-borde bg-panel px-3 text-[14px] text-texto placeholder:text-texto-3 outline-none transition-colors focus:border-acento focus:ring-3 focus:ring-acento/15';
 
 export const Entrada = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Entrada(
   { className, ...resto },
   ref,
 ) {
-  return <input ref={ref} className={cx(claseCampo, 'h-9', className)} {...resto} />;
+  return <input ref={ref} className={cx(claseCampo, 'h-10', className)} {...resto} />;
 });
 
 export const AreaTexto = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function AreaTexto(
@@ -86,9 +86,9 @@ export function Insignia({ children, color = 'neutro', className }: { children: 
   return (
     <span
       className={cx(
-        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-medium',
+        'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[12px] font-semibold',
         color === 'neutro' && 'bg-panel-2 text-texto-2',
-        color === 'acento' && 'bg-acento-suave text-acento',
+        color === 'acento' && 'bg-acento-suave text-acento-texto',
         color === 'ok' && 'bg-ok/12 text-ok',
         color === 'aviso' && 'bg-aviso/12 text-aviso',
         color === 'error' && 'bg-error/12 text-error',
@@ -101,7 +101,7 @@ export function Insignia({ children, color = 'neutro', className }: { children: 
 }
 
 export function Tarjeta({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cx('rounded-xl border border-borde bg-panel shadow-suave', className)}>{children}</div>;
+  return <div className={cx('rounded-2xl border border-borde bg-panel shadow-suave', className)}>{children}</div>;
 }
 
 export function Modal({
@@ -121,12 +121,33 @@ export function Modal({
   ancho?: string;
   sinCerrar?: boolean;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const closeRef = useRef(onCerrar);
+  const lockedRef = useRef(sinCerrar);
+  closeRef.current = onCerrar;
+  lockedRef.current = sinCerrar;
   useEffect(() => {
-    if (!abierto || sinCerrar) return;
-    const f = (e: KeyboardEvent) => e.key === 'Escape' && onCerrar();
+    if (!abierto) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const focusable = () => Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), summary, a[href], [tabindex="0"]') ?? []).filter(element => element.getClientRects().length > 0);
+    (focusable()[0] ?? dialogRef.current)?.focus();
+    const f = (e: KeyboardEvent) => {
+      const dialogs = document.querySelectorAll('[role="dialog"]');
+      if (dialogs[dialogs.length - 1] !== dialogRef.current) return;
+      if (e.key === 'Escape' && !lockedRef.current) { e.preventDefault(); closeRef.current(); }
+      if (e.key !== 'Tab') return;
+      const elements = focusable();
+      const first = elements[0] ?? dialogRef.current;
+      const last = elements[elements.length - 1] ?? dialogRef.current;
+      if (!dialogRef.current?.contains(document.activeElement) || (e.shiftKey ? document.activeElement === first : document.activeElement === last)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first)?.focus();
+      }
+    };
     window.addEventListener('keydown', f);
-    return () => window.removeEventListener('keydown', f);
-  }, [abierto, onCerrar, sinCerrar]);
+    return () => { window.removeEventListener('keydown', f); if (previousFocus?.isConnected) previousFocus.focus(); };
+  }, [abierto]);
   if (!abierto) return null;
   return (
     <div
@@ -134,10 +155,10 @@ export function Modal({
       onMouseDown={(e) => !sinCerrar && e.target === e.currentTarget && onCerrar()}
     >
       {/* Nunca más alto que la ventana: si no cabe, se desplaza el contenido y la cabecera queda fija */}
-      <div role="dialog" aria-modal="true" className={cx('aparecer flex max-h-[calc(100vh-2rem)] w-full flex-col rounded-2xl border border-borde bg-panel shadow-2xl', ancho)}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={cx('aparecer flex max-h-[calc(100vh-2rem)] w-full flex-col rounded-[22px] border border-borde bg-panel shadow-2xl', ancho)}>
         <div className="flex shrink-0 items-start justify-between gap-4 px-6 pt-5">
           <div>
-            <h2 className="text-lg font-semibold tracking-tight">{titulo}</h2>
+            <h2 id={titleId} className="text-xl font-bold tracking-tight">{titulo}</h2>
             {descripcion && <p className="mt-1 text-sm text-texto-2">{descripcion}</p>}
           </div>
           {!sinCerrar && (
@@ -155,8 +176,8 @@ export function Modal({
 export function Vacio({ icono, titulo, texto, accion }: { icono: ReactNode; titulo: string; texto?: ReactNode; accion?: ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-      <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-acento-suave text-acento">{icono}</div>
-      <h3 className="font-semibold">{titulo}</h3>
+      <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-acento-suave text-acento-texto">{icono}</div>
+      <h3 className="text-lg font-bold">{titulo}</h3>
       {texto && <p className="mt-1 max-w-sm text-sm text-texto-2">{texto}</p>}
       {accion && <div className="mt-5">{accion}</div>}
     </div>

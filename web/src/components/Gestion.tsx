@@ -185,7 +185,7 @@ export function ModalPapelera({ abierto, onCerrar }: { abierto: boolean; onCerra
           <ul className="divide-y divide-borde rounded-lg border border-borde">
             {lista.map((e) => (
               <li key={e.id} className="flex items-center gap-3 px-3 py-2.5">
-                <FileText className={cx('size-4 shrink-0', e.tipo === 'asignatura' ? 'text-acento' : 'text-texto-3')} />
+                <FileText className={cx('size-4 shrink-0', e.tipo === 'asignatura' ? 'text-acento-texto' : 'text-texto-3')} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[13.5px] font-medium">{e.titulo}</div>
                   <div className="text-[12px] text-texto-3">
@@ -317,7 +317,7 @@ export function ModalExportarTodos({ asignatura, onCerrar }: { asignatura?: stri
                 onClick={() => setFormato(f)}
                 className={cx(
                   'rounded-lg border px-3 py-1.5 text-[13px] transition-colors cursor-pointer',
-                  formato === f ? 'border-acento bg-acento-suave text-acento' : 'border-borde hover:bg-panel-2',
+                  formato === f ? 'border-acento bg-acento-suave text-acento-texto' : 'border-borde hover:bg-panel-2',
                 )}
               >
                 {nombre}

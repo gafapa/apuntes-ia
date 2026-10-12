@@ -139,6 +139,11 @@ function conectar() {
     const msg = JSON.parse(m.data) as MensajeWS;
     const { trabajos, versiones } = useEstado.getState();
     switch (msg.tipo) {
+      case 'trabajos-eliminados': {
+        const removedIds = new Set(msg.ids);
+        useEstado.setState({ trabajos: Object.fromEntries(Object.entries(trabajos).filter(([id]) => !removedIds.has(id))) });
+        break;
+      }
       case 'trabajo': {
         const previo = trabajos[msg.trabajo.id];
         const t = { ...msg.trabajo, eventos: previo?.eventos ?? [] };
