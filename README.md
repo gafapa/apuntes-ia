@@ -16,9 +16,15 @@ Windows, macOS y Linux. Las apps instaladas se actualizan solas.
   plantillas y **currículo oficial** (BOE) para alinear el índice y revisar la cobertura.
 - **Visuales**: imágenes libres de Wikimedia y de museos, bibliotecas y archivos (Europeana,
   Smithsonian, Art Institute of Chicago…), con su referencia APA en el pie; diagramas Mermaid;
-  gráficas de funciones, mapas, moléculas (PubChem), química con `\ce{}`, árboles sintácticos,
+  gráficas de funciones, moléculas (PubChem), química con `\ce{}`, árboles sintácticos,
   partituras, pictogramas de ARASAAC e imágenes generadas con Codex. Se comprueba que cada
   imagen se ha descargado y, si falla, se reintenta o se busca otra.
+- **Mapas** dibujados por la app: de España (comunidades o provincias), la península, Europa, el
+  Mediterráneo, cualquier continente o el mundo, o acercándose a una región; **físicos** (relieve
+  con colores de altitud, ríos, cordilleras y cimas), **de datos** (valores por región con escala y
+  leyenda automáticas), **históricos** (fronteras de más de 50 épocas, desde la prehistoria hasta
+  2010), con áreas y tramas, rutas con flechas, símbolos (batallas, puertos, castillos…), textos
+  libres y versión **muda** para actividades.
 - **Actividades**: bloques independientes de autoevaluación que se piden con un diálogo
   (varios tipos de pregunta en un mismo bloque, dificultad, soluciones) y se incluyen o no en
   los apuntes; cada bloque se exporta a **Moodle** (GIFT).
@@ -81,7 +87,14 @@ npm run typecheck
 npm test             # pruebas (tests/): cola de agentes con un motor falso, importar/exportar, gestión
 npm start            # compila y abre la app en Electron
 npm run iconos       # regenera los iconos (app, instalador, web) desde build/icono.svg
+npm run datos-mapas  # regenera los datos de los mapas físicos (descarga ~400 MB de Natural Earth)
 ```
+
+Datos de los mapas: límites actuales de [es-atlas](https://github.com/martgnz/es-atlas) y
+[Natural Earth](https://www.naturalearthdata.com/) (dominio público), igual que el relieve, los ríos y
+las cordilleras de `web/src/lib/datos-mapas/`. Las fronteras históricas son del atlas
+[historical-basemaps](https://github.com/aourednik/historical-basemaps) (GPL-3.0): no se incluyen en
+la app; se descargan la primera vez que un mapa pide una época y se guardan junto a los ajustes.
 
 Las pruebas de importar y exportar necesitan Pandoc en `resources-bin/` (`npm run fetch-bin`); sin él
 se saltan. GitHub Actions las pasa en cada cambio de `main` (`.github/workflows/pruebas.yml`) y antes

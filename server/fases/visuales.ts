@@ -91,13 +91,44 @@ Como máximo 2 o 3 por sección, y solo donde aporten. Si el usuario te responde
     if (typeof cambios.titulo === 'string') permitidos.titulo = cambios.titulo;
     if (typeof cambios.descripcion === 'string') permitidos.descripcion = cambios.descripcion;
     if (cambios.estado === 'descartada' || cambios.estado === 'propuesta') permitidos.estado = cambios.estado;
-    return this.cambiarPropuesta(asig, doc, id, permitidos);
+    return this.conCandado(`${asig}/${doc}/visuales`, async () => {
+      const proposals = await this.almacen.leerJsonDoc<PropuestaVisual[]>(asig, doc, 'visuales.json', []);
+      const current = proposals.find(item => item.id === id);
+      if (!current) throw new ErrorUsuario('Propuesta no encontrada', 404);
+      if (current.estado === 'generando') throw new ErrorUsuario('Espera a que termine la generación');
+      if (current.estado === 'insertada') throw new ErrorUsuario('Este visual ya está incorporado al documento');
+      if (current.estado === 'generada' && ['tipo', 'molecula', 'titulo', 'descripcion'].some(key => key in permitidos && permitidos[key as keyof PropuestaVisual] !== current[key as keyof PropuestaVisual])) {
+        permitidos.estado = 'propuesta';
+        permitidos.markdown = undefined;
+      }
+      Object.assign(current, permitidos);
+      await this.almacen.escribirJsonDoc(asig, doc, 'visuales.json', proposals);
+      return current;
+    });
+  }
+
+  /** Publish generated content only after the user approves its stored preview. */
+  async approveVisual(asig: string, doc: string, id: string) {
+    return this.conCandado(`${asig}/${doc}/visuales`, async () => {
+      const proposals = await this.almacen.leerJsonDoc<PropuestaVisual[]>(asig, doc, 'visuales.json', []);
+      const proposal = proposals.find(item => item.id === id);
+      if (!proposal) throw new ErrorUsuario('Propuesta no encontrada', 404);
+      if (proposal.estado === 'insertada') return proposal;
+      if (proposal.estado !== 'generada' || !proposal.markdown?.trim()) throw new ErrorUsuario('Genera y revisa el visual antes de aceptarlo');
+      if (!tiposVisualesPermitidos(await this.permisos(asig, doc), true).includes(proposal.tipo)) throw new ErrorUsuario('La ficha no permite este tipo de visual');
+      if (proposal.archivo && !existsSync(path.join(this.almacen.dirDocumento(asig, doc), proposal.archivo))) throw new ErrorUsuario('Falta el archivo generado. Vuelve a generar el visual');
+      await this.insertarEnSeccion(asig, doc, proposal, proposal.markdown);
+      proposal.estado = 'insertada';
+      if (proposal.archivo) proposal.reemplaza = proposal.archivo;
+      await this.almacen.escribirJsonDoc(asig, doc, 'visuales.json', proposals);
+      return proposal;
+    });
   }
 
   async limpiarVisuales(asig: string, doc: string) {
     return this.conCandado(`${asig}/${doc}/visuales`, async () => {
       const lista = await this.almacen.leerJsonDoc<PropuestaVisual[]>(asig, doc, 'visuales.json', []);
-      await this.almacen.escribirJsonDoc(asig, doc, 'visuales.json', lista.filter((p) => p.estado === 'propuesta' || p.estado === 'generando'));
+      await this.almacen.escribirJsonDoc(asig, doc, 'visuales.json', lista.filter((p) => p.estado === 'propuesta' || p.estado === 'generando' || p.estado === 'generada'));
     });
   }
 
@@ -112,14 +143,18 @@ Como máximo 2 o 3 por sección, y solo donde aporten. Si el usuario te responde
   }
 
   async generarVisual(asig: string, doc: string, id: string, indicaciones?: string) {
-    const lista = await this.almacen.leerJsonDoc<PropuestaVisual[]>(asig, doc, 'visuales.json', []);
-    const p = lista.find((x) => x.id === id);
-    if (!p) throw new ErrorUsuario('Propuesta no encontrada', 404);
-    if (p.estado === 'generando') throw new ErrorUsuario('Ya se está generando');
-    if (!tiposVisualesPermitidos(await this.permisos(asig, doc), true).includes(p.tipo)) {
-      throw new ErrorUsuario('La ficha de la asignatura o del documento no permite este tipo de visual. Cámbialo de tipo o cambia la ficha.');
-    }
-    await this.cambiarPropuesta(asig, doc, id, { estado: 'generando', error: undefined });
+    const p = await this.conCandado(`${asig}/${doc}/visuales`, async () => {
+      const proposals = await this.almacen.leerJsonDoc<PropuestaVisual[]>(asig, doc, 'visuales.json', []);
+      const proposal = proposals.find(item => item.id === id);
+      if (!proposal) throw new ErrorUsuario('Propuesta no encontrada', 404);
+      if (proposal.estado === 'generando') throw new ErrorUsuario('Ya se está generando');
+      if (!tiposVisualesPermitidos(await this.permisos(asig, doc), true).includes(proposal.tipo)) throw new ErrorUsuario('La ficha no permite este tipo de visual');
+      proposal.estado = 'generando';
+      proposal.error = undefined;
+      proposal.markdown = undefined;
+      await this.almacen.escribirJsonDoc(asig, doc, 'visuales.json', proposals);
+      return proposal;
+    });
     const comun = {
       agente: 'ilustrador',
       asignatura: asig,
@@ -136,11 +171,11 @@ Lee la sección para que el visual sea coherente con su contenido y su terminolo
 
     try {
       if (p.tipo === 'molecula') {
-        // Si ya se sabe qué molécula es, se inserta directamente (sin agente)
+        // A known molecule can be previewed without launching an agent.
         const directa = p.molecula && (await this.dep.moleculas?.resolver(p.molecula).catch(() => undefined));
         if (directa) {
-          await this.insertarMolecula(asig, doc, p, p.molecula!);
-          return { insertada: true };
+          await this.stageMolecule(asig, doc, p, p.molecula!);
+          return { generada: true };
         }
         const salida = this.salida(`molecula-${p.id}`, 'md');
         return await this.lanzar({
@@ -187,7 +222,7 @@ Usa un tipo de diagrama adecuado (flowchart, mindmap, timeline, sequenceDiagram,
         });
       }
 
-      const archivoBase = `${slug(p.titulo).slice(0, 40)}-${p.id.slice(0, 4)}`;
+      const archivoBase = `${slug(p.titulo).slice(0, 40)}-${p.id.slice(0, 4)}-${randomUUID().slice(0, 8)}`;
 
       if (p.tipo === 'imagen-ia') {
         const rel = `recursos/${archivoBase}.png`;
@@ -319,6 +354,7 @@ Solo licencias que permitan reutilizarla (CC0, dominio público, CC BY, CC BY-SA
     for (const f of fallidas) {
       try {
         let v = f.visual ? await this.propuesta(asig, doc, f.visual) : undefined;
+        if (v?.estado === 'generada') throw new ErrorUsuario('La alternativa está pendiente de aceptación en Visuales');
         // 1. Reintentar la descarga original
         if (v?.tipo === 'imagen-web' && v.url) {
           const base = f.ruta
@@ -469,18 +505,15 @@ Edita solo esos elementos; no cambies nada más del texto. Si alguno ya tiene un
         throw new PedirAlAgente(`La gráfica tiene un error: ${(e as Error).message}`, `La gráfica no se puede dibujar: ${(e as Error).message}. Corrige el bloque en \`${salida}\`.`);
       }
     }
-    const encontrado = await this.insertarEnSeccion(asig, doc, p, `${m[0]}\n\n*Figura: ${p.titulo}*`);
-    await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada' });
-    return encontrado ? 'Diagrama insertado' : 'Diagrama añadido al final de la sección (no se encontró el párrafo indicado)';
+    await this.cambiarPropuesta(asig, doc, id, { estado: 'generada', markdown: `${m[0]}\n\n*Figura: ${p.titulo}*`, archivo: undefined, error: undefined });
+    return 'Visual generado. Revísalo y pulsa Aceptar para incorporarlo al documento';
 
   }
 
-  /** Inserta el bloque ```molecula (y su pie) en la sección y marca la propuesta como insertada. */
-  protected async insertarMolecula(asig: string, doc: string, p: PropuestaVisual, consulta: string) {
+  /** Store the molecule preview without changing the target section. */
+  protected async stageMolecule(asig: string, doc: string, p: PropuestaVisual, consulta: string) {
     const bloque = ['```molecula', consulta, '```', '', `*Figura: ${p.titulo}*`].join('\n');
-    const encontrado = await this.insertarEnSeccion(asig, doc, p, bloque);
-    await this.cambiarPropuesta(asig, doc, p.id, { estado: 'insertada', molecula: consulta, error: undefined });
-    return encontrado;
+    await this.cambiarPropuesta(asig, doc, p.id, { estado: 'generada', markdown: bloque, archivo: undefined, molecula: consulta, error: undefined });
   }
 
   protected async postMolecula(t: Trabajo, datos: Record<string, unknown>): Promise<string | void> {
@@ -500,8 +533,8 @@ Edita solo esos elementos; no cambies nada más del texto. Si alguno ya tiene un
     } catch (e) {
       throw new PedirAlAgente(`${(e as Error).message}`, `PubChem no reconoce «${consulta}». Escribe en \`${salida}\` otro nombre en inglés del compuesto (el que use PubChem) o su SMILES.`);
     }
-    const encontrado = await this.insertarMolecula(asig, doc, p, consulta);
-    return encontrado ? 'Molécula insertada' : 'Molécula añadida al final de la sección';
+    await this.stageMolecule(asig, doc, p, consulta);
+    return 'Molécula generada. Revísala y pulsa Aceptar para incorporarla al documento';
   }
 
   protected async postImagenIa(t: Trabajo, datos: Record<string, unknown>): Promise<string | void> {
@@ -514,9 +547,8 @@ Edita solo esos elementos; no cambies nada más del texto. Si alguno ya tiene un
     if (!existsSync(ruta) || !dimensiones(ruta)) {
       throw new PedirAlAgente(`No se ha guardado la imagen en ${rel}.`, `La imagen no está guardada (o está dañada) en \`${rel}\`. Genérala de nuevo y guárdala ahí como PNG.`);
     }
-    const encontrado = await this.insertarEnSeccion(asig, doc, p, `![${p.titulo}](${rel})`);
-    await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada', archivo: rel, reemplaza: rel });
-    return encontrado ? 'Imagen generada e insertada' : 'Imagen añadida al final de la sección';
+    await this.cambiarPropuesta(asig, doc, id, { estado: 'generada', markdown: `![${p.titulo}](${rel})`, archivo: rel, error: undefined });
+    return 'Imagen generada. Revísala y pulsa Aceptar para incorporarla al documento';
 
   }
 
@@ -545,8 +577,7 @@ Edita solo esos elementos; no cambies nada más del texto. Si alguno ya tiene un
     // Referencia APA 7 bajo la imagen (al exportar pasa al pie de figura)
     const credito = referenciaApa({ ...r, institucion: r.institucion ?? sitioWeb(r.pagina ?? r.url) });
     const pie = `\n\n${credito}`;
-    const encontrado = await this.insertarEnSeccion(asig, doc, p, `![${p.titulo}](${rel})${pie}`);
-    await this.cambiarPropuesta(asig, doc, id, { estado: 'insertada', archivo: rel, credito, url: r.url, reemplaza: rel, error: undefined });
-    return encontrado ? 'Imagen descargada e insertada' : 'Imagen añadida al final de la sección';
+    await this.cambiarPropuesta(asig, doc, id, { estado: 'generada', markdown: `![${p.titulo}](${rel})${pie}`, archivo: rel, credito, url: r.url, error: undefined });
+    return 'Imagen descargada. Revísala y pulsa Aceptar para incorporarla al documento';
   }
 }

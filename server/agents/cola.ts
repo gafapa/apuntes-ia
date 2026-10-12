@@ -13,6 +13,7 @@ import path from 'node:path';
 import type { ChildProcess } from 'node:child_process';
 import treeKill from 'tree-kill';
 import type { Esfuerzo, EventoTrabajo, Motor, PasoFlujo, Tokens, Trabajo, UsoSuscripcion } from '../../shared/tipos';
+import { removeFileAtomic, writeFileAtomic } from '../atomicFiles';
 
 type Traduccion = { mensaje?: string; resultado?: string; error?: string; final?: 'ok' | 'error'; tokens?: Tokens; limite?: Limite };
 /** Límite de uso de la suscripción agotado; `hasta`, cuándo se renueva (epoch ms), si se sabe. */
@@ -213,14 +214,14 @@ export class Cola extends EventEmitter {
       this.temporizadorGuardado = undefined;
       for (const i of this.guardadoPendiente) {
         const r = this.registros.get(i);
-        if (r) fs.writeFile(this.ruta(i, 'json'), JSON.stringify(r), () => {});
+        if (r) void writeFileAtomic(this.ruta(i, 'json'), JSON.stringify(r)).catch(() => console.error('Unable to persist an agent job'));
       }
       this.guardadoPendiente.clear();
     }, 400);
   }
 
   private borrarArchivos(id: string) {
-    for (const ext of ['json', 'prompt.txt', 'original.txt', 'entrada.txt', 'sistema.txt', 'salida.jsonl', 'err.log']) fs.rm(this.ruta(id, ext), { force: true }, () => {});
+    for (const ext of ['json', 'prompt.txt', 'original.txt', 'entrada.txt', 'sistema.txt', 'salida.jsonl', 'err.log']) void removeFileAtomic(this.ruta(id, ext)).catch(() => console.error('Unable to remove an agent job file'));
   }
 
   // ---------------------------------------------------------------------------
@@ -386,11 +387,14 @@ export class Cola extends EventEmitter {
       if (r) r.pid = undefined;
     }
     this.seguimientos.clear();
-    for (const [id, r] of this.registros) {
-      try {
-        fs.writeFileSync(this.ruta(id, 'json'), JSON.stringify(r));
-      } catch {}
-    }
+    void this.flush().catch(() => console.error('Unable to persist the paused agent queue'));
+  }
+
+  async flush() {
+    clearTimeout(this.temporizadorGuardado);
+    this.temporizadorGuardado = undefined;
+    this.guardadoPendiente.clear();
+    await Promise.all([...this.registros].map(([id, record]) => writeFileAtomic(this.ruta(id, 'json'), JSON.stringify(record))));
   }
 
   // ---------------------------------------------------------------------------

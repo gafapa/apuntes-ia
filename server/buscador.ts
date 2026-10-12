@@ -9,6 +9,7 @@ import type { ResultadoBusqueda, TipoBusqueda } from '../shared/tipos';
 import { ErrorUsuario, slug } from './store';
 import { ejecutarBinario, rutaPandoc } from './conversion';
 import { extraerJson } from './texto';
+import { fetchPublicResource, readResponseLimited } from './remoteResources';
 
 export const ARCHIVO_RESULTADOS = 'busqueda-fuentes.json';
 
@@ -24,7 +25,7 @@ async function enlaceVivo(url: string): Promise<{ ok: boolean; motivo?: string }
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 10000);
   try {
-    const r = await fetch(url, { method: 'GET', redirect: 'follow', signal: ctrl.signal, headers: { ...CABECERAS, Range: 'bytes=0-2047' } });
+    const r = await fetchPublicResource(url, { method: 'GET', signal: ctrl.signal, headers: { ...CABECERAS, Range: 'bytes=0-2047' } });
     await r.body?.cancel().catch(() => {});
     if (r.status === 404 || r.status === 410) return { ok: false, motivo: `no existe (${r.status})` };
     return { ok: true, motivo: r.ok || r.status === 206 ? undefined : `el sitio respondió ${r.status}` };
@@ -128,7 +129,7 @@ export async function descargarFuente(r: ResultadoBusqueda, dirFuentes: string, 
   const t = setTimeout(() => ctrl.abort(), 60000);
   let resp: Response;
   try {
-    resp = await fetch(r.url, { signal: ctrl.signal, redirect: 'follow', headers: CABECERAS });
+    resp = await fetchPublicResource(r.url, { signal: ctrl.signal, headers: CABECERAS });
   } catch (e) {
     clearTimeout(t);
     throw new ErrorUsuario(`No se pudo descargar: ${(e as Error).message}`);
@@ -138,7 +139,7 @@ export async function descargarFuente(r: ResultadoBusqueda, dirFuentes: string, 
       throw new ErrorUsuario('El sitio no permite descargas automáticas. Ábrela en el navegador y, si te interesa, guárdala y súbela a mano.');
     if (!resp.ok) throw new ErrorUsuario(`No se pudo descargar (error ${resp.status}). Ábrela en el navegador y súbela a mano si te interesa.`);
     const tipo = resp.headers.get('content-type') ?? '';
-    const datos = Buffer.from(await resp.arrayBuffer());
+    const datos = await readResponseLimited(resp, 40 * 1024 * 1024);
     if (datos.length > 40 * 1024 * 1024) throw new ErrorUsuario('El archivo es demasiado grande (más de 40 MB)');
 
     if (/pdf/i.test(tipo) || datos.subarray(0, 5).toString() === '%PDF-') {

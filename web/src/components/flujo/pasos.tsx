@@ -73,7 +73,7 @@ export function estadoPaso(id: IdPaso, e: EstadoFlujo | undefined, trabajos: Tra
       };
     }
     case 'visuales': {
-      const propuestas = e.visuales.filter((v) => v.estado === 'propuesta' || v.estado === 'error').length;
+      const propuestas = e.visuales.filter((v) => v.estado === 'propuesta' || v.estado === 'error' || v.estado === 'generada').length;
       return {
         hecho: e.visuales.some((v) => v.estado === 'insertada') && propuestas === 0,
         trabajando: enCurso('visuales'),

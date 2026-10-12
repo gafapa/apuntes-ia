@@ -45,6 +45,7 @@ export class FlujoBase {
   }
 
   motorPara(agente: string, forzado?: Motor): Motor {
+    if (!Object.hasOwn(AGENTES, agente)) throw new ErrorUsuario('Agente desconocido');
     const info = AGENTES[agente];
     const listos = this.dep.motoresListos();
     if (forzado) {
@@ -293,12 +294,12 @@ export class FlujoBase {
     if (doc && seleccionTexto?.fragmento.trim()) {
       const sel = seleccionTexto;
       const salida = this.salida('seleccion', 'md');
-      const parcial = sel.texto && sel.texto.replace(/\s+/g, ' ').length < sel.fragmento.replace(/\s+/g, ' ').length * 0.8;
+      const parcial = !sel.figura && sel.texto && sel.texto.replace(/\s+/g, ' ').length < sel.fragmento.replace(/\s+/g, ' ').length * 0.8;
       sobreSeleccion = {
         texto: `
 
 ## ${todaLaSeccion ? 'Sección abierta' : 'Selección'}
-${todaLaSeccion ? `El usuario tiene abierta la sección \`secciones/${sel.seccion}\` y solo se puede trabajar sobre ella. Su contenido actual es este` : `El usuario ha seleccionado este fragmento de \`secciones/${sel.seccion}\``}${
+${todaLaSeccion ? `El usuario tiene abierta la sección \`secciones/${sel.seccion}\` y solo se puede trabajar sobre ella. Su contenido actual es este` : sel.figura ? `El usuario ha seleccionado esta figura (imagen, diagrama, mapa, molécula o tabla, con su pie y su referencia) de \`secciones/${sel.seccion}\`` : `El usuario ha seleccionado este fragmento de \`secciones/${sel.seccion}\``}${
           parcial ? ` (y, dentro de él, en concreto el texto «${sel.texto.slice(0, 1500)}»)` : ''
         }:
 
@@ -308,7 +309,11 @@ ${sel.fragmento}
 
 Actúa SOLO sobre ${todaLaSeccion ? 'esta sección; no modifiques otros archivos' : 'este fragmento; puedes leer la sección para entender el contexto'}.
 - Si la petición pide cambiarlo (reescribir, ampliar, corregir, añadir algo junto a él, sustituir una imagen…), NO edites la sección: escribe en \`${salida}\` el fragmento nuevo completo, en Markdown, que sustituirá exactamente al de arriba (incluye también lo que no cambie). Nada más en ese archivo.
-- Si es una pregunta o una consulta, respóndela sin escribir ningún archivo.`,
+- Si es una pregunta o una consulta, respóndela sin escribir ningún archivo.${
+          sel.figura
+            ? '\n- Es una figura: si es un bloque (```mapa, ```grafica, ```mermaid…), cambia su contenido; si es una imagen que hay que sustituir, busca otra con las herramientas de imágenes si las tienes, guárdala en `recursos/` y actualiza el pie y la referencia APA.'
+            : ''
+        }`,
         post: { tipo: 'seleccion', datos: { salida, seccion: sel.seccion, fragmento: sel.fragmento } },
       };
     }

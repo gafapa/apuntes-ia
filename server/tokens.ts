@@ -1,10 +1,17 @@
 // Contador de tokens consumidos por los agentes (total y del día), guardado junto a los ajustes.
 import fs from 'node:fs';
 import type { ContadorTokens, GastoAsignatura, Motor, Tokens, Trabajo } from '../shared/tipos';
+import { writeFileAtomic } from './atomicFiles';
+import { ErrorUsuario } from './store';
 
 const cero = (): Tokens => ({ entrada: 0, salida: 0, cache: 0 });
 const hoy = () => new Date().toLocaleDateString('sv'); // AAAA-MM-DD en hora local
 const sumar = (a: Tokens, b: Tokens): Tokens => ({ entrada: a.entrada + b.entrada, salida: a.salida + b.salida, cache: a.cache + b.cache });
+
+function getEntry<T>(record: Record<string, T>, key: string, factory: () => T): T {
+  if (!Object.hasOwn(record, key)) Object.defineProperty(record, key, { value: factory(), configurable: true, enumerable: true, writable: true });
+  return record[key];
+}
 
 function vacio(): ContadorTokens {
   return { desde: new Date().toISOString(), total: { claude: cero(), codex: cero() }, hoy: { fecha: hoy(), porMotor: { claude: cero(), codex: cero() } }, porAsignatura: {}, porAgente: {} };
@@ -17,11 +24,13 @@ export class Contador {
   constructor(private archivo: string) {
     try {
       const leido = JSON.parse(fs.readFileSync(archivo, 'utf8'));
+      if (!leido || typeof leido !== 'object' || !leido.total || !leido.hoy?.porMotor) throw new Error('Invalid counter data');
       this.datos = { ...vacio(), ...leido };
       // Contador antiguo, sin desglose: se siembra con los trabajos que se conservan
       if (!leido.porAsignatura) delete this.datos.porAsignatura;
       if (!leido.porAgente) delete this.datos.porAgente;
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new ErrorUsuario('El contador de uso está dañado; recupéralo desde una copia de seguridad', 409);
       this.datos = vacio();
     }
   }
@@ -38,7 +47,7 @@ export class Contador {
     d.hoy.porMotor[motor] = sumar(d.hoy.porMotor[motor] ?? cero(), t);
     if (asignatura) this.sumarA(motor, t, asignatura, documento);
     if (agente) {
-      const a = ((d.porAgente ??= {})[agente] ??= { llamadas: 0, ...cero() });
+      const a = getEntry(d.porAgente ??= {}, agente, () => ({ llamadas: 0, ...cero() }));
       Object.assign(a, sumar(a, t));
     }
     this.guardar();
@@ -46,17 +55,17 @@ export class Contador {
 
   /** Una llamada más a un agente (cada vez que termina un trabajo o una respuesta). */
   llamada(agente: string) {
-    const a = ((this.datos.porAgente ??= {})[agente] ??= { llamadas: 0, ...cero() });
+    const a = getEntry(this.datos.porAgente ??= {}, agente, () => ({ llamadas: 0, ...cero() }));
     a.llamadas++;
     this.guardar();
   }
 
   private sumarA(motor: Motor, t: Tokens, asignatura: string, documento?: string) {
     const por = (this.datos.porAsignatura ??= {});
-    const a: GastoAsignatura = (por[asignatura] ??= { total: { claude: cero(), codex: cero() }, documentos: {} });
+    const a: GastoAsignatura = getEntry(por, asignatura, () => ({ total: { claude: cero(), codex: cero() }, documentos: {} }));
     a.total[motor] = sumar(a.total[motor] ?? cero(), t);
     if (documento) {
-      const doc = (a.documentos[documento] ??= { claude: cero(), codex: cero() });
+      const doc = getEntry(a.documentos, documento, () => ({ claude: cero(), codex: cero() }));
       doc[motor] = sumar(doc[motor] ?? cero(), t);
     }
   }
@@ -73,7 +82,7 @@ export class Contador {
     if (!this.datos.porAgente) {
       this.datos.porAgente = {};
       for (const t of trabajos) {
-        const a = (this.datos.porAgente[t.agente] ??= { llamadas: 0, ...cero() });
+        const a = getEntry(this.datos.porAgente, t.agente, () => ({ llamadas: 0, ...cero() }));
         a.llamadas++;
         if (t.tokens) Object.assign(a, sumar(a, t.tokens));
       }
@@ -88,6 +97,12 @@ export class Contador {
 
   private guardar() {
     clearTimeout(this.temporizador);
-    this.temporizador = setTimeout(() => fs.writeFile(this.archivo, JSON.stringify(this.datos), () => {}), 500);
+    this.temporizador = setTimeout(() => { void this.flush().catch(() => console.error('Unable to persist token usage')); }, 500);
+  }
+
+  async flush() {
+    clearTimeout(this.temporizador);
+    this.temporizador = undefined;
+    await writeFileAtomic(this.archivo, JSON.stringify(this.datos));
   }
 }

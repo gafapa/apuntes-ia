@@ -7,12 +7,13 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { pipeline } from 'node:stream/promises';
 import type { WebSocket } from 'ws';
 import type { Ajustes, EstadoMotor, HerramientasChat, PerfilGasto, SeleccionTexto, Trabajo, Indice, MensajeWS, MezclaVisuales, ModoMejora, Motor, OpcionesExportacion, PropuestaVisual, TipoBusqueda, TipoRevision } from '../shared/tipos';
 import { Almacen, ErrorUsuario } from './store';
 import { Cola } from './agents/cola';
 import { readCodexUsage } from './agents/codexUsage';
+import { APPLICATION_CSP, isLocalRequestAllowed } from './localSecurity';
+import { saveUpload } from './uploads';
 import { AGENTES } from './agents/agentes';
 import { abrirArchivo, abrirCarpeta, abrirTerminal, comandoInstalacion, comandoSesion, comprobarMotor } from './agents/motores';
 import { cargarAjustes, guardarAjustes } from './ajustes';
@@ -25,12 +26,14 @@ import { plantillaBase } from './plantillaBase';
 import { borrarDePapelera, crearCopia, duplicarAsignatura, duplicarDocumento, listarPapelera, reunirExportados, restaurarCopia, restaurarDePapelera } from './gestion';
 import { Moleculas } from './moleculas';
 import { Arasaac } from './arasaac';
+import { Fronteras } from './fronteras';
 import { rutaPandoc } from './conversion';
 import { ESFUERZOS, PERFILES, modelosDisponibles, preset } from './agents/modelos';
 import { buscarImagenes, miniatura, type ResultadoImagen } from './imagenesWeb';
 import { buscar as buscarRag, indexar } from './rag';
 
 export interface OpcionesServidor {
+  codexUsageReader?: typeof readCodexUsage;
   archivoAjustes: string; // dónde se guardan los ajustes (fuera de la carpeta de datos)
   carpetaDatosPorDefecto: string;
   dirEstatico?: string; // interfaz compilada (en desarrollo la sirve Vite)
@@ -64,6 +67,7 @@ export async function crearServidor(op: OpcionesServidor) {
 
   const moleculas = new Moleculas(path.join(path.dirname(op.archivoAjustes), 'moleculas.json'));
   const arasaac = new Arasaac(path.join(path.dirname(op.archivoAjustes), 'arasaac'));
+  const fronteras = new Fronteras(path.join(path.dirname(op.archivoAjustes), 'fronteras'));
   // Versiones de las secciones: se guardan al cambiar los archivos (lo que haga quien los cambie)
   const historial = new Historial(() => almacen.raiz);
   const flujo = new Flujo({
@@ -90,17 +94,16 @@ export async function crearServidor(op: OpcionesServidor) {
   // Y una web cuyo dominio apunte a 127.0.0.1 (DNS rebinding) pasaría por «propia»: el Host tiene que
   // ser local.
   app.addHook('onRequest', async (req, rep) => {
-    const host = req.headers.host ?? '';
-    if (!/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test(host)) {
-      return rep.code(403).send({ error: 'Host no permitido' });
-    }
-    const origen = req.headers.origin;
-    if (!origen) return;
-    const web = process.env.APUNTES_PUERTO_WEB ?? '5173'; // interfaz de Vite en desarrollo
-    const permitido = [`http://${host}`, `http://localhost:${web}`, `http://127.0.0.1:${web}`];
-    if (!permitido.includes(origen)) {
-      return rep.code(403).send({ error: 'Origen no permitido' });
-    }
+    const webPort = op.dirEstatico ? undefined : process.env.APUNTES_PUERTO_WEB ?? '5173';
+    if (!isLocalRequestAllowed(req.headers.host ?? '', req.headers.origin, req.headers['sec-fetch-site'] as string | undefined, webPort)) return rep.code(403).send({ error: 'Origen o Host no permitido' });
+  });
+  app.addHook('preValidation', async req => {
+    if (req.headers['content-type']?.startsWith('application/json') && (!req.body || typeof req.body !== 'object' || Array.isArray(req.body))) throw new ErrorUsuario('La petición debe contener un objeto JSON');
+  });
+  app.addHook('onSend', async (_req, reply, payload) => {
+    reply.header('X-Content-Type-Options', 'nosniff').header('Referrer-Policy', 'no-referrer');
+    if (op.dirEstatico && !reply.hasHeader('Content-Security-Policy')) reply.header('Content-Security-Policy', APPLICATION_CSP);
+    return payload;
   });
 
   app.setErrorHandler((err: Error & { status?: number; statusCode?: number }, _req, rep) => {
@@ -170,7 +173,7 @@ export async function crearServidor(op: OpcionesServidor) {
     if (b.agentes && typeof b.agentes === 'object') {
       nuevo.agentes = {};
       for (const [id, c] of Object.entries(b.agentes)) {
-        if (!AGENTES[id] || !c) continue;
+        if (!Object.hasOwn(AGENTES, id) || !c) continue;
         const motor = c.motor === 'claude' || c.motor === 'codex' ? c.motor : undefined;
         const instrucciones = typeof c.instrucciones === 'string' && c.instrucciones.trim() ? c.instrucciones : undefined;
         const esfuerzo = c.esfuerzo === 'low' || c.esfuerzo === 'medium' || c.esfuerzo === 'high' ? c.esfuerzo : undefined;
@@ -179,7 +182,7 @@ export async function crearServidor(op: OpcionesServidor) {
       }
     }
     if (b.modoMotor === 'claude' || b.modoMotor === 'codex' || b.modoMotor === 'ambos') nuevo.modoMotor = b.modoMotor;
-    if (typeof b.perfil === 'string' && b.perfil in PERFILES) nuevo.perfil = b.perfil;
+    if (typeof b.perfil === 'string' && Object.hasOwn(PERFILES, b.perfil)) nuevo.perfil = b.perfil;
     if (b.modelos && typeof b.modelos === 'object') {
       const modelos: NonNullable<Ajustes['modelos']> = {};
       for (const m of ['claude', 'codex'] as const) {
@@ -187,7 +190,7 @@ export async function crearServidor(op: OpcionesServidor) {
         if (!tabla || typeof tabla !== 'object') continue;
         modelos[m] = {};
         for (const [agente, c] of Object.entries(tabla)) {
-          if (!AGENTES[agente] || !c || typeof c.modelo !== 'string' || !/^[\w.:-]{1,80}$/.test(c.modelo)) continue;
+          if (!Object.hasOwn(AGENTES, agente) || !c || typeof c.modelo !== 'string' || !/^[\w.:-]{1,80}$/.test(c.modelo)) continue;
           modelos[m]![agente] = { modelo: c.modelo, esfuerzo: c.esfuerzo && ESFUERZOS.includes(c.esfuerzo) ? c.esfuerzo : undefined };
         }
       }
@@ -303,15 +306,16 @@ export async function crearServidor(op: OpcionesServidor) {
   app.post('/api/copia', async (req) => {
     const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'apuntes-copia-'));
     try {
-      let restauradas: { id: string; nombre: string }[] = [];
+      let uploaded = false;
       for await (const parte of req.parts()) {
         if (parte.type !== 'file') continue;
+        if (uploaded) throw new ErrorUsuario('Sube una sola copia por petición');
         const ruta = path.join(tmp, 'copia.zip');
-        await pipeline(parte.file, fs.createWriteStream(ruta));
-        restauradas = await restaurarCopia(almacen, ruta);
+        await saveUpload(parte.file, ruta);
+        uploaded = true;
       }
-      if (!restauradas.length) throw new ErrorUsuario('Falta el archivo de la copia');
-      return restauradas;
+      if (!uploaded) throw new ErrorUsuario('Falta el archivo de la copia');
+      return await restaurarCopia(almacen, path.join(tmp, 'copia.zip'));
     } finally {
       await fsp.rm(tmp, { recursive: true, force: true }).catch(() => {});
     }
@@ -364,7 +368,7 @@ export async function crearServidor(op: OpcionesServidor) {
       const guardados: string[] = [];
       for await (const parte of req.files()) {
         const destino = await almacen.rutaNuevaFuente(a, parte.filename, d);
-        await pipeline(parte.file, fs.createWriteStream(destino));
+        await saveUpload(parte.file, destino);
         guardados.push(path.basename(destino));
       }
       flujo.prepararFuentes(a, d).catch(() => {}); // extraer texto e indexar
@@ -439,6 +443,11 @@ export async function crearServidor(op: OpcionesServidor) {
     cola.reanudarCola();
     return cola.uso;
   });
+  app.post('/api/cola/guardar', async () => {
+    cola.pausarTodo();
+    await Promise.all([cola.flush(), contador.flush()]);
+    return { ok: true };
+  });
   app.post('/api/trabajos/limpiar', async () => {
     const removedIds = cola.limpiar();
     difundir({ tipo: 'trabajos-eliminados', ids: removedIds });
@@ -476,6 +485,16 @@ export async function crearServidor(op: OpcionesServidor) {
       return png;
     } catch (e) {
       throw new ErrorUsuario((e as Error).message, 404);
+    }
+  });
+  // Fronteras históricas de un año para los bloques ```mapa (se descargan la primera vez)
+  app.get('/api/mapas/fronteras/:anio', async (req, reply) => {
+    try {
+      const datos = await fronteras.geojson(Number((req.params as { anio: string }).anio));
+      reply.header('Content-Type', 'application/json').header('Cache-Control', 'max-age=604800');
+      return datos;
+    } catch (e) {
+      throw new ErrorUsuario((e as Error).message, 502);
     }
   });
   // Estructura de una molécula (nombre o SMILES) para los bloques ```molecula
@@ -543,6 +562,9 @@ export async function crearServidor(op: OpcionesServidor) {
   app.post(`${D}/flujo/visuales/:id/generar`, async (req) =>
     flujo.generarVisual(params(req).a, params(req).d, (req.params as { id: string }).id, cuerpo(req).indicaciones),
   );
+  app.post(`${D}/flujo/visuales/:id/aprobar`, async (req) =>
+    flujo.approveVisual(params(req).a, params(req).d, (req.params as { id: string }).id),
+  );
   app.delete(`${D}/flujo/visuales`, async (req) => {
     await flujo.limpiarVisuales(params(req).a, params(req).d);
     return { ok: true };
@@ -575,8 +597,9 @@ export async function crearServidor(op: OpcionesServidor) {
     try {
       for await (const parte of req.parts()) {
         if (parte.type === 'file') {
+          if (archivo) throw new ErrorUsuario('Sube un solo archivo de apuntes por petición');
           const ruta = path.join(tmp, path.basename(parte.filename) || 'apuntes');
-          await pipeline(parte.file, fs.createWriteStream(ruta));
+          await saveUpload(parte.file, ruta);
           archivo = { ruta, nombre: path.basename(parte.filename) };
         } else campos[parte.fieldname] = String(parte.value ?? '');
       }
@@ -717,7 +740,7 @@ export async function crearServidor(op: OpcionesServidor) {
         parte.file.resume();
         throw new ErrorUsuario('La plantilla debe ser un .docx o un .odt');
       }
-      await pipeline(parte.file, fs.createWriteStream(almacen.rutaPlantilla(a, ext.slice(1) as 'docx' | 'odt')));
+      await saveUpload(parte.file, almacen.rutaPlantilla(a, ext.slice(1) as 'docx' | 'odt'), true);
     }
     return almacen.plantillas(a);
   });
@@ -746,12 +769,16 @@ export async function crearServidor(op: OpcionesServidor) {
     const abs = path.resolve(almacen.raiz, rel);
     if (!abs.startsWith(path.resolve(almacen.raiz) + path.sep)) return rep.code(403).send();
     if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) return rep.code(404).send();
+    const realRoot = await fsp.realpath(almacen.raiz);
+    const realFile = await fsp.realpath(abs);
+    const relativeFile = path.relative(realRoot, realFile);
+    if (relativeFile.startsWith(`..${path.sep}`) || relativeFile === '..' || path.isAbsolute(relativeFile)) return rep.code(403).send();
     return rep
       .type(tipoMime(abs))
       .header('Cache-Control', 'no-cache')
       // Un SVG descargado de internet no debe poder ejecutar scripts en la app
       .header('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'")
-      .send(fs.createReadStream(abs));
+      .send(fs.createReadStream(realFile));
   });
 
   // ---------- Interfaz ----------
@@ -769,7 +796,7 @@ export async function crearServidor(op: OpcionesServidor) {
     if (usagePending || usageController.signal.aborted) return;
     usagePending = true;
     try {
-      const codex = await readCodexUsage({ signal: usageController.signal });
+      const codex = await (op.codexUsageReader ?? readCodexUsage)({ signal: usageController.signal });
       cola.uso = { ...cola.uso, codex, actualizado: Date.now() };
     } catch {
       cola.uso = { ...cola.uso, codex: { windows: [], updatedAt: Date.now(), unavailable: true }, actualizado: Date.now() };
@@ -797,6 +824,7 @@ export async function crearServidor(op: OpcionesServidor) {
     async cerrar() {
       cola.pausarTodo();
       vigilante?.close();
+      await Promise.all([cola.flush(), contador.flush()]);
       await app.close();
     },
   };

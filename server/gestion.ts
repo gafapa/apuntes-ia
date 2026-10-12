@@ -5,7 +5,9 @@ import { createReadStream, existsSync } from 'node:fs';
 import path from 'node:path';
 import JSZip from 'jszip';
 import type { Asignatura, Documento, ElementoPapelera } from '../shared/tipos';
-import { Almacen, ErrorUsuario, nombreLibre, slug } from './store';
+import { Almacen, ErrorUsuario, nombreLibre, reserveDirectory, slug } from './store';
+import { extractSafeArchive, loadSafeArchive, readArchiveText } from './safeArchives';
+import { writeFileAtomic } from './atomicFiles';
 
 // ---------------------------------------------------------------------------
 // Papelera: .papelera/<fecha>-<asignatura> o .papelera/<fecha>-<asignatura>--<documento>
@@ -97,7 +99,7 @@ export async function duplicarDocumento(almacen: Almacen, asig: string, doc: str
   const titulo = op.titulo?.trim() || (destino === asig ? `${original.titulo} (copia)` : original.titulo);
   const base = path.join(almacen.dirAsignatura(destino), 'documentos');
   await fs.mkdir(base, { recursive: true });
-  const id = await nombreLibre(base, slug(titulo));
+  const id = await reserveDirectory(base, slug(titulo));
   const origen = almacen.dirDocumento(asig, doc);
   const dir = path.join(base, id);
   await fs.cp(origen, dir, { recursive: true, filter: filtro(origen, NO_DUPLICAR) });
@@ -111,7 +113,7 @@ export async function duplicarDocumento(almacen: Almacen, asig: string, doc: str
 export async function duplicarAsignatura(almacen: Almacen, asig: string, nombre?: string): Promise<string> {
   const original = await almacen.obtenerAsignatura(asig);
   const nuevoNombre = nombre?.trim() || `${original.nombre} (copia)`;
-  const id = await nombreLibre(almacen.raiz, slug(nuevoNombre));
+  const id = await reserveDirectory(almacen.raiz, slug(nuevoNombre));
   const origen = almacen.dirAsignatura(asig);
   const dir = path.join(almacen.raiz, id);
   await fs.cp(origen, dir, { recursive: true, filter: filtro(origen, NO_DUPLICAR) });
@@ -139,7 +141,7 @@ const NO_COPIAR = new Set(['.agentes', '.indice', '.texto']);
 
 async function anadirCarpeta(zip: JSZip, dir: string, prefijo: string) {
   for (const e of await fs.readdir(dir, { withFileTypes: true })) {
-    if (NO_COPIAR.has(e.name)) continue;
+    if (NO_COPIAR.has(e.name) || e.name.startsWith('.tmp-')) continue;
     const ruta = path.join(dir, e.name);
     if (e.isDirectory()) await anadirCarpeta(zip, ruta, `${prefijo}${e.name}/`);
     else if (e.isFile()) {
@@ -169,37 +171,67 @@ export async function crearCopia(almacen: Almacen, asignaturas: string[] | undef
  * el mismo nombre de carpeta, la restaurada se guarda aparte y se indica en su nombre).
  */
 export async function restaurarCopia(almacen: Almacen, archivo: string): Promise<{ id: string; nombre: string }[]> {
-  let zip: JSZip;
-  try {
-    zip = await JSZip.loadAsync(await fs.readFile(archivo));
-  } catch {
-    throw new ErrorUsuario('El archivo no es un .zip válido');
-  }
+  const zip = await loadSafeArchive(archivo);
   const nombres = Object.keys(zip.files).filter((n) => !zip.files[n].dir);
   // Raíces: carpetas de primer nivel con asignatura.json (o el zip entero, si la tiene en la raíz)
   const raices = nombres.filter((n) => /^[^/]+\/asignatura\.json$/.test(n)).map((n) => n.slice(0, n.indexOf('/') + 1));
   if (!raices.length && nombres.includes('asignatura.json')) raices.push('');
   if (!raices.length) throw new ErrorUsuario('El .zip no contiene ninguna asignatura de Apuntes IA');
-  const res: { id: string; nombre: string }[] = [];
-  for (const raiz of raices) {
-    const datos = JSON.parse(await zip.file(`${raiz}asignatura.json`)!.async('string')) as Asignatura;
-    const base = slug(raiz.replace(/\/$/, '') || datos.nombre || 'asignatura');
-    const ocupado = existsSync(path.join(almacen.raiz, base));
-    const id = await nombreLibre(almacen.raiz, base);
-    const destino = path.join(almacen.raiz, id);
-    for (const n of nombres) {
-      if (!n.startsWith(raiz) || n === MANIFIESTO) continue;
-      const rel = n.slice(raiz.length);
-      const final = path.resolve(destino, rel);
-      if (!rel || !final.startsWith(destino + path.sep)) continue; // rutas que se salen de la carpeta
-      await fs.mkdir(path.dirname(final), { recursive: true });
-      await fs.writeFile(final, await zip.file(n)!.async('nodebuffer'));
+  // Validate every subject before publishing any of them.
+  const plans: { root: string; data: Asignatura; base: string }[] = [];
+  for (const root of raices) {
+    let data: Asignatura;
+    try { data = JSON.parse(await readArchiveText(zip.file(`${root}asignatura.json`)!, 1024 * 1024)); }
+    catch { throw new ErrorUsuario('La copia contiene una asignatura con datos dañados'); }
+    if (!data || typeof data.nombre !== 'string' || !data.nombre.trim()) throw new ErrorUsuario('La copia contiene una asignatura sin nombre válido');
+    for (const filename of nombres.filter(name => name.startsWith(root) && /^documentos\/[^/]+\/documento\.json$/.test(name.slice(root.length)))) {
+      let document: Documento;
+      try { document = JSON.parse(await readArchiveText(zip.file(filename)!, 1024 * 1024)); }
+      catch { throw new ErrorUsuario('La copia contiene un documento con datos dañados'); }
+      if (!document || typeof document.titulo !== 'string' || !document.titulo.trim()) throw new ErrorUsuario('La copia contiene un documento sin título válido');
     }
-    const nombre = ocupado ? `${datos.nombre} (restaurada)` : datos.nombre;
-    await fs.writeFile(path.join(destino, 'asignatura.json'), JSON.stringify({ ...datos, id, nombre }, null, 2) + '\n', 'utf8');
-    res.push({ id, nombre });
+    plans.push({ root, data, base: slug(root.replace(/\/$/, '') || data.nombre) });
   }
-  return res;
+  const staging = await fs.mkdtemp(path.join(almacen.raiz, '.restore-'));
+  const claimed: string[] = [];
+  let committed = false;
+  try {
+    await extractSafeArchive(zip, staging);
+    const result: { id: string; nombre: string }[] = [];
+    for (const plan of plans) {
+      const source = path.join(staging, plan.root);
+      // Subject metadata is published last, after all payload files have been copied.
+      await fs.rm(path.join(source, 'asignatura.json'));
+      const occupied = existsSync(path.join(almacen.raiz, plan.base));
+      const id = await reserveDirectory(almacen.raiz, plan.base);
+      const destination = path.join(almacen.raiz, id);
+      claimed.push(destination);
+      for (const entry of await fs.readdir(source)) {
+        if (entry === MANIFIESTO) continue;
+        await fs.cp(path.join(source, entry), path.join(destination, entry), { recursive: true, force: false, errorOnExist: true });
+      }
+      const documentsDirectory = path.join(destination, 'documentos');
+      if (existsSync(documentsDirectory)) for (const entry of await fs.readdir(documentsDirectory, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        const metadata = path.join(documentsDirectory, entry.name, 'documento.json');
+        if (!existsSync(metadata)) continue;
+        const document = JSON.parse(await fs.readFile(metadata, 'utf8')) as Documento;
+        await writeFileAtomic(metadata, JSON.stringify({ ...document, id: entry.name, asignatura: id }, null, 2) + '\n');
+      }
+      const nombre = occupied ? `${plan.data.nombre} (restaurada)` : plan.data.nombre;
+      result.push({ id, nombre });
+    }
+    for (const [index, subject] of result.entries()) await writeFileAtomic(path.join(almacen.raiz, subject.id, 'asignatura.json'), JSON.stringify({ ...plans[index].data, id: subject.id, nombre: subject.nombre }, null, 2) + '\n');
+    committed = true;
+    return result;
+  } finally {
+    if (!committed) for (const destination of claimed) {
+      const relative = path.relative(path.resolve(almacen.raiz), path.resolve(destination));
+      if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('Unsafe restoration rollback path');
+      await fs.rm(destination, { recursive: true, force: true });
+    }
+    await fs.rm(staging, { recursive: true, force: true });
+  }
 }
 
 // ---------------------------------------------------------------------------

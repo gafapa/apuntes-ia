@@ -34,6 +34,8 @@ interface Estado {
   reconexion: number;
   /** Fragmento seleccionado en la vista previa: el chat de la derecha actúa solo sobre él. */
   seleccionTexto?: SeleccionTexto;
+  /** Cambia al pulsar «Pedir cambios» en una figura: el panel de agentes se abre y pone el cursor en el chat. */
+  enfocarChat?: number;
   /** Sección abierta en el editor (se envía como contexto a los agentes). */
   seccionActiva?: string;
   /** Petición de abrir una sección en el editor (desde el flujo). */

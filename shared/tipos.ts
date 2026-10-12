@@ -363,6 +363,7 @@ export interface SeleccionTexto {
   hasta: number; // línea siguiente a la última
   fragmento: string; // Markdown de esas líneas
   texto: string; // texto seleccionado tal como se ve (puede ser solo parte del fragmento)
+  figura?: boolean; // es una imagen, un diagrama, un mapa, una molécula o una tabla (con su pie)
 }
 
 /** Herramientas que el usuario activa para una petición libre desde el panel de agentes. */
@@ -384,7 +385,8 @@ export interface PropuestaVisual {
   tipo: TipoVisual;
   titulo: string;
   descripcion: string;
-  estado: 'propuesta' | 'generando' | 'insertada' | 'descartada' | 'error';
+  estado: 'propuesta' | 'generando' | 'generada' | 'insertada' | 'descartada' | 'error';
+  markdown?: string; // Generated preview, pending explicit approval.
   archivo?: string; // recurso generado
   credito?: string; // autoría/licencia de imágenes de internet
   molecula?: string; // tipo molecula: nombre en inglés (PubChem) o SMILES

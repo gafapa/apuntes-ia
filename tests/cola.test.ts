@@ -20,6 +20,7 @@ before(() => {
 after(async () => {
   cola.detenerTodo();
   cola.reanudarCola();
+  await cola.flush();
   // El proceso cancelado tarda un poco en soltar la carpeta (en Windows no se puede borrar mientras)
   for (let i = 0; i < 40; i++) {
     try {

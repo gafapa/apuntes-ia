@@ -183,6 +183,7 @@ export const api = {
   generarVisual: (a: string, d: string, id: string, indicaciones?: string) =>
     pedir<Trabajo>('POST', `${doc(a, d)}/flujo/visuales/${e(id)}/generar`, { indicaciones }),
   limpiarVisuales: (a: string, d: string) => pedir('DELETE', `${doc(a, d)}/flujo/visuales`),
+  approveVisual: (a: string, d: string, id: string) => pedir<PropuestaVisual>('POST', `${doc(a, d)}/flujo/visuales/${e(id)}/aprobar`),
   generarActividad: (a: string, d: string, op: Partial<OpcionesActividad>) => pedir<BloqueActividad>('POST', `${doc(a, d)}/actividades`, op),
   rehacerActividad: (a: string, d: string, id: string, op: Partial<OpcionesActividad>) =>
     pedir<BloqueActividad>('POST', `${doc(a, d)}/actividades/${e(id)}/rehacer`, op),

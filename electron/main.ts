@@ -3,6 +3,7 @@ import { app, BrowserWindow, Menu, dialog, shell } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import path from 'node:path';
 import { crearServidor } from '../server/index';
+import { isApplicationUrl } from '../server/localSecurity';
 
 let ventana: BrowserWindow | null = null;
 let servidor: Awaited<ReturnType<typeof crearServidor>> | null = null;
@@ -63,7 +64,7 @@ async function iniciar() {
     title: URL_EN_VIVO ? 'Apuntes IA · en vivo' : 'Apuntes IA',
     backgroundColor: '#0f1117',
     show: false,
-    icon: path.join(__dirname, '..', 'build', 'icon.png'),
+    icon: path.join(__dirname, '..', 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     webPreferences: { contextIsolation: true, sandbox: true },
   });
   ventana.once('ready-to-show', () => ventana?.show());
@@ -71,11 +72,11 @@ async function iniciar() {
   // Los enlaces externos se abren en el navegador del sistema
   const urlApp = URL_EN_VIVO ?? servidor!.url;
   ventana.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/.test(url) && !url.startsWith(urlApp)) shell.openExternal(url);
+    if (/^https?:/.test(url) && !isApplicationUrl(url, urlApp)) void shell.openExternal(url);
     return { action: 'deny' };
   });
   ventana.webContents.on('will-navigate', (e, url) => {
-    if (!new URL(url).host.startsWith(new URL(urlApp).host)) {
+    if (!isApplicationUrl(url, urlApp)) {
       e.preventDefault();
       if (/^https?:/.test(url)) shell.openExternal(url);
     }

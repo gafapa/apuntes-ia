@@ -19,7 +19,8 @@ import {
   X,
 } from 'lucide-react';
 import type { EstadoFlujo, ImagenFallida, MezclaVisuales, OpcionesExportacion, PropuestaVisual, TipoVisual, Trabajo } from '../../../../shared/tipos';
-import { api } from '../../lib/api';
+import { api, urlDatos } from '../../lib/api';
+import { VistaPrevia } from '../VistaPrevia';
 import { useEstado } from '../../lib/estado';
 import { exportarDocumento } from '../../lib/exportacion';
 import { AreaTexto, Boton, Entrada, Insignia, cx } from '../ui';
@@ -38,7 +39,7 @@ interface Props {
 const TIPOS: { id: TipoVisual; nombre: string; icono: typeof Network; ayuda: string }[] = [
   { id: 'diagrama', nombre: 'Diagrama', icono: Network, ayuda: 'Esquema dibujado con Mermaid' },
   { id: 'grafica', nombre: 'Gráfica', icono: ChartLine, ayuda: 'Funciones, datos, climogramas, pirámides de población' },
-  { id: 'mapa', nombre: 'Mapa', icono: MapIcon, ayuda: 'España, Europa o el mundo con regiones, puntos y rutas' },
+  { id: 'mapa', nombre: 'Mapa', icono: MapIcon, ayuda: 'Político, físico, de datos o histórico, con rutas y símbolos (también mudo)' },
   { id: 'molecula', nombre: 'Molécula', icono: Atom, ayuda: 'Fórmula estructural dibujada con los datos de PubChem' },
   { id: 'imagen-web', nombre: 'Imagen web', icono: Globe, ayuda: 'Imagen real con licencia libre' },
   { id: 'imagen-ia', nombre: 'Imagen IA', icono: Sparkles, ayuda: 'Generada con Codex' },
@@ -80,7 +81,7 @@ export function PasoVisuales({ a, d, estado, trabajos, recargar }: Props) {
       opcional
       hecho={insertadas.length > 0 && propuestas.length === 0}
       trabajando={director.length > 0 || propuestas.some((p) => p.estado === 'generando')}
-      descripcion="El director visual detecta dónde ayuda un apoyo visual y decide de qué tipo. Tú apruebas y el ilustrador lo crea."
+      descripcion="Genera los visuales y revísalos aquí. Solo se incorporan al documento cuando pulses Aceptar."
       acciones={
         <BotonAgente
           texto="Buscar dónde hacen falta"
@@ -200,11 +201,14 @@ function TarjetaPropuesta({
   const [descripcion, setDescripcion] = useState(p.descripcion);
   const [molecula, setMolecula] = useState(p.molecula ?? '');
   const generando = p.estado === 'generando';
+  const ready = p.estado === 'generada' && !!p.markdown;
+  const [busy, setBusy] = useState(false);
 
   const guardar = (cambios: Partial<PropuestaVisual>) =>
     api.editarPropuesta(a, d, p.id, cambios).then(recargar).catch((e) => avisar(e.message, 'error'));
 
   const generar = async () => {
+    setBusy(true);
     try {
       if (titulo !== p.titulo || descripcion !== p.descripcion || molecula !== (p.molecula ?? '')) {
         await api.editarPropuesta(a, d, p.id, { titulo, descripcion, molecula });
@@ -213,6 +217,21 @@ function TarjetaPropuesta({
       recargar();
     } catch (e) {
       avisar((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const approve = async () => {
+    setBusy(true);
+    try {
+      await api.approveVisual(a, d, p.id);
+      recargar();
+      avisar('Visual aceptado e incorporado al documento', 'ok');
+    } catch (error) {
+      avisar((error as Error).message, 'error');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -222,9 +241,9 @@ function TarjetaPropuesta({
         <button onClick={() => irASeccion(p.seccion)} className="min-w-0 flex-1 basis-40 truncate text-left text-[12px] text-texto-3 hover:text-acento-texto cursor-pointer">
           {seccion}
         </button>
-        <div className="ml-auto flex shrink-0 gap-0.5 rounded-lg bg-panel-2 p-0.5">
+        <div className="ml-auto flex max-w-full flex-wrap gap-0.5 rounded-lg bg-panel-2 p-0.5">
           {TIPOS.map((t) => {
-            const deshabilitado = generando || (t.id === 'imagen-ia' && !conCodex) || !tipoPermitido[t.id];
+            const deshabilitado = generando || busy || ready || (t.id === 'imagen-ia' && !conCodex) || !tipoPermitido[t.id];
             return (
               <button
                 key={t.id}
@@ -246,7 +265,7 @@ function TarjetaPropuesta({
       <Entrada
         className="mb-1.5 h-8 text-[13px] font-medium"
         value={titulo}
-        disabled={generando}
+        disabled={generando || busy || ready}
         onChange={(e) => setTitulo(e.target.value)}
         onBlur={() => titulo !== p.titulo && guardar({ titulo })}
       />
@@ -254,7 +273,7 @@ function TarjetaPropuesta({
         rows={2}
         className="text-[12.5px]"
         value={descripcion}
-        disabled={generando}
+        disabled={generando || busy || ready}
         onChange={(e) => setDescripcion(e.target.value)}
         onBlur={() => descripcion !== p.descripcion && guardar({ descripcion })}
       />
@@ -263,7 +282,7 @@ function TarjetaPropuesta({
           className="mt-1.5 h-8 font-mono text-[12.5px]"
           placeholder="Molécula: nombre en inglés (p. ej. aspirin) o SMILES; si lo dejas vacío, lo decide el agente"
           value={molecula}
-          disabled={generando}
+          disabled={generando || busy || ready}
           onChange={(e) => setMolecula(e.target.value)}
           onBlur={() => molecula !== (p.molecula ?? '') && guardar({ molecula })}
         />
@@ -274,19 +293,31 @@ function TarjetaPropuesta({
           {p.error ?? 'No se pudo generar'}. Puedes reintentarlo o responder al agente en el panel de la derecha.
         </p>
       )}
-      <div className="mt-2 flex items-center justify-end gap-1.5">
+      {ready && (
+        <section className="mt-3 rounded-lg border border-borde bg-panel p-4" aria-label={`Vista previa: ${p.titulo}`}>
+          <p className="mb-3 text-[12.5px] text-texto-2" role="status">Pendiente de aceptación. Este visual aún no está en el documento.</p>
+          <VistaPrevia texto={p.markdown!} base={urlDatos(a, 'documentos', d)} />
+        </section>
+      )}
+      <div className="mt-2 flex flex-wrap items-center justify-end gap-1.5">
         {trabajo && (
           <span className="mr-auto flex items-center gap-1.5 text-[12px] text-acento-texto">
             <Loader2 className="size-3.5 animate-spin" />
             {trabajo.estado === 'en-cola' ? 'En cola…' : `${trabajo.nombreAgente} trabajando…`}
           </span>
         )}
-        <Boton tam="sm" variante="fantasma" icono={<X className="size-3.5" />} disabled={generando} onClick={() => guardar({ estado: 'descartada' })}>
+        <Boton tam="sm" variante="fantasma" icono={<X className="size-3.5" />} disabled={generando || busy} onClick={() => guardar({ estado: 'descartada' })}>
           Descartar
         </Boton>
-        <Boton tam="sm" icono={<Wand2 className="size-3.5" />} disabled={generando} onClick={generar}>
-          {p.estado === 'error' ? 'Reintentar' : 'Generar'}
+        {ready && (
+          <Boton tam="sm" variante="fantasma" disabled={busy} onClick={() => guardar({ estado: 'propuesta' })}>Editar propuesta</Boton>
+        )}
+        <Boton tam="sm" icono={<Wand2 className="size-3.5" />} disabled={generando || busy} onClick={generar}>
+          {p.estado === 'error' ? 'Reintentar' : ready ? 'Volver a generar' : 'Generar'}
         </Boton>
+        {ready && (
+          <Boton tam="sm" variante="primario" icono={<Check className="size-3.5" />} cargando={busy} disabled={busy} onClick={approve}>Aceptar</Boton>
+        )}
       </div>
     </div>
   );

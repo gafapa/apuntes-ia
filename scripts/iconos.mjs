@@ -1,18 +1,14 @@
-// Genera los iconos de la app a partir de build/icono.svg y build/icono-pequeno.svg (la versión
-// simplificada para 32 px o menos). Se ejecuta con Electron, que dibuja el SVG en un canvas:
-//   npm run iconos
-// Escribe build/icon.png (1024), build/icon.ico (16-256), web/public/icono.png y docs/icono.png.
+// Render the full and small SVG marks using Electron's canvas implementation.
+// Run npm run iconos to refresh the desktop, website and documentation assets.
 import { app, BrowserWindow } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const grande = fs.readFileSync(path.join(raiz, 'build', 'icono.svg'), 'utf8');
-const pequeno = fs.readFileSync(path.join(raiz, 'build', 'icono-pequeno.svg'), 'utf8');
-// Por debajo de 128 px los renglones de las páginas solo ensucian
-const sinRenglones = grande.replace(/<g id="renglones"[\s\S]*?<\/g>\s*/, '');
-const svgPara = (lado) => (lado <= 32 ? pequeno : lado < 128 ? sinRenglones : grande);
+const fullSvg = fs.readFileSync(path.join(raiz, 'build', 'icono.svg'), 'utf8');
+const smallSvg = fs.readFileSync(path.join(raiz, 'build', 'icono-pequeno.svg'), 'utf8');
+const svgForSize = (size) => (size <= 32 ? smallSvg : fullSvg);
 
 app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
@@ -22,7 +18,7 @@ app.whenReady().then(async () => {
   const png = async (lado) => {
     const url = await ventana.webContents.executeJavaScript(`(async () => {
       const img = new Image();
-      img.src = 'data:image/svg+xml;base64,' + ${JSON.stringify(Buffer.from(svgPara(lado)).toString('base64'))};
+      img.src = 'data:image/svg+xml;base64,' + ${JSON.stringify(Buffer.from(svgForSize(lado)).toString('base64'))};
       await img.decode();
       const c = document.querySelector('canvas');
       c.width = c.height = ${lado};

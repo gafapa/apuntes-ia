@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { dibujarDiagramas, renderizar } from '../lib/markdown';
 import { useEstado } from '../lib/estado';
 import { Visor, type ContenidoVisor } from './Visor';
+import { Estrella } from './Logo';
 
 /** Rango de líneas [desde, hasta) de un bloque de la vista previa (atributo data-l). */
 function lineasDe(el: Element): [number, number] | undefined {
@@ -9,15 +10,38 @@ function lineasDe(el: Element): [number, number] | undefined {
   return m ? [Number(m[1]), Number(m[2])] : undefined;
 }
 
+const FIGURAS = 'figure, .mermaid, .molecula, .bloque-dibujado, table';
+
+/** El bloque de primer nivel que es una figura (imagen, diagrama, mapa, molécula o tabla) y contiene `el`. */
+function figuraDe(el: Element | null, raiz: HTMLElement): HTMLElement | undefined {
+  let b = el?.closest('[data-l]') ?? null;
+  while (b && b.parentElement !== raiz) b = b.parentElement?.closest('[data-l]') ?? null;
+  if (!b || !lineasDe(b)) return;
+  return b.matches(FIGURAS) || b.querySelector(':scope > img') ? (b as HTMLElement) : undefined;
+}
+
+/** Nombre corto de una figura: su pie, o qué es. */
+function nombreFigura(b: HTMLElement): string {
+  const pie = b.querySelector('figcaption')?.textContent || (b.nextElementSibling?.matches('p.pie') ? b.nextElementSibling.textContent : '');
+  if (pie?.trim()) return pie.trim();
+  if (b.matches('.mermaid')) return 'Diagrama';
+  if (b.matches('.molecula')) return 'Molécula';
+  if (b.matches('table')) return 'Tabla';
+  if (b.matches('.bloque-dibujado')) return b.dataset.tipo === 'mapa' ? 'Mapa' : 'Figura';
+  return 'Imagen';
+}
+
 /**
  * Vista previa de Markdown con fórmulas y diagramas. `base` es la URL de la carpeta del documento.
- * Con `seccion`, se puede seleccionar texto (arrastrando) o elementos enteros (Ctrl+clic) y el chat
- * de la derecha actúa solo sobre ese fragmento.
+ * Con `seccion`, se puede seleccionar texto (arrastrando), una figura (botón «Pedir cambios» al pasar
+ * el ratón) o elementos enteros (Ctrl+clic), y el chat de la derecha actúa solo sobre ese fragmento.
  */
 export function VistaPrevia({ texto, base, seccion }: { texto: string; base: string; seccion?: string }) {
   const ref = useRef<HTMLDivElement>(null);
+  const caja = useRef<HTMLDivElement>(null);
   const html = useMemo(() => renderizar(texto, base), [texto, base]);
   const [ampliado, setAmpliado] = useState<ContenidoVisor>();
+  const [figura, setFigura] = useState<{ el: HTMLElement; top: number; left: number }>();
   const seleccion = useEstado((s) => (seccion && s.seleccionTexto?.seccion === seccion ? s.seleccionTexto : undefined));
 
   useEffect(() => {
@@ -25,6 +49,7 @@ export function VistaPrevia({ texto, base, seccion }: { texto: string; base: str
     const t = setTimeout(() => ref.current && dibujarDiagramas(ref.current), 150);
     return () => clearTimeout(t);
   }, [html]);
+  useEffect(() => setFigura(undefined), [html]);
 
   // Resaltar los bloques seleccionados (también tras volver a dibujar la vista)
   useEffect(() => {
@@ -35,11 +60,11 @@ export function VistaPrevia({ texto, base, seccion }: { texto: string; base: str
     }
   }, [html, seleccion]);
 
-  const seleccionar = (desde: number, hasta: number, visible: string) => {
+  const seleccionar = (desde: number, hasta: number, visible: string, esFigura = false) => {
     if (!seccion) return;
     const lineas = texto.split('\n');
     useEstado.setState({
-      seleccionTexto: { seccion, desde, hasta, fragmento: lineas.slice(desde, hasta).join('\n').trim(), texto: visible.trim() },
+      seleccionTexto: { seccion, desde, hasta, fragmento: lineas.slice(desde, hasta).join('\n').trim(), texto: visible.trim(), ...(esFigura && { figura: true }) },
     });
   };
 
@@ -54,6 +79,31 @@ export function VistaPrevia({ texto, base, seccion }: { texto: string; base: str
     const lineas = tocados.map(lineasDe).filter((l): l is [number, number] => !!l);
     if (!lineas.length) return;
     seleccionar(Math.min(...lineas.map((l) => l[0])), Math.max(...lineas.map((l) => l[1])), sel.toString());
+  };
+
+  // «Pedir cambios» en una figura: se selecciona con su pie y su referencia, y el cursor va al chat
+  const pedirCambios = (b: HTMLElement) => {
+    let [desde, hasta] = lineasDe(b)!;
+    for (let sig = b.nextElementSibling; sig?.matches('p.pie'); sig = sig.nextElementSibling) {
+      const l = lineasDe(sig);
+      if (l) hasta = Math.max(hasta, l[1]);
+    }
+    for (let ant = b.previousElementSibling; ant?.matches('p.pie') && !ant.matches('.referencia'); ant = ant.previousElementSibling) {
+      const l = lineasDe(ant); // pie de tabla encima
+      if (l) desde = Math.min(desde, l[0]);
+    }
+    seleccionar(desde, hasta, nombreFigura(b), true);
+    useEstado.setState({ enfocarChat: Date.now() });
+  };
+
+  const alMover = (e: React.MouseEvent) => {
+    if (!seccion || !ref.current || !caja.current) return;
+    const b = figuraDe(e.target as Element, ref.current);
+    if (!b) return setFigura(undefined);
+    if (figura?.el === b) return;
+    const r = b.getBoundingClientRect();
+    const c = caja.current.getBoundingClientRect();
+    setFigura({ el: b, top: r.top - c.top + 8, left: Math.min(r.right, c.right) - c.left - 8 });
   };
 
   // Clic en una imagen o un diagrama: verlo ampliado. Ctrl+clic: seleccionar el elemento entero
@@ -84,16 +134,34 @@ export function VistaPrevia({ texto, base, seccion }: { texto: string; base: str
     return () => window.removeEventListener('keydown', tecla);
   }, [seleccion]);
 
+  const figuraSeleccionada = (() => {
+    const l = figura && lineasDe(figura.el);
+    return !!seleccion?.figura && !!l && l[0] >= seleccion.desde && l[1] <= seleccion.hasta;
+  })();
+
   return (
-    <>
+    <div ref={caja} className="relative" onMouseLeave={() => setFigura(undefined)}>
       <div
         ref={ref}
         className="apunte"
         onClick={alPulsar}
         onMouseUp={alSoltar}
+        onMouseMove={alMover}
         dangerouslySetInnerHTML={{ __html: html }}
       />
+      {figura && (
+        <button
+          type="button"
+          onClick={() => pedirCambios(figura.el)}
+          title="Selecciona esta figura con su pie para pedir cambios a un agente en el chat de la derecha"
+          className="aparecer absolute z-10 inline-flex -translate-x-full items-center gap-1.5 rounded-full bg-acento px-3 py-1.5 text-[12.5px] font-semibold whitespace-nowrap text-white shadow-suave transition-colors hover:bg-acento-2 cursor-pointer"
+          style={{ top: figura.top, left: figura.left }}
+        >
+          <Estrella className="size-3.5 text-estrella" />
+          {figuraSeleccionada ? 'Seleccionada' : 'Pedir cambios'}
+        </button>
+      )}
       <Visor contenido={ampliado} onCerrar={() => setAmpliado(undefined)} />
-    </>
+    </div>
   );
 }

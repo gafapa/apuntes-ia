@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, Check, Clock, Crosshair, RotateCcw, TextSelect, X, ChevronDown, CircleStop, Eraser, Globe, FileEdit, Landmark, Library, Loader2, PanelRightClose, PanelRightOpen, Search, Send, Wrench } from 'lucide-react';
+import { Bot, Check, Clock, Crosshair, Image as IconoImagen, RotateCcw, TextSelect, X, ChevronDown, CircleStop, Eraser, Globe, FileEdit, Landmark, Library, Loader2, PanelRightClose, PanelRightOpen, Search, Send, Wrench } from 'lucide-react';
 import type { HerramientasChat, Motor, Trabajo } from '../../../shared/tipos';
 import { api } from '../lib/api';
 import { useEstado } from '../lib/estado';
@@ -104,6 +104,16 @@ export function PanelAgentes() {
     localStorage.setItem('panelAgentes', v ? 'abierto' : 'cerrado');
   };
 
+  // «Pedir cambios» en una figura de la vista previa: abrir el panel y escribir directamente
+  const campo = useRef<HTMLTextAreaElement>(null);
+  const enfocarChat = useEstado((s) => s.enfocarChat);
+  useEffect(() => {
+    if (!enfocarChat) return;
+    setAbierto(true);
+    localStorage.setItem('panelAgentes', 'abierto');
+    requestAnimationFrame(() => campo.current?.focus());
+  }, [enfocarChat]);
+
   const enviar = async () => {
     if (!tarea.trim() || !seleccion.asignatura) return;
     setEnviando(true);
@@ -170,9 +180,9 @@ export function PanelAgentes() {
         )}
         {seleccionTexto && (
           <div className="mb-2 flex items-start gap-2 rounded-lg border border-acento/30 bg-acento-suave px-2.5 py-1.5 text-[12px]">
-            <TextSelect className="mt-0.5 size-3.5 shrink-0 text-acento-texto" />
+            {seleccionTexto.figura ? <IconoImagen className="mt-0.5 size-3.5 shrink-0 text-acento-texto" /> : <TextSelect className="mt-0.5 size-3.5 shrink-0 text-acento-texto" />}
             <div className="min-w-0 flex-1">
-              <div className="font-medium text-acento-texto">Solo sobre la selección</div>
+              <div className="font-medium text-acento-texto">{seleccionTexto.figura ? 'Solo sobre esta figura' : 'Solo sobre la selección'}</div>
               <div className="line-clamp-2 text-texto-2" title={seleccionTexto.fragmento}>
                 {seleccionTexto.texto || seleccionTexto.fragmento}
               </div>
@@ -188,6 +198,7 @@ export function PanelAgentes() {
         )}
         <div className="relative rounded-2xl border border-borde bg-fondo focus-within:border-acento focus-within:ring-3 focus-within:ring-acento/15">
           <textarea
+            ref={campo}
             value={tarea}
             onChange={(e) => setTarea(e.target.value)}
             onKeyDown={(e) => {
@@ -198,10 +209,12 @@ export function PanelAgentes() {
             }}
             rows={3}
             placeholder={
-              seleccionTexto
-                ? '¿Qué hago con la selección? (p. ej. «simplifícalo», «añade un ejemplo», «¿qué significa?»)'
-                : seleccion.documento
-                  ? '¿Qué quieres que hagan los agentes con este documento? Puedes seleccionar texto en la vista previa para actuar solo sobre él.'
+              seleccionTexto?.figura
+                ? '¿Qué cambio en la figura? (p. ej. «busca una imagen más clara», «marca Madrid en el mapa», «añade la leyenda», «mejora el pie»)'
+                : seleccionTexto
+                  ? '¿Qué hago con la selección? (p. ej. «simplifícalo», «añade un ejemplo», «¿qué significa?»)'
+                  : seleccion.documento
+                    ? '¿Qué quieres que hagan los agentes con este documento? Selecciona texto en la vista previa, o pulsa «Pedir cambios» sobre una figura, para actuar solo sobre eso.'
                   : '¿Qué quieres que hagan los agentes en esta asignatura?'
             }
             className="block w-full resize-none bg-transparent px-3 pt-2.5 text-sm outline-none placeholder:text-texto-3"

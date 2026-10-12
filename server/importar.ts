@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import JSZip from 'jszip';
+import { extractSafeArchive, loadSafeArchive, readArchiveText } from './safeArchives';
 import type { Apartado, FormatoImportado } from '../shared/tipos';
 import { ejecutarBinario, rutaPandoc } from './conversion';
 import { ErrorUsuario, slug } from './store';
@@ -79,17 +79,12 @@ export async function aMarkdown(origen: string, nombre: string, dirBin: string |
       formatoWord = { estiloCuerpo: ajustado.estiloCuerpo, estiloTabla: ajustado.estiloTabla };
     } else if (path.extname(nombre).toLowerCase() === '.zip') {
       // Markdown con sus imágenes (p. ej. el que exporta la propia app)
-      const zip = await JSZip.loadAsync(await fs.readFile(origen));
+      const zip = await loadSafeArchive(origen);
       const mds = Object.values(zip.files).filter((f) => !f.dir && /\.(md|markdown)$/i.test(f.name) && !f.name.startsWith('__MACOSX'));
       if (!mds.length) throw new ErrorUsuario('El .zip no contiene ningún archivo Markdown (.md)');
-      for (const f of Object.values(zip.files)) {
-        if (f.dir || f.name.includes('..')) continue;
-        const destino = path.join(tmp, f.name);
-        await fs.mkdir(path.dirname(destino), { recursive: true });
-        await fs.writeFile(destino, await f.async('nodebuffer'));
-      }
+      await extractSafeArchive(zip, tmp);
       // El más largo es el de los apuntes (puede haber un LEEME)
-      const principal = (await Promise.all(mds.map(async (f) => ({ f, n: (await f.async('string')).length })))).sort((a, b) => b.n - a.n)[0].f;
+      const principal = (await Promise.all(mds.map(async (f) => ({ f, n: (await readArchiveText(f)).length })))).sort((a, b) => b.n - a.n)[0].f;
       texto = await fs.readFile(path.join(tmp, principal.name), 'utf8');
       base = path.dirname(path.join(tmp, principal.name));
     } else {

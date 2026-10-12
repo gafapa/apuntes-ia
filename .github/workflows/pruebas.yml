@@ -1,10 +1,17 @@
-# Comprueba tipos y pasa las pruebas automáticas en cada cambio de main (y en las pull requests)
-name: Pruebas
+# Validate types, security, tests and build for pushes and pull requests.
+name: Checks
 
 on:
   push:
     branches: [main]
   pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   pruebas:
@@ -17,15 +24,20 @@ jobs:
           - so: ubuntu-latest
             plataforma: linux
     runs-on: ${{ matrix.so }}
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm audit --audit-level=low
       - run: node scripts/fetch-bin.mjs ${{ matrix.plataforma }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: npm test
+      - run: npm run build

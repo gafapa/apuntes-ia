@@ -4,6 +4,7 @@
 // público, CC0, CC BY o CC BY-SA. Lo que no lo declare, o tenga una licencia no comercial o sin
 // obras derivadas, se descarta (inspirado en open-museum-mcp y archival-imagery-mcp).
 import fs from 'node:fs/promises';
+import { fetchPublicResource, readResponseLimited } from './remoteResources';
 import path from 'node:path';
 import { dimensiones } from './imagenes';
 
@@ -361,14 +362,13 @@ const HOSTS_MINIATURAS = /(^|\.)(wikimedia\.org|openverse\.org|staticflickr\.com
 export async function miniatura(url: string): Promise<{ tipo: string; datos: Buffer }> {
   const u = new URL(url);
   if (!/^https?:$/.test(u.protocol) || !HOSTS_MINIATURAS.test(u.hostname)) throw new Error('Servidor no admitido');
-  const r = await fetch(u, {
+  const r = await fetchPublicResource(u.toString(), {
     headers: { 'User-Agent': UA, ...(/artic\.edu$/.test(u.hostname) ? { 'AIC-User-Agent': UA } : {}) },
     signal: AbortSignal.timeout(20000),
   });
   const tipo = r.headers.get('content-type') ?? '';
   if (!r.ok || !tipo.startsWith('image/')) throw new Error(`No disponible (${r.status})`);
-  const datos = Buffer.from(await r.arrayBuffer());
-  if (datos.length > 5 * 1024 * 1024) throw new Error('Demasiado grande');
+  const datos = await readResponseLimited(r, 5 * 1024 * 1024);
   return { tipo, datos };
 }
 
@@ -445,7 +445,7 @@ async function descargarUnaVez(url: string, dir: string, base: string): Promise<
     let r: Response;
     try {
       // El Art Institute of Chicago pide identificarse con su cabecera propia para servir las imágenes
-      r = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': UA, ...(/artic\.edu/.test(url) ? { 'AIC-User-Agent': UA } : {}) } });
+      r = await fetchPublicResource(url, { signal: ctrl.signal, headers: { 'User-Agent': UA, ...(/artic\.edu/.test(url) ? { 'AIC-User-Agent': UA } : {}) } });
     } catch (e) {
       throw temporal(`No se pudo conectar para descargar la imagen (${(e as Error).name === 'AbortError' ? 'tiempo agotado' : (e as Error).message}).`);
     }
@@ -457,7 +457,7 @@ async function descargarUnaVez(url: string, dir: string, base: string): Promise<
     const tipo = r.headers.get('content-type') ?? '';
     const ext = /png/.test(tipo) ? 'png' : /jpe?g/.test(tipo) ? 'jpg' : /svg/.test(tipo) ? 'svg' : /webp/.test(tipo) ? 'webp' : /gif/.test(tipo) ? 'gif' : '';
     if (!ext) throw new Error(`La URL no es una imagen (${tipo || 'tipo desconocido'}).`);
-    const datos = Buffer.from(await r.arrayBuffer());
+    const datos = await readResponseLimited(r, 20 * 1024 * 1024);
     if (datos.length > 20 * 1024 * 1024) throw new Error('La imagen es demasiado grande (más de 20 MB).');
     await fs.mkdir(dir, { recursive: true });
     const nombre = `${base}.${ext}`;

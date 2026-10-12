@@ -32,9 +32,9 @@ export function TarjetaMotor({ estado }: { estado?: EstadoMotor & { motor: Motor
       <div className="flex items-start gap-3">
         <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-panel-2 font-titulo text-[18px] font-extrabold">{motor === 'claude' ? 'C' : 'Cx'}</div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-[16px] font-semibold">{info.nombre}</span>
-            <span className="text-xs text-texto-3">de {info.empresa}</span>
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <span className="text-[16px] font-semibold whitespace-nowrap">{info.nombre}</span>
+            <span className="text-xs whitespace-nowrap text-texto-3">de {info.empresa}</span>
           </div>
           <div className="text-[13.5px] text-texto-2">{info.uso}</div>
           {estado?.version && <div className="mt-0.5 text-[11.5px] text-texto-3">{estado.version}</div>}

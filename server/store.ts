@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { Asignatura, AsignaturaDetalle, Documento, Exportado, Fuente, Permisos, Recurso, Seccion } from '../shared/tipos';
 import { PERMISOS } from '../shared/tipos';
+import { writeFileAtomic } from './atomicFiles';
 
 const COLORES = ['#7c5cff', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#8b5cf6'];
 
@@ -37,14 +38,15 @@ async function leerJson<T>(archivo: string): Promise<T> {
 }
 
 async function escribirJson(archivo: string, datos: unknown) {
-  await fs.writeFile(archivo, JSON.stringify(datos, null, 2) + '\n', 'utf8');
+  await writeFileAtomic(archivo, JSON.stringify(datos, null, 2) + '\n');
 }
 
 async function leerTexto(archivo: string): Promise<string> {
   try {
     return await fs.readFile(archivo, 'utf8');
-  } catch {
-    return '';
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return '';
+    throw error;
   }
 }
 
@@ -52,6 +54,18 @@ export async function nombreLibre(dir: string, base: string): Promise<string> {
   let nombre = base;
   for (let i = 2; existsSync(path.join(dir, nombre)); i++) nombre = `${base}-${i}`;
   return nombre;
+}
+
+/** Claim a unique directory atomically, including concurrent requests with the same title. */
+export async function reserveDirectory(directory: string, base: string): Promise<string> {
+  nombreSeguro(base);
+  await fs.mkdir(directory, { recursive: true });
+  for (let index = 1; index <= 10000; index++) {
+    const name = index === 1 ? base : `${base}-${index}`;
+    try { await fs.mkdir(path.join(directory, name)); return name; }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
+  }
+  throw new ErrorUsuario('No se ha podido reservar un nombre libre');
 }
 
 function ahora() {
@@ -102,9 +116,9 @@ export class Almacen {
   }
 
   async crearAsignatura(datos: Partial<AsignaturaDetalle>): Promise<AsignaturaDetalle> {
-    const nombre = (datos.nombre ?? '').trim();
+    const nombre = typeof datos.nombre === 'string' ? datos.nombre.trim() : '';
     if (!nombre) throw new ErrorUsuario('La asignatura necesita un nombre');
-    const id = await nombreLibre(this.raiz, slug(nombre));
+    const id = await reserveDirectory(this.raiz, slug(nombre));
     const dir = path.join(this.raiz, id);
     await fs.mkdir(path.join(dir, 'fuentes'), { recursive: true });
     await fs.mkdir(path.join(dir, 'documentos'), { recursive: true });
@@ -178,11 +192,12 @@ export class Almacen {
   }
 
   async crearDocumento(asig: string, datos: Partial<Documento>): Promise<Documento> {
-    const titulo = (datos.titulo ?? '').trim();
+    await this.obtenerAsignatura(asig);
+    const titulo = typeof datos.titulo === 'string' ? datos.titulo.trim() : '';
     if (!titulo) throw new ErrorUsuario('El documento necesita un título');
     const base = path.join(this.dirAsignatura(asig), 'documentos');
     await fs.mkdir(base, { recursive: true });
-    const id = await nombreLibre(base, slug(titulo));
+    const id = await reserveDirectory(base, slug(titulo));
     const dir = path.join(base, id);
     for (const sub of ['secciones', 'fuentes', 'recursos', 'exportados']) {
       await fs.mkdir(path.join(dir, sub), { recursive: true });
@@ -248,7 +263,7 @@ export class Almacen {
   }
 
   async guardarSeccion(asig: string, doc: string, archivo: string, contenido: string) {
-    await fs.writeFile(path.join(this.dirSecciones(asig, doc), nombreSeguro(archivo)), contenido, 'utf8');
+    await writeFileAtomic(path.join(this.dirSecciones(asig, doc), nombreSeguro(archivo)), contenido);
   }
 
   async crearSeccion(asig: string, doc: string, titulo: string): Promise<Seccion> {
@@ -327,17 +342,17 @@ export class Almacen {
   async leerJsonDoc<T>(asig: string, doc: string, nombre: string, defecto: T): Promise<T> {
     try {
       return await leerJson<T>(path.join(this.dirDocumento(asig, doc), nombreSeguro(nombre)));
-    } catch {
-      return defecto;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return defecto;
+      if (error instanceof SyntaxError) throw new ErrorUsuario(`El archivo ${nombre} está dañado; recupéralo desde una copia de seguridad`, 409);
+      throw error;
     }
   }
 
   /** Escritura atómica (archivo temporal + renombrado) para no dejar JSON a medias. */
   async escribirJsonDoc(asig: string, doc: string, nombre: string, datos: unknown) {
     const destino = path.join(this.dirDocumento(asig, doc), nombreSeguro(nombre));
-    const tmp = path.join(path.dirname(destino), `.tmp-${Date.now()}-${nombre}`);
-    await escribirJson(tmp, datos);
-    await fs.rename(tmp, destino);
+    await escribirJson(destino, datos);
   }
 
   async leerArchivoDoc(asig: string, doc: string, nombre: string): Promise<string> {
@@ -346,7 +361,7 @@ export class Almacen {
 
   async guardarArchivoDoc(asig: string, doc: string, nombre: string, contenido: string) {
     if (!Almacen.ARCHIVOS_EDITABLES.includes(nombre)) throw new ErrorUsuario('Archivo no editable');
-    await fs.writeFile(path.join(this.dirDocumento(asig, doc), nombre), contenido, 'utf8');
+    await writeFileAtomic(path.join(this.dirDocumento(asig, doc), nombre), contenido);
   }
 
   async infoArchivoDoc(asig: string, doc: string, nombre: string) {

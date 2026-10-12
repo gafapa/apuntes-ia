@@ -2,6 +2,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { Ajustes } from '../shared/tipos';
+import { writeFileAtomic } from './atomicFiles';
+import { ErrorUsuario } from './store';
 
 export async function cargarAjustes(archivo: string, carpetaPorDefecto: string): Promise<Ajustes> {
   const base: Ajustes = {
@@ -12,11 +14,15 @@ export async function cargarAjustes(archivo: string, carpetaPorDefecto: string):
     agentes: {},
   };
   try {
-    const leidos: Ajustes = { ...base, ...JSON.parse(await fs.readFile(archivo, 'utf8')) };
+    const saved = JSON.parse(await fs.readFile(archivo, 'utf8'));
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved) || (saved.carpetaDatos !== undefined && (typeof saved.carpetaDatos !== 'string' || !saved.carpetaDatos.trim()))) throw new ErrorUsuario('La configuración guardada no tiene un formato válido', 409);
+    const leidos: Ajustes = { ...base, ...saved };
     // Ruta relativa (versión portable): se resuelve junto al archivo de ajustes
     return { ...leidos, carpetaDatos: path.resolve(path.dirname(archivo), leidos.carpetaDatos) };
-  } catch {
-    return base;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return base;
+    if (error instanceof ErrorUsuario) throw error;
+    throw new ErrorUsuario('No se puede leer la configuración; recupérala desde una copia de seguridad', 409);
   }
 }
 
@@ -26,5 +32,5 @@ export async function guardarAjustes(archivo: string, ajustes: Ajustes) {
   // siguen funcionando aunque la memoria USB cambie de letra o la carpeta se mueva
   const relativa = path.relative(path.dirname(archivo), ajustes.carpetaDatos);
   const carpetaDatos = relativa && !relativa.startsWith('..') && !path.isAbsolute(relativa) ? relativa : ajustes.carpetaDatos;
-  await fs.writeFile(archivo, JSON.stringify({ ...ajustes, carpetaDatos }, null, 2), 'utf8');
+  await writeFileAtomic(archivo, JSON.stringify({ ...ajustes, carpetaDatos }, null, 2));
 }

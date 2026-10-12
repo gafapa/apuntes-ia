@@ -188,7 +188,7 @@ export function abrirTerminal(comando: string) {
 
 /** Abre un archivo con el programa predeterminado del sistema. */
 export function abrirArchivo(ruta: string) {
-  if (WIN) spawn('cmd.exe', ['/c', 'start', '""', ruta], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  if (WIN) spawn('explorer.exe', [ruta], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
   else abrirCarpeta(ruta);
 }
 

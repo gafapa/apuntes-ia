@@ -10,6 +10,7 @@ files:
   - dist/**
   - dist-web/**
   - build/icon.png
+  - build/icon.ico
   - package.json
   - "!**/*.map"
 

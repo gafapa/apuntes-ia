@@ -5,14 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="./icono.png" />
     <title>Apuntes IA</title>
-    <script>
-      // Aplica el tema antes de pintar para evitar parpadeos
-      try {
-        const t = localStorage.getItem('tema');
-        const oscuro = t ? t === 'oscuro' : matchMedia('(prefers-color-scheme: dark)').matches;
-        document.documentElement.classList.toggle('dark', oscuro);
-      } catch {}
-    </script>
+    <script src="./theme.js"></script>
   </head>
   <body>
     <div id="root"></div>
