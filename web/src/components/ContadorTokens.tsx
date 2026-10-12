@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, RotateCcw } from 'lucide-react';
 import type { Motor, Tokens } from '../../../shared/tipos';
 import { api } from '../lib/api';
 import { useEstado } from '../lib/estado';
-import { abreviar } from '../lib/formato';
+import { abreviar, numero } from '../lib/formato';
 import { confirmar, cx } from './ui';
 
 const cero: Tokens = { entrada: 0, salida: 0, cache: 0 };
@@ -12,7 +12,7 @@ const suma = (l: Tokens[]) => l.reduce((a, b) => ({ entrada: a.entrada + b.entra
 /** «↓ 12 k ↑ 1,3 k» */
 export function ParTokens({ t, className }: { t: Tokens; className?: string }) {
   return (
-    <span className={cx('inline-flex items-center gap-1.5 tabular-nums', className)} title={`Entrada: ${t.entrada.toLocaleString('es')} tokens (${t.cache.toLocaleString('es')} de caché) · Salida: ${t.salida.toLocaleString('es')} tokens`}>
+    <span className={cx('inline-flex items-center gap-1.5 tabular-nums', className)} title={`Entrada: ${numero(t.entrada)} tokens (${numero(t.cache)} de caché) · Salida: ${numero(t.salida)} tokens`}>
       <span className="inline-flex items-center">
         <ArrowDown className="size-3" />
         {abreviar(t.entrada)}

@@ -1,8 +1,9 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Check, ChevronDown, Loader2, MessageSquarePlus } from 'lucide-react';
 import type { EstadoFlujo, PasoFlujo, Trabajo } from '../../../../shared/tipos';
 import { api } from '../../lib/api';
-import { useEstado } from '../../lib/estado';
+import { useEstado, useCampos } from '../../lib/estado';
 import { AreaTexto, Boton, Insignia, cx } from '../ui';
 import { estimar } from '../../lib/estimacion';
 import { abreviar } from '../../lib/formato';
@@ -10,11 +11,7 @@ import { abreviar } from '../../lib/formato';
 /** Estado del flujo de un documento, que se recarga cuando cambian sus archivos o sus trabajos. */
 export function useFlujo(asignatura: string, documento: string) {
   const version = useEstado((s) => `${s.versiones[`${asignatura}/${documento}`] ?? 0}-${s.reconexion}`); // también al reconectar
-  const todos = useEstado((s) => s.trabajos);
-  const trabajos = useMemo(
-    () => Object.values(todos).filter((t) => t.asignatura === asignatura && t.documento === documento),
-    [todos, asignatura, documento],
-  );
+  const trabajos = useEstado(useShallow(s => Object.values(s.trabajos).filter(t => t.asignatura === asignatura && t.documento === documento)));
   const firma = trabajos.map((t) => t.id + t.estado).join(',');
   const [estado, setEstado] = useState<EstadoFlujo>();
   const recargar = useCallback(() => api.flujo(asignatura, documento).then(setEstado).catch(() => {}), [asignatura, documento]);
@@ -133,7 +130,7 @@ export function BotonAgente({
   /** Agentes que va a lanzar y cuántas veces, para mostrar cuántos tokens gastará más o menos. */
   estimacion?: [string, number][];
 }) {
-  const { avisar } = useEstado();
+  const { avisar } = useCampos('avisar');
   const tokens = useEstado((s) => s.tokens);
   const previstos = estimacion?.length ? estimar(tokens, estimacion) : 0;
   const [conIndicaciones, setConIndicaciones] = useState(false);

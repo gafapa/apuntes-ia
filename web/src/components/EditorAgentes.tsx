@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, Check, CheckCircle2, ChevronDown, Loader2, RotateCcw } from 'lucide-react';
 import type { Ajustes, Esfuerzo, InfoAgente, ModelosDisponibles, Motor, PerfilGasto } from '../../../shared/tipos';
 import { api } from '../lib/api';
-import { useEstado } from '../lib/estado';
+import { useEstado, useCampos } from '../lib/estado';
 import { abreviar } from '../lib/formato';
 import { AreaTexto, cx } from './ui';
 
@@ -20,7 +20,7 @@ const MOTORES: [NonNullable<Ajustes['modoMotor']>, string, string][] = [
 const NOMBRE_ESFUERZO: Record<Esfuerzo, string> = { low: 'Bajo', medium: 'Medio', high: 'Alto', xhigh: 'Muy alto', max: 'Máximo' };
 
 export function EditorAgentes() {
-  const { ajustes, motores, tokens, avisar } = useEstado();
+  const { ajustes, motores, tokens, avisar } = useCampos('ajustes', 'motores', 'tokens', 'avisar');
   const [modelos, setModelos] = useState<Modelos>();
   const [agentes, setAgentes] = useState<InfoAgente[]>([]);
   const [config, setConfig] = useState<Config>();

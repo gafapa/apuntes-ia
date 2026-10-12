@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ExternalLink, Stethoscope } from 'lucide-react';
 import type { AccionDiagnostico, AreaDiagnostico, EstadoFlujo, ModoMejora, ProblemaDiagnostico, Trabajo } from '../../../../shared/tipos';
 import { api } from '../../lib/api';
-import { useEstado } from '../../lib/estado';
+import { useEstado, useCampos } from '../../lib/estado';
 import { Boton, Insignia, confirmar, cx } from '../ui';
 import { ActividadAgente, BotonAgente, fechaCorta, trabajosDe } from './comun';
 import { useVistaDocumento } from './pasos';
@@ -29,7 +29,7 @@ const MODOS: Record<ModoMejora, string> = {
  * con un acceso directo a la fase que resuelve cada cosa.
  */
 export function PanelDiagnostico({ a, d, estado, trabajos, conImportacion }: { a: string; d: string; estado: EstadoFlujo; trabajos: Trabajo[]; conImportacion: boolean }) {
-  const { avisar } = useEstado();
+  const { avisar } = useCampos('avisar');
   const [, elegirVista] = useVistaDocumento();
   const activos = trabajosDe(trabajos, 'diagnostico');
   const diag = estado.diagnostico;

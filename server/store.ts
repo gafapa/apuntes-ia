@@ -73,6 +73,7 @@ function ahora() {
 }
 
 export class Almacen {
+  private sectionSummaries = new Map<string, { stamp: string; summary: Seccion }>();
   constructor(public raiz: string) {}
 
   async iniciar() {
@@ -245,17 +246,33 @@ export class Almacen {
     const dir = this.dirSecciones(asig, doc);
     await fs.mkdir(dir, { recursive: true });
     const archivos = (await fs.readdir(dir)).filter((f) => f.endsWith('.md')).sort();
-    const res: Seccion[] = [];
-    for (const archivo of archivos) {
-      const texto = await leerTexto(path.join(dir, archivo));
-      const h = texto.match(/^#{1,3}\s+(.+)$/m);
-      res.push({
-        archivo,
-        titulo: h ? h[1].trim() : archivo.replace(/^\d+-/, '').replace(/\.md$/, '').replace(/-/g, ' '),
-        palabras: texto.split(/\s+/).filter(Boolean).length,
-      });
-    }
-    return res;
+    const summaries = new Array<Seccion>(archivos.length);
+    let next = 0;
+    // Bound disk concurrency and keep the original sorted order.
+    await Promise.all(Array.from({ length: Math.min(8, archivos.length) }, async () => {
+      while (next < archivos.length) {
+        const index = next++;
+        summaries[index] = await this.sectionSummary(path.join(dir, archivos[index]), archivos[index]);
+      }
+    }));
+    return summaries;
+  }
+
+  private async sectionSummary(filename: string, name: string): Promise<Seccion> {
+    let stamp = '';
+    try {
+      const stats = await fs.stat(filename);
+      stamp = `${stats.mtimeMs}:${stats.ctimeMs}:${stats.size}:${stats.ino}`;
+    } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    const cached = this.sectionSummaries.get(filename);
+    if (stamp && cached?.stamp === stamp) return { ...cached.summary };
+    const text = await leerTexto(filename);
+    const heading = text.match(/^#{1,3}\s+(.+)$/m);
+    const summary = { archivo: name, titulo: heading ? heading[1].trim() : name.replace(/^\d+-/, '').replace(/\.md$/, '').replace(/-/g, ' '), palabras: text.split(/\s+/).filter(Boolean).length };
+    this.sectionSummaries.delete(filename);
+    if (stamp) this.sectionSummaries.set(filename, { stamp, summary });
+    if (this.sectionSummaries.size > 1024) this.sectionSummaries.delete(this.sectionSummaries.keys().next().value!);
+    return { ...summary };
   }
 
   async leerSeccion(asig: string, doc: string, archivo: string): Promise<string> {
@@ -263,7 +280,9 @@ export class Almacen {
   }
 
   async guardarSeccion(asig: string, doc: string, archivo: string, contenido: string) {
-    await writeFileAtomic(path.join(this.dirSecciones(asig, doc), nombreSeguro(archivo)), contenido);
+    const filename = path.join(this.dirSecciones(asig, doc), nombreSeguro(archivo));
+    await writeFileAtomic(filename, contenido);
+    this.sectionSummaries.delete(filename);
   }
 
   async crearSeccion(asig: string, doc: string, titulo: string): Promise<Seccion> {

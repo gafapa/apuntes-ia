@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArchiveRestore, FileText, FolderOpen, RotateCcw, Trash2 } from 'lucide-react';
 import type { ElementoPapelera, OpcionesExportacion } from '../../../shared/tipos';
 import { api } from '../lib/api';
-import { useEstado } from '../lib/estado';
+import { useCampos } from '../lib/estado';
 import { exportarDocumento } from '../lib/exportacion';
 import { Boton, Campo, Entrada, Modal, Vacio, confirmar, cx } from './ui';
 
@@ -12,7 +12,7 @@ import { Boton, Campo, Entrada, Modal, Vacio, confirmar, cx } from './ui';
 // Duplicar
 
 export function ModalDuplicarAsignatura({ asignatura, nombre, onCerrar }: { asignatura?: string; nombre: string; onCerrar: () => void }) {
-  const { cargarAsignaturas, seleccionar, avisar } = useEstado();
+  const { cargarAsignaturas, seleccionar, avisar } = useCampos('cargarAsignaturas', 'seleccionar', 'avisar');
   const [nuevo, setNuevo] = useState('');
   const [guardando, setGuardando] = useState(false);
   useEffect(() => setNuevo(`${nombre} (copia)`), [asignatura, nombre]);
@@ -69,7 +69,7 @@ export function ModalDuplicarDocumento({
   titulo: string;
   onCerrar: () => void;
 }) {
-  const { asignaturas, cargarAsignaturas, seleccionar, avisar } = useEstado();
+  const { asignaturas, cargarAsignaturas, seleccionar, avisar } = useCampos('asignaturas', 'cargarAsignaturas', 'seleccionar', 'avisar');
   const [destino, setDestino] = useState(asignatura);
   const [nuevo, setNuevo] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -143,7 +143,7 @@ export function ModalDuplicarDocumento({
 // Papelera
 
 export function ModalPapelera({ abierto, onCerrar }: { abierto: boolean; onCerrar: () => void }) {
-  const { cargarAsignaturas, seleccionar, avisar } = useEstado();
+  const { cargarAsignaturas, seleccionar, avisar } = useCampos('cargarAsignaturas', 'seleccionar', 'avisar');
   const [lista, setLista] = useState<ElementoPapelera[]>();
   const cargar = () => api.papelera().then(setLista).catch((e) => avisar((e as Error).message, 'error'));
   useEffect(() => {
@@ -218,7 +218,7 @@ export function ModalPapelera({ abierto, onCerrar }: { abierto: boolean; onCerra
 
 /** Botón que pide un .zip de copia de seguridad y lo restaura. */
 export function BotonRestaurarCopia({ variante = 'secundario' }: { variante?: 'secundario' | 'fantasma' }) {
-  const { cargarAsignaturas, seleccionar, avisar } = useEstado();
+  const { cargarAsignaturas, seleccionar, avisar } = useCampos('cargarAsignaturas', 'seleccionar', 'avisar');
   const entrada = useRef<HTMLInputElement>(null);
   const [restaurando, setRestaurando] = useState(false);
   const restaurar = async (archivo?: File) => {
@@ -266,7 +266,7 @@ function opcionesGuardadas(): OpcionesExportacion {
 }
 
 export function ModalExportarTodos({ asignatura, onCerrar }: { asignatura?: string; onCerrar: () => void }) {
-  const { asignaturas, avisar } = useEstado();
+  const { asignaturas, avisar } = useCampos('asignaturas', 'avisar');
   const a = asignaturas.find((x) => x.id === asignatura);
   const [formato, setFormato] = useState<OpcionesExportacion['formato']>(() => opcionesGuardadas().formato);
   const [elegidos, setElegidos] = useState<Set<string>>(new Set());

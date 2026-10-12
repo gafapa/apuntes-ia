@@ -61,7 +61,13 @@ export async function crearServidor(op: OpcionesServidor) {
 
   // Estado de los motores (se refresca al consultarlo desde la interfaz)
   let motores: EstadoMotor[] = [];
-  const refrescarMotores = async () => (motores = await Promise.all([comprobarMotor('claude'), comprobarMotor('codex')]));
+  let engineCheck: Promise<EstadoMotor[]> | undefined;
+  const refrescarMotores = () => {
+    engineCheck ??= Promise.all([comprobarMotor('claude'), comprobarMotor('codex')])
+      .then(result => (motores = result))
+      .finally(() => { engineCheck = undefined; });
+    return engineCheck;
+  };
   refrescarMotores().catch(() => {});
   const motoresListos = () => new Set(motores.filter((m) => m.instalado && m.sesion).map((m) => m.motor));
 
@@ -785,7 +791,7 @@ export async function crearServidor(op: OpcionesServidor) {
   if (op.dirEstatico && fs.existsSync(op.dirEstatico)) {
     await app.register(fastifyStatic, { root: op.dirEstatico, wildcard: false });
     app.setNotFoundHandler((req, rep) => {
-      if (req.url.startsWith('/api/')) return rep.code(404).send({ error: 'No encontrado' });
+      if (req.url.startsWith('/api/') || req.url.startsWith('/assets/')) return rep.code(404).send({ error: 'No encontrado' });
       return rep.sendFile('index.html');
     });
   }

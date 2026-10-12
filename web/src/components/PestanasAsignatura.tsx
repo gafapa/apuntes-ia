@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { BookA, Download, FileType, Landmark, Pencil, Save, Trash2, Upload } from 'lucide-react';
 import { api, urlDatos } from '../lib/api';
-import { useEstado } from '../lib/estado';
+import { useCampos } from '../lib/estado';
 import { AreaTexto, Boton, Insignia, confirmar } from './ui';
 import { VistaPrevia } from './VistaPrevia';
 import { ActividadAgente, BotonAgente } from './flujo/comun';
 
 /** Glosario común de la asignatura: lo mantiene un agente y se puede editar a mano. */
 export function PestanaGlosario({ a }: { a: string }) {
-  const { avisar, versiones, reconexion, trabajos } = useEstado();
+  const { avisar, versiones, reconexion, trabajos } = useCampos('avisar', 'versiones', 'reconexion', 'trabajos');
   const version = `${versiones[`${a}/`] ?? 0}-${reconexion}`; // también al reconectar con el servidor
   const [texto, setTexto] = useState('');
   const [editando, setEditando] = useState(false);
@@ -69,7 +69,7 @@ export function PestanaGlosario({ a }: { a: string }) {
 
 /** Plantillas de Word / LibreOffice con los estilos del centro o del profesor. */
 export function PestanaPlantillas({ a }: { a: string }) {
-  const { avisar } = useEstado();
+  const { avisar } = useCampos('avisar');
   const [plantillas, setPlantillas] = useState<{ docx: boolean; odt: boolean }>();
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -169,7 +169,7 @@ const COMUNIDADES = [
  * apuntes cubren lo que les toca.
  */
 export function PestanaCurriculo({ a, comunidad, onComunidad }: { a: string; comunidad?: string; onComunidad: (c: string) => void }) {
-  const { avisar, versiones, reconexion, trabajos } = useEstado();
+  const { avisar, versiones, reconexion, trabajos } = useCampos('avisar', 'versiones', 'reconexion', 'trabajos');
   const version = `${versiones[`${a}/`] ?? 0}-${reconexion}`;
   const [texto, setTexto] = useState('');
   const [editando, setEditando] = useState(false);

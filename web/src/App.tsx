@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { CheckCircle2, Info, XCircle } from 'lucide-react';
-import { useEstado } from './lib/estado';
+import { useEstado, useCampos } from './lib/estado';
 import { api } from './lib/api';
 import { BarraLateral } from './components/BarraLateral';
 import { VistaInicio } from './components/VistaInicio';
@@ -13,7 +13,7 @@ import { Confirmador, cx } from './components/ui';
 import { ProveedorFlujo } from './components/flujo/pasos';
 
 export default function App() {
-  const { seleccion, asignaturas, cargarAsignaturas, cargarAjustes, cargarMotores } = useEstado();
+  const { seleccion, asignaturas, cargarAsignaturas, cargarAjustes, cargarMotores } = useCampos('seleccion', 'asignaturas', 'cargarAsignaturas', 'cargarAjustes', 'cargarMotores');
 
   useEffect(() => {
     cargarAsignaturas();
@@ -55,7 +55,7 @@ export default function App() {
 }
 
 function Avisos() {
-  const { avisos, quitarAviso } = useEstado();
+  const { avisos, quitarAviso } = useCampos('avisos', 'quitarAviso');
   return (
     <div className="pointer-events-none fixed bottom-4 left-1/2 z-[60] flex -translate-x-1/2 flex-col items-center gap-2">
       {avisos.map((a) => (

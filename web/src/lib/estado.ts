@@ -1,5 +1,6 @@
 // Estado global de la interfaz y conexión WebSocket con el servidor.
 import { create } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import type { Ajustes, ContadorTokens, EstadoMotor, MensajeWS, SeleccionTexto, Trabajo, UsoSuscripcion } from '../../../shared/tipos';
 import { api, type AsignaturaResumen } from './api';
 import { avisarTrabajo, avisarUso } from './notificaciones';
@@ -112,6 +113,15 @@ export const useEstado = create<Estado>((set, get) => ({
   },
 }));
 
+/**
+ * Solo los campos indicados del estado. El componente se vuelve a dibujar cuando cambia alguno de
+ * ellos y no con cada mensaje del servidor: cada paso de cada agente cambia `trabajos`, y con
+ * `useEstado()` a secas se redibujaba la app entera varias veces por segundo.
+ */
+export function useCampos<K extends keyof Estado>(...campos: K[]): Pick<Estado, K> {
+  return useEstado(useShallow((s) => Object.fromEntries(campos.map((c) => [c, s[c]])) as Pick<Estado, K>));
+}
+
 window.addEventListener('popstate', () => useEstado.setState({ seleccion: leerHash() }));
 
 // ---------- WebSocket ----------
@@ -161,7 +171,7 @@ function conectar() {
       case 'evento': {
         const t = trabajos[msg.id];
         if (!t) break;
-        useEstado.setState({ trabajos: { ...trabajos, [t.id]: { ...t, eventos: [...t.eventos, msg.evento] } } });
+        useEstado.setState({ trabajos: { ...trabajos, [t.id]: { ...t, eventos: [...t.eventos, msg.evento].slice(-400) } } });
         break;
       }
       case 'actualizacion':

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, Check, Clock, Crosshair, Image as IconoImagen, RotateCcw, TextSelect, X, ChevronDown, CircleStop, Eraser, Globe, FileEdit, Landmark, Library, Loader2, PanelRightClose, PanelRightOpen, Search, Send, Wrench } from 'lucide-react';
-import type { HerramientasChat, Motor, Trabajo } from '../../../shared/tipos';
+import type { EventoTrabajo, HerramientasChat, Motor, Trabajo } from '../../../shared/tipos';
 import { api } from '../lib/api';
-import { useEstado } from '../lib/estado';
+import { useEstado, useCampos } from '../lib/estado';
 import { renderizar } from '../lib/markdown';
 import { usePermisos } from '../lib/permisos';
 import { PASOS, VISTAS_DOCUMENTO, useVistaDocumento } from './flujo/pasos';
@@ -34,7 +34,7 @@ function leerHerramientas(): Required<HerramientasChat> {
 }
 
 export function PanelAgentes() {
-  const { seleccion, trabajos, ajustes, motores, seccionActiva, seleccionTexto, avisar } = useEstado();
+  const { seleccion, trabajos, ajustes, motores, seccionActiva, seleccionTexto, avisar } = useCampos('seleccion', 'trabajos', 'ajustes', 'motores', 'seccionActiva', 'seleccionTexto', 'avisar');
   const [abierto, setAbierto] = useState(() => localStorage.getItem('panelAgentes') !== 'cerrado');
   const [tarea, setTarea] = useState('');
   const [motor, setMotor] = useState<Motor>();
@@ -324,7 +324,7 @@ function horaCorta(ms: number) {
 
 /** Motores con el límite de uso de la suscripción agotado: sus agentes esperan y siguen solos. */
 function AvisoLimite() {
-  const { uso, trabajos, avisar } = useEstado();
+  const { uso, trabajos, avisar } = useCampos('uso', 'trabajos', 'avisar');
   const pausas = Object.entries(uso?.pausas ?? {}).filter(([, hasta]) => hasta && hasta > Date.now()) as [Motor, number][];
   if (!pausas.length) return null;
   return (
@@ -352,13 +352,20 @@ function AvisoLimite() {
   );
 }
 
+/** Markdown de un mensaje del agente; solo se vuelve a convertir si cambia el texto. */
+const TextoMarkdown = memo(function TextoMarkdown({ texto, className }: { texto: string; className: string }) {
+  const html = useMemo(() => renderizar(texto), [texto]);
+  return <div className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+});
+
 function duracion(ms: number) {
   const s = Math.max(0, Math.round(ms / 1000));
   return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`;
 }
 
-function TarjetaTrabajo({ t }: { t: Trabajo }) {
-  const { uso, avisar } = useEstado();
+/** Tarjeta de un trabajo; con memo, cada mensaje de un agente solo redibuja la suya. */
+const TarjetaTrabajo = memo(function TarjetaTrabajo({ t }: { t: Trabajo }) {
+  const { uso, avisar } = useCampos('uso', 'avisar');
   const activo = t.estado === 'ejecutando' || t.estado === 'en-cola';
   const pausa = t.estado === 'en-cola' ? uso?.pausas?.[t.motor] : undefined;
   const reintentar = () => api.reintentar(t.id).catch((e) => avisar((e as Error).message, 'error'));
@@ -427,30 +434,13 @@ function TarjetaTrabajo({ t }: { t: Trabajo }) {
       {abierto && (
         <div className="border-t border-borde px-3.5 py-3">
           <div className="max-h-72 space-y-1.5 overflow-y-auto">
-            {t.eventos.map((e, i) =>
-              e.tipo === 'usuario' ? (
-                <div key={i} className="my-2 ml-8 rounded-lg rounded-br-sm bg-acento px-3 py-1.5 text-[12.5px] whitespace-pre-wrap text-white">
-                  {e.texto}
-                </div>
-              ) : e.tipo === 'texto' ? (
-                e.texto === t.resultado?.trim() ? null : (
-                  <div
-                    key={i}
-                    className="apunte !text-[12.5px] !leading-snug [&_p]:my-1"
-                    dangerouslySetInnerHTML={{ __html: renderizar(e.texto) }}
-                  />
-                )
-              ) : (
-                <div key={i} className={cx('flex items-start gap-2 text-[12px]', e.tipo === 'error' ? 'text-error' : 'text-texto-2')}>
-                  <IconoEvento texto={e.texto} tipo={e.tipo} />
-                  <span className="min-w-0 break-words whitespace-pre-wrap">{e.texto}</span>
-                </div>
-              ),
-            )}
+            {t.eventos.map((e, i) => (
+              <FilaEvento key={i} e={e} resultado={t.resultado} />
+            ))}
             <div ref={finRef} />
           </div>
           {t.resultado && (
-            <div className="apunte mt-3 rounded-lg bg-panel-2 px-3 py-2 !text-[13px] !leading-relaxed" dangerouslySetInnerHTML={{ __html: renderizar(t.resultado) }} />
+            <TextoMarkdown texto={t.resultado} className="apunte mt-3 rounded-lg bg-panel-2 px-3 py-2 !text-[13px] !leading-relaxed" />
           )}
           {t.inactivo && t.estado === 'ejecutando' && (
             <div className="mt-3 rounded-xl bg-aviso/12 px-3 py-2.5 text-[12.5px]">
@@ -493,10 +483,10 @@ function TarjetaTrabajo({ t }: { t: Trabajo }) {
       )}
     </div>
   );
-}
+});
 
 function Responder({ id }: { id: string }) {
-  const { avisar } = useEstado();
+  const { avisar } = useCampos('avisar');
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
   const enviar = async () => {
@@ -537,6 +527,22 @@ function Responder({ id }: { id: string }) {
     </div>
   );
 }
+
+/** Un evento del trabajo (los que ya estaban no se redibujan al llegar uno nuevo). */
+const FilaEvento = memo(function FilaEvento({ e, resultado }: { e: EventoTrabajo; resultado?: string }) {
+  if (e.tipo === 'usuario') {
+    return <div className="my-2 ml-8 rounded-lg rounded-br-sm bg-acento px-3 py-1.5 text-[12.5px] whitespace-pre-wrap text-white">{e.texto}</div>;
+  }
+  if (e.tipo === 'texto') {
+    return e.texto === resultado?.trim() ? null : <TextoMarkdown texto={e.texto} className="apunte !text-[12.5px] !leading-snug [&_p]:my-1" />;
+  }
+  return (
+    <div className={cx('flex items-start gap-2 text-[12px]', e.tipo === 'error' ? 'text-error' : 'text-texto-2')}>
+      <IconoEvento texto={e.texto} tipo={e.tipo} />
+      <span className="min-w-0 break-words whitespace-pre-wrap">{e.texto}</span>
+    </div>
+  );
+});
 
 function EstadoIcono({ estado }: { estado: Trabajo['estado'] }) {
   const base = 'mt-0.5 size-4 shrink-0';

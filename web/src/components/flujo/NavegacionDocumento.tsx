@@ -1,5 +1,5 @@
 import { ArrowLeft, Check } from 'lucide-react';
-import { useEstado } from '../../lib/estado';
+import { useEstado, useCampos } from '../../lib/estado';
 import { abreviar } from '../../lib/formato';
 import { cx } from '../ui';
 import { Estrella } from '../Logo';
@@ -8,7 +8,7 @@ import { PASOS, VISTAS_DOCUMENTO, estadoPaso, useFlujoActual, useVistaDocumento,
 /** Barra lateral dentro de un documento: las vistas del documento y las fases del flujo. */
 export function NavegacionDocumento() {
   const f = useFlujoActual()!;
-  const { asignaturas, seleccionar } = useEstado();
+  const { asignaturas, seleccionar } = useCampos('asignaturas', 'seleccionar');
   const gasto = useEstado((s) => s.tokens?.porAsignatura?.[f.a]?.documentos[f.d]);
   const [vista, elegir] = useVistaDocumento();
   const asig = asignaturas.find((a) => a.id === f.a);

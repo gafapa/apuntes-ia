@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Archive, Copy, FileDown, FileText, FileUp, Plus, Trash2 } from 'lucide-react';
 import type { AsignaturaDetalle } from '../../../shared/tipos';
 import { api } from '../lib/api';
-import { useEstado } from '../lib/estado';
+import { useCampos } from '../lib/estado';
 import { AreaTexto, Boton, Campo, Vacio, confirmar, cx } from './ui';
 import { GastoTokens } from './ContadorTokens';
 import { GestorFuentes } from './GestorFuentes';
@@ -21,7 +21,7 @@ const COLORES = ['#7c5cff', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899
 type Pestana = 'documentos' | 'contexto' | 'material' | 'curriculo' | 'glosario' | 'plantillas';
 
 export function VistaAsignatura({ asignatura }: { asignatura: string }) {
-  const { seleccionar, cargarAsignaturas, avisar, versiones, reconexion } = useEstado();
+  const { seleccionar, cargarAsignaturas, avisar, versiones, reconexion } = useCampos('seleccionar', 'cargarAsignaturas', 'avisar', 'versiones', 'reconexion');
   const [a, setA] = useState<AsignaturaDetalle>();
   const [pestana, setPestana] = useState<Pestana>('documentos');
   const [nuevoDoc, setNuevoDoc] = useState(false);
@@ -214,7 +214,7 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
 }
 
 function FormContexto({ a, onGuardado }: { a: AsignaturaDetalle; onGuardado: (a: AsignaturaDetalle) => void }) {
-  const { avisar } = useEstado();
+  const { avisar } = useCampos('avisar');
   const inicial = { destinatarios: a.destinatarios, estilo: a.estilo, color: a.color, contexto: a.contexto, permisos: a.permisos ?? {} };
   const ensenanzaInicial: ValorEnsenanza = {
     etapa: (a.etapa as Etapa) ?? (a.nivel ? 'libre' : undefined),

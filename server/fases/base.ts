@@ -242,25 +242,35 @@ export class FlujoBase {
 
   async estado(asig: string, doc: string): Promise<EstadoFlujo> {
     const a = this.almacen;
-    const info = await a.infoArchivoDoc(asig, doc, 'investigacion.md');
+    const [info, document, secciones, storedQuestions, indice, sugerencias, visuales, actividades, diagnostico, exportados] = await Promise.all([
+      a.infoArchivoDoc(asig, doc, 'investigacion.md'),
+      a.obtenerDocumento(asig, doc),
+      a.listarSecciones(asig, doc),
+      a.leerJsonDoc<PreguntaInvestigacion[]>(asig, doc, 'preguntas.json', []),
+      a.leerJsonDoc<Indice | null>(asig, doc, 'indice.json', null),
+      a.leerJsonDoc<Sugerencia[]>(asig, doc, 'sugerencias.json', []),
+      a.leerJsonDoc<PropuestaVisual[]>(asig, doc, 'visuales.json', []),
+      this.actividades(asig, doc),
+      a.leerJsonDoc<Diagnostico | null>(asig, doc, 'diagnostico.json', null),
+      a.listarExportados(asig, doc),
+    ]);
     const dossier = info ? await a.leerArchivoDoc(asig, doc, 'investigacion.md') : '';
-    const secciones = await a.listarSecciones(asig, doc);
-    const preguntas = (await a.leerJsonDoc<PreguntaInvestigacion[]>(asig, doc, 'preguntas.json', [])).map((p) => ({
+    const preguntas = storedQuestions.map((p) => ({
       ...p,
       respuesta: respuestaEnDossier(dossier, p.texto),
     }));
     return {
-      imported: !!(await a.obtenerDocumento(asig, doc)).importado,
+      imported: !!document.importado,
       investigacion: info ? { palabras: contarPalabras(dossier), actualizado: info.modificado } : undefined,
       preguntas,
-      indice: (await a.leerJsonDoc<Indice | null>(asig, doc, 'indice.json', null)) ?? undefined,
+      indice: indice ?? undefined,
       secciones,
-      sugerencias: await a.leerJsonDoc<Sugerencia[]>(asig, doc, 'sugerencias.json', []),
-      visuales: await a.leerJsonDoc<PropuestaVisual[]>(asig, doc, 'visuales.json', []),
+      sugerencias,
+      visuales,
       autoevaluacion: secciones.find((s) => ARCHIVO_AUTOEVALUACION.test(s.archivo))?.archivo,
-      actividades: await this.actividades(asig, doc),
-      diagnostico: (await a.leerJsonDoc<Diagnostico | null>(asig, doc, 'diagnostico.json', null)) ?? undefined,
-      exportados: await a.listarExportados(asig, doc),
+      actividades,
+      diagnostico: diagnostico ?? undefined,
+      exportados,
     };
   }
 

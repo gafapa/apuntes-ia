@@ -2,19 +2,25 @@
 // a partir del catálogo oficial. Siempre se puede escribir una asignatura que no esté en la lista.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ExternalLink } from 'lucide-react';
-import {
-  CATALOGO_FP,
-  CURSOS,
-  ETAPAS,
-  IDIOMAS,
-  MODALIDADES_BACHILLERATO,
-  esFP,
-  familiasFP,
-  materias,
-  type Etapa,
-  type Materia,
-} from '../../../shared/catalogo/educacion';
+import { CURSOS, ETAPAS, IDIOMAS, MODALIDADES_BACHILLERATO, esFP, materias, type Etapa, type Materia } from '../../../shared/catalogo/educacion';
 import { Campo, Entrada, cx } from './ui';
+
+type ModuloCatalogoFP = typeof import('../../../shared/catalogo/fp');
+let catalogoFP: Promise<ModuloCatalogoFP> | undefined;
+
+/** El catálogo de FP pesa mucho: se carga aparte, al abrir el selector, y no al arrancar la app. */
+function useCatalogoFP(enabled: boolean) {
+  const [m, setM] = useState<ModuloCatalogoFP>();
+  useEffect(() => {
+    if (!enabled) return;
+    let vigente = true;
+    (catalogoFP ??= import('../../../shared/catalogo/fp')).then((x) => vigente && setM(x)).catch(() => (catalogoFP = undefined));
+    return () => {
+      vigente = false;
+    };
+  }, [enabled]);
+  return m;
+}
 
 export interface ValorEnsenanza {
   etapa?: Etapa;
@@ -132,7 +138,8 @@ export function SelectorEnsenanza({ valor, onCambio }: { valor: ValorEnsenanza; 
   const v = valor;
   const set = (c: Partial<ValorEnsenanza>) => onCambio({ ...v, ...c });
   const fp = esFP(v.etapa);
-  const familias = useMemo(() => (fp ? familiasFP(v.etapa!) : []), [fp, v.etapa]);
+  const catalogo = useCatalogoFP(fp);
+  const familias = useMemo(() => (fp && catalogo ? catalogo.familiasFP(v.etapa!) : []), [fp, catalogo, v.etapa]);
   const titulos = familias.find((f) => f.nombre === v.familia)?.titulos ?? [];
   const titulo = titulos.find((t) => t.nombre === v.titulo);
   const otroIdioma = !IDIOMAS.includes(v.idioma);
@@ -248,7 +255,7 @@ export function SelectorEnsenanza({ valor, onCambio }: { valor: ValorEnsenanza; 
         </div>
       </Campo>
       <p className="text-[11.5px] text-texto-3">
-        Catálogo oficial: Reales Decretos 157/2022, 217/2022 y 243/2022 (BOE) y títulos de FP de TodoFP ({CATALOGO_FP.generado}).
+        Catálogo oficial: Reales Decretos 157/2022, 217/2022 y 243/2022 (BOE) y títulos de FP de TodoFP{catalogo && ` (${catalogo.CATALOGO_FP.generado})`}.
       </p>
     </div>
   );

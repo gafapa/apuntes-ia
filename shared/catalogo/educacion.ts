@@ -4,12 +4,9 @@
 // - Educación Primaria: Real Decreto 157/2022, art. 8 (BOE-A-2022-3296).
 // - ESO: Real Decreto 217/2022, arts. 8, 9, 10 y 24 (BOE-A-2022-4975).
 // - Bachillerato: Real Decreto 243/2022, arts. 9 a 14 (BOE-A-2022-5521).
-// - Formación Profesional: catálogo de títulos del Ministerio en todofp.es (fp.json,
-//   generado con scripts/catalogo-fp.mjs).
+// - Formación Profesional: catálogo de títulos del Ministerio en todofp.es (fp.ts, aparte).
 // Las comunidades autónomas pueden añadir materias propias; por eso siempre se puede
 // escribir una asignatura que no esté en la lista.
-import fp from './fp.json';
-
 export type Etapa = 'primaria' | 'eso' | 'bachillerato' | 'fp-basica' | 'fp-medio' | 'fp-superior' | 'libre';
 
 export interface InfoEtapa {
@@ -218,36 +215,6 @@ export function materias(etapa: Etapa, curso?: string, opciones: { modalidad?: s
   if (etapa === 'eso') return materiasESO(n, opciones.idioma);
   if (etapa === 'bachillerato') return materiasBachillerato(n, opciones.modalidad, opciones.idioma);
   return [];
-}
-
-// ---------------------------------------------------------------------------
-// Formación Profesional
-
-export interface ModuloFP {
-  codigo?: string;
-  nombre: string;
-}
-
-export interface TituloFP {
-  nombre: string;
-  nivel: 'fp-basica' | 'fp-medio' | 'fp-superior';
-  horas?: number;
-  url: string;
-  modulos: ModuloFP[];
-}
-
-export interface FamiliaFP {
-  nombre: string;
-  titulos: TituloFP[];
-}
-
-export const CATALOGO_FP = fp as { fuente: string; generado: string; familias: FamiliaFP[] };
-
-/** Familias profesionales que tienen títulos del nivel indicado. */
-export function familiasFP(nivel: Etapa): FamiliaFP[] {
-  return CATALOGO_FP.familias
-    .map((f) => ({ ...f, titulos: f.titulos.filter((t) => t.nivel === nivel) }))
-    .filter((f) => f.titulos.length > 0);
 }
 
 // ---------------------------------------------------------------------------

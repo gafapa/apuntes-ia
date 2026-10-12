@@ -21,7 +21,7 @@ import {
 import type { EstadoFlujo, ImagenFallida, MezclaVisuales, OpcionesExportacion, PropuestaVisual, TipoVisual, Trabajo } from '../../../../shared/tipos';
 import { api, urlDatos } from '../../lib/api';
 import { VistaPrevia } from '../VistaPrevia';
-import { useEstado } from '../../lib/estado';
+import { useEstado, useCampos } from '../../lib/estado';
 import { exportarDocumento } from '../../lib/exportacion';
 import { AreaTexto, Boton, Entrada, Insignia, cx } from '../ui';
 import { ActividadAgente, BotonAgente, Paso, fechaCorta, trabajosDe } from './comun';
@@ -46,7 +46,7 @@ const TIPOS: { id: TipoVisual; nombre: string; icono: typeof Network; ayuda: str
 ];
 
 export function PasoVisuales({ a, d, estado, trabajos, recargar }: Props) {
-  const { motores, avisar } = useEstado();
+  const { motores, avisar } = useCampos('motores', 'avisar');
   const conCodex = !!motores?.find((m) => m.motor === 'codex' && m.instalado && m.sesion);
   const director = trabajosDe(trabajos, 'visuales', (t) => t.ref === 'director');
   const propuestas = estado.visuales.filter((p) => p.estado !== 'descartada' && p.estado !== 'insertada');
@@ -187,7 +187,7 @@ function TarjetaPropuesta({
   trabajo?: Trabajo;
   recargar: () => void;
 }) {
-  const { avisar } = useEstado();
+  const { avisar } = useCampos('avisar');
   const permisos = usePermisos(a, d);
   const tipoPermitido: Record<TipoVisual, boolean> = {
     diagrama: permisos.diagramas,
@@ -340,7 +340,7 @@ const FORMATOS: { id: OpcionesExportacion['formato']; nombre: string; detalle: s
  * que el paso de visuales ya muestra en sus tarjetas.
  */
 function AvisoImagenes({ a, d, estado, soloFaltan }: { a: string; d: string; estado?: EstadoFlujo; soloFaltan?: boolean }) {
-  const { avisar } = useEstado();
+  const { avisar } = useCampos('avisar');
   const [lista, setLista] = useState<ImagenFallida[]>([]);
   const [reparando, setReparando] = useState(false);
   const firma = estado ? `${estado.secciones.map((s) => `${s.archivo}:${s.palabras}`).join('|')}#${estado.visuales.map((v) => v.id + v.estado).join('|')}` : '';
@@ -390,7 +390,7 @@ function AvisoImagenes({ a, d, estado, soloFaltan }: { a: string; d: string; est
 }
 
 export function PanelExportar({ a, d, estado, recargar }: { a: string; d: string; estado?: EstadoFlujo; recargar: () => void }) {
-  const { avisar } = useEstado();
+  const { avisar } = useCampos('avisar');
   const [op, setOp] = useState<OpcionesExportacion>(() => {
     try {
       return { formato: 'pdf', portada: true, indice: true, numerar: true, autoevaluacion: true, saltoSeccion: false, pies: true, ...JSON.parse(localStorage.getItem('opcionesExportar') ?? '{}') };

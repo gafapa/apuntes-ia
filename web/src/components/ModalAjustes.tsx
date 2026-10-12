@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import { FolderOpen, RefreshCw } from 'lucide-react';
 import type { Ajustes, Motor } from '../../../shared/tipos';
 import { api } from '../lib/api';
-import { useEstado } from '../lib/estado';
+import { useEstado, useCampos } from '../lib/estado';
 import { Boton, Campo, Entrada, Modal, cx } from './ui';
 import { TarjetaMotor } from './TarjetaMotor';
 import { EditorAgentes } from './EditorAgentes';
 
 export function ModalAjustes({ abierto, onCerrar }: { abierto: boolean; onCerrar: () => void }) {
-  const { ajustes, motores, cargarMotores, cargarAjustes, cargarAsignaturas, avisar } = useEstado();
+  const { ajustes, motores, cargarMotores, cargarAjustes, cargarAsignaturas, avisar } = useCampos('ajustes', 'motores', 'cargarMotores', 'cargarAjustes', 'cargarAsignaturas', 'avisar');
   const [max, setMax] = useState(3);
   const [motor, setMotor] = useState<Motor>('claude');
   const [carpeta, setCarpeta] = useState('');

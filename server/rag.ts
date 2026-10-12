@@ -63,11 +63,9 @@ export function terminos(texto: string): string[] {
 const opcionesIndice = {
   fields: ['texto', 'titulo', 'archivo'],
   storeFields: ['archivo', 'pagina', 'titulo', 'texto', 'carpeta'],
-  tokenize: (t: string) => t.split(/\s+/),
-  processTerm: (t: string) => {
-    const r = terminos(t);
-    return r.length ? r : null;
-  },
+  // Se normaliza el texto entero de una vez y no palabra a palabra (indexa casi el doble de rápido)
+  tokenize: terminos,
+  processTerm: (t: string) => t,
   searchOptions: { boost: { titulo: 2, archivo: 1.5 }, fuzzy: 0.15, prefix: true, combineWith: 'OR' as const },
 };
 
@@ -188,7 +186,7 @@ export async function indexar(dirFuentes: string): Promise<InfoIndice[]> {
         cache = { version: VERSION, mtime, tam: st.size, estado: 'sin-texto', fragmentos: [], fallo: true };
       }
       await fs.writeFile(rutaCache, JSON.stringify(cache));
-      memoria.delete(dirFuentes);
+      invalidateSourceCache(dirFuentes);
     }
     res.push({ archivo, fragmentos: cache.fragmentos.length, paginas: cache.paginas, estado: cache.estado });
   }
@@ -196,7 +194,7 @@ export async function indexar(dirFuentes: string): Promise<InfoIndice[]> {
   for (const c of await fs.readdir(dirIndice)) {
     if (!archivos.includes(c.replace(/\.json$/, ''))) {
       await fs.rm(path.join(dirIndice, c), { force: true });
-      memoria.delete(dirFuentes);
+      invalidateSourceCache(dirFuentes);
     }
   }
   return res;
@@ -216,36 +214,99 @@ async function leerCaches(dirFuentes: string): Promise<Fragmento[]> {
 }
 
 /** Firma de la carpeta de índice para saber si el índice en memoria sigue valiendo. */
-function firma(dirFuentes: string): string {
+async function firma(dirFuentes: string): Promise<string> {
   try {
-    return String(statSync(path.join(dirFuentes, '.indice')).mtimeMs);
-  } catch {
-    return '';
+    const directory = path.join(dirFuentes, '.indice');
+    const files = (await fs.readdir(directory)).filter(name => name.endsWith('.json')).sort();
+    const stamps = await Promise.all(files.map(async name => {
+      try {
+        const stats = await fs.stat(path.join(directory, name));
+        return `${name}:${stats.mtimeMs}:${stats.ctimeMs}:${stats.size}:${stats.ino}`;
+      } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return `${name}:missing`; throw error; }
+    }));
+    return stamps.join('|');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return '';
+    throw error;
   }
 }
 
-const memoria = new Map<string, { firma: string; fragmentos: (Fragmento & { carpeta: string })[] }>();
+type Memoria = { firma: string; fragmentos: Fragmento[] };
+const memoria = new Map<string, Memoria>();
+const sourceLoads = new Map<string, Promise<Memoria>>();
+
+function invalidateSourceCache(directory: string) {
+  memoria.delete(directory);
+  sourceLoads.delete(directory);
+}
+
+async function sourceMemory(directory: string): Promise<Memoria> {
+  const stamp = await firma(directory);
+  const cached = memoria.get(directory);
+  if (cached?.firma === stamp) {
+    memoria.delete(directory);
+    memoria.set(directory, cached);
+    return cached;
+  }
+  const pending = sourceLoads.get(directory);
+  if (pending) return pending;
+  const loading = leerCaches(directory).then(fragmentos => ({ firma: stamp, fragmentos }));
+  sourceLoads.set(directory, loading);
+  try {
+    const result = await loading;
+    // An invalidation during loading must not put old data back into the cache.
+    if (sourceLoads.get(directory) === loading) {
+      memoria.delete(directory);
+      memoria.set(directory, result);
+      if (memoria.size > 24) memoria.delete(memoria.keys().next().value!);
+    }
+    return result;
+  } finally { if (sourceLoads.get(directory) === loading) sourceLoads.delete(directory); }
+}
+
+/** Fragmentos de cada carpeta, leídos de sus cachés solo si han cambiado. */
+async function memoriasDe(carpetas: Record<string, string>): Promise<Memoria[]> {
+  return Promise.all(Object.values(carpetas).map(sourceMemory));
+}
 
 async function fragmentosDe(carpetas: Record<string, string>) {
+  const memorias = await memoriasDe(carpetas);
   const todos: (Fragmento & { carpeta: string; id: number })[] = [];
-  for (const [carpeta, dir] of Object.entries(carpetas)) {
-    let m = memoria.get(dir);
-    if (!m || m.firma !== firma(dir)) {
-      m = { firma: firma(dir), fragmentos: (await leerCaches(dir)).map((f) => ({ ...f, carpeta })) };
-      memoria.set(dir, m);
-    }
-    for (const f of m.fragmentos) todos.push({ ...f, carpeta, id: todos.length });
-  }
+  Object.keys(carpetas).forEach((carpeta, n) => {
+    for (const f of memorias[n].fragmentos) todos.push({ ...f, carpeta, id: todos.length });
+  });
   return todos;
+}
+
+/**
+ * Índices BM25 ya construidos, por conjunto de carpetas. Construirlo cuesta mucho más que buscar
+ * (con ~1.500 páginas, un segundo frente a unos milisegundos) y los agentes buscan muchas veces
+ * seguidas. Se rehace cuando cambia lo leído de alguna de las carpetas.
+ */
+const indices = new Map<string, { usadas: Memoria[]; indice: MiniSearch; total: number }>();
+
+async function indiceDe(carpetas: Record<string, string>) {
+  const clave = JSON.stringify(carpetas);
+  const usadas = await memoriasDe(carpetas);
+  let i = indices.get(clave);
+  if (!i || i.usadas.some((m, n) => m !== usadas[n])) {
+    const fragmentos = Object.keys(carpetas).flatMap((label, position) => usadas[position].fragmentos.map(fragment => ({ ...fragment, carpeta: label })));
+    const indice = new MiniSearch(opcionesIndice);
+    indice.addAll(fragmentos.map((fragment, id) => ({ ...fragment, id })));
+    i = { usadas, indice, total: fragmentos.length };
+  }
+  indices.delete(clave);
+  indices.set(clave, i); // el más reciente, al final
+  if (indices.size > 6) indices.delete(indices.keys().next().value!);
+  return i;
 }
 
 /** Busca en las fuentes indexadas. `carpetas`: etiqueta → carpeta de fuentes. */
 export async function buscar(carpetas: Record<string, string>, consulta: string, max = 6, archivo?: string): Promise<ResultadoRag[]> {
-  const fragmentos = (await fragmentosDe(carpetas)).filter((f) => !archivo || f.archivo === archivo);
-  if (!fragmentos.length || !consulta.trim()) return [];
-  const indice = new MiniSearch(opcionesIndice);
-  indice.addAll(fragmentos);
-  return indice.search(consulta).slice(0, max).map((r) => ({
+  if (!consulta.trim()) return [];
+  const { indice, total } = await indiceDe(carpetas);
+  if (!total) return [];
+  return indice.search(consulta, archivo ? { filter: (r) => r.archivo === archivo } : undefined).slice(0, max).map((r) => ({
     archivo: r.archivo,
     pagina: r.pagina,
     titulo: r.titulo,
@@ -294,7 +355,7 @@ export async function listar(carpetas: Record<string, string>) {
 
 /** ¿Hay algo indexado en estas carpetas? */
 export async function hayIndice(carpetas: Record<string, string>) {
-  return (await fragmentosDe(carpetas)).length > 0;
+  return (await memoriasDe(carpetas)).some((m) => m.fragmentos.length > 0);
 }
 
 /** Fragmentos formateados para incluir en un prompt, con su referencia. */

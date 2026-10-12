@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { AlertCircle, Check, CircleMinus, FileOutput, Globe, KeyRound, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
-import { useEstado } from '../lib/estado';
+import { useEstado, useCampos } from '../lib/estado';
 import { Boton, Modal, cx } from './ui';
 import { TarjetaMotor } from './TarjetaMotor';
 
@@ -14,7 +14,7 @@ const INICIO = new URLSearchParams(location.search).get('inicio') ?? 'navegador'
  * muestra al abrir la app hasta que se marca «No volver a mostrar»; desde Ajustes se puede abrir.
  */
 export function PantallaRequisitos() {
-  const { ajustes, motores, cargarMotores, cargarAjustes, verRequisitos } = useEstado();
+  const { ajustes, motores, cargarMotores, cargarAjustes, verRequisitos } = useCampos('ajustes', 'motores', 'cargarMotores', 'cargarAjustes', 'verRequisitos');
   // Solo al iniciar la app: Electron conserva sessionStorage entre arranques, así que se guarda el
   // identificador del arranque (?inicio=…, lo pone la ventana); recargar la ventana no la vuelve a mostrar
   const [cerrada, setCerrada] = useState(() => {

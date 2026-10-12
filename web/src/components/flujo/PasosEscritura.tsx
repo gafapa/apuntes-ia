@@ -3,7 +3,7 @@ import { Check, ExternalLink, Loader2, PenLine, SearchCheck, X } from 'lucide-re
 import type { EstadoFlujo, Sugerencia, TipoRevision, Trabajo } from '../../../../shared/tipos';
 import { ARCHIVO_AUTOEVALUACION } from '../../../../shared/tipos';
 import { api } from '../../lib/api';
-import { useEstado } from '../../lib/estado';
+import { useEstado, useCampos } from '../../lib/estado';
 import { diferencias } from '../../lib/diff';
 import { AreaTexto, Boton, Insignia, cx } from '../ui';
 import { ActividadAgente, BotonAgente, Paso, trabajosDe } from './comun';
@@ -146,7 +146,7 @@ const NOMBRES_REVISION: Record<TipoRevision, { nombre: string; ayuda: string }> 
 };
 
 export function PasoRevision({ a, d, estado, trabajos, recargar }: Props) {
-  const { avisar } = useEstado();
+  const { avisar } = useCampos('avisar');
   const importado = useEstado((s) => !!s.asignaturas.find((x) => x.id === a)?.documentos.find((x) => x.id === d)?.importado);
   const activos = trabajosDe(trabajos, 'revision');
   const [tipos, setTipos] = useState<Set<TipoRevision>>(new Set(['estilo', 'calidad']));

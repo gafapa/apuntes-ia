@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { BookOpen, Check, ExternalLink, FileText, Globe, Loader2, Plus, Search, Video, X } from 'lucide-react';
 import type { ResultadoBusqueda, TipoBusqueda } from '../../../shared/tipos';
 import { api } from '../lib/api';
-import { useEstado } from '../lib/estado';
+import { useCampos } from '../lib/estado';
 import { Boton, Entrada, Insignia, cx } from './ui';
 import { ActividadAgente } from './flujo/comun';
 
@@ -17,7 +17,7 @@ const ICONOS: Record<ResultadoBusqueda['tipo'], typeof Globe> = { pdf: FileText,
 
 /** Buscador de fuentes con IA: propone recursos fiables y los descarga a la carpeta de fuentes. */
 export function BuscadorFuentes({ asignatura, documento, onAnadida }: { asignatura: string; documento?: string; onAnadida: () => void }) {
-  const { avisar, versiones, reconexion, trabajos } = useEstado();
+  const { avisar, versiones, reconexion, trabajos } = useCampos('avisar', 'versiones', 'reconexion', 'trabajos');
   const [consulta, setConsulta] = useState('');
   const [tipo, setTipo] = useState<TipoBusqueda>('cualquiera');
   const [resultados, setResultados] = useState<ResultadoBusqueda[]>([]);

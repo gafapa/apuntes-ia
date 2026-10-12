@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -9,6 +10,9 @@ export default defineConfig({
   root: 'web',
   base: './',
   plugins: [react(), tailwindcss()],
+  // markdown-it-texmath pide KaTeX con require() (versión CommonJS) y el resto con import (ESM):
+  // sin esto, la app llevaría KaTeX dos veces
+  resolve: { alias: [{ find: /^katex$/, replacement: fileURLToPath(new URL('./node_modules/katex/dist/katex.mjs', import.meta.url)) }] },
   build: { outDir: '../dist-web', emptyOutDir: true, chunkSizeWarningLimit: 4000 },
   server: {
     port: Number(process.env.APUNTES_PUERTO_WEB ?? 5173),

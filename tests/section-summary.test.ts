@@ -1,0 +1,30 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { Almacen } from '../server/store';
+
+test('Section summary cache tracks external writes, atomic replacements, renames and deletions', async context => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'apuntes-summary-'));
+  context.after(() => fs.rm(directory, {recursive:true,force:true}));
+  const store = new Almacen(directory); await store.iniciar();
+  const subject = await store.crearAsignatura({nombre:'Fictional subject'});
+  const document = await store.crearDocumento(subject.id,{titulo:'Fictional document'});
+  const filename = '01-fixture.md';
+  await store.guardarSeccion(subject.id,document.id,filename,'# First\n\nOne word.');
+  const first = await store.listarSecciones(subject.id,document.id);
+  first[0].titulo = 'Caller mutation';
+  assert.equal((await store.listarSecciones(subject.id,document.id))[0].titulo,'First');
+  const full = path.join(store.dirDocumento(subject.id,document.id),'secciones',filename);
+  const originalTime = (await fs.stat(full)).mtime;
+  await fs.writeFile(full,'# Other\n\nTwo words.');
+  await fs.utimes(full,originalTime,originalTime);
+  assert.equal((await store.listarSecciones(subject.id,document.id))[0].titulo,'Other');
+  await store.guardarSeccion(subject.id,document.id,filename,'# Atomic\n\nMore fictional words.');
+  assert.equal((await store.listarSecciones(subject.id,document.id))[0].titulo,'Atomic');
+  await fs.rename(full,path.join(path.dirname(full),'02-renamed.md'));
+  assert.equal((await store.listarSecciones(subject.id,document.id))[0].archivo,'02-renamed.md');
+  await fs.rm(path.join(path.dirname(full),'02-renamed.md'));
+  assert.deepEqual(await store.listarSecciones(subject.id,document.id),[]);
+});

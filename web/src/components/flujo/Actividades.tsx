@@ -14,7 +14,7 @@ import {
   type TipoActividad,
 } from '../../../../shared/actividades';
 import { api, urlDatos } from '../../lib/api';
-import { useEstado } from '../../lib/estado';
+import { useCampos } from '../../lib/estado';
 import { AreaTexto, Boton, Entrada, Insignia, Modal, confirmar, cx } from '../ui';
 import { VistaPrevia } from '../VistaPrevia';
 import { ActividadAgente, Paso } from './comun';
@@ -24,7 +24,7 @@ import { ActividadAgente, Paso } from './comun';
  * secciones) se genera por separado, se marca para incluirlo o no en los apuntes y se exporta a Moodle por separado.
  */
 export function PasoActividades({ a, d, estado, trabajos }: { a: string; d: string; estado: EstadoFlujo; trabajos: Trabajo[] }) {
-  const { avisar } = useEstado();
+  const { avisar } = useCampos('avisar');
   const bloques = estado.actividades ?? [];
   const [modal, setModal] = useState<{ bloque?: BloqueActividad } | undefined>();
   const [abierto, setAbierto] = useState<string>();
@@ -169,7 +169,7 @@ function ModalBloque({
   secciones: { archivo: string; titulo: string }[];
   onCerrar: () => void;
 }) {
-  const { avisar } = useEstado();
+  const { avisar } = useCampos('avisar');
   const inicial = bloque?.opciones;
   // Cuántas preguntas de cada tipo: un mismo bloque puede mezclar varios
   const [cantidades, setCantidades] = useState<Partial<Record<TipoActividad, number>>>(() =>

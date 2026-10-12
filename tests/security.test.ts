@@ -196,6 +196,7 @@ test('The production HTTP and WebSocket server enforce boundaries and security h
     const normal = await fetch(`${server.url}/api/version`);
     assert.equal(normal.status, 200);
     assert.equal(normal.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal((await fetch(`${server.url}/assets/missing-fixture.js`)).status, 404);
     assert.match(normal.headers.get('content-security-policy')!, /script-src 'self';/);
     assert.equal((await fetch(`${server.url}/api/ajustes`, { headers: { 'Sec-Fetch-Site': 'cross-site' } })).status, 403);
     assert.equal((await fetch(`${server.url}/api/ajustes`, { headers: { Origin: 'http://localhost:5173' } })).status, 403);

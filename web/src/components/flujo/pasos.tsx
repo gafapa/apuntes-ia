@@ -1,6 +1,6 @@
 // Definición de las fases del flujo y cálculo de su estado, compartido por la barra
 // lateral (navegación) y la vista central (detalle de la fase elegida).
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { BookOpenText, ClipboardCheck, Download, FileSearch, Files, FolderInput, Image, ImagePlus, ListTree, PenLine, SearchCheck, SlidersHorizontal } from 'lucide-react';
 import type { EstadoFlujo, PasoFlujo, Trabajo } from '../../../../shared/tipos';
 import { ARCHIVO_AUTOEVALUACION } from '../../../../shared/tipos';
@@ -118,13 +118,21 @@ export function vistaInicial(e: EstadoFlujo | undefined, trabajos: Trabajo[]): I
 
 type ValorFlujo = ReturnType<typeof useFlujo> & { a: string; d: string };
 const Contexto = createContext<ValorFlujo | null>(null);
+/** Solo si hay un documento abierto: no cambia con cada mensaje de sus agentes, como el estado del flujo. */
+const HayFlujo = createContext(false);
 
 export function ProveedorFlujo({ a, d, children }: { a: string; d: string; children: ReactNode }) {
-  const f = useFlujo(a, d);
-  return <Contexto.Provider value={{ ...f, a, d }}>{children}</Contexto.Provider>;
+  const { estado, recargar, trabajos } = useFlujo(a, d);
+  const valor = useMemo(() => ({ estado, recargar, trabajos, a, d }), [estado, recargar, trabajos, a, d]);
+  return (
+    <HayFlujo.Provider value={true}>
+      <Contexto.Provider value={valor}>{children}</Contexto.Provider>
+    </HayFlujo.Provider>
+  );
 }
 
 export const useFlujoActual = () => useContext(Contexto);
+export const useHayFlujo = () => useContext(HayFlujo);
 
 /** Vista abierta en el documento actual: la elegida por el usuario o, si no, la fase que toca. */
 export function useVistaDocumento(): [IdVista, (v: IdVista) => void] {

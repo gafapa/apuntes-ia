@@ -92,10 +92,59 @@ export function renderizar(texto: string, base?: string): string {
 let mermaidListo: Promise<typeof import('mermaid').default> | undefined;
 let contador = 0;
 
+// ---------------------------------------------------------------------------
+// Dibujos ya hechos (diagramas, moléculas y bloques), por tipo y contenido. La vista previa se
+// rehace entera con cada cambio del texto: sin esto, todos los diagramas se volvían a dibujar
+// (y parpadeaban) aunque no hubieran cambiado. Tope por tamaño: los mapas con relieve pesan ~1 MB.
+
+const dibujados = new Map<string, string>();
+const MAX_CARACTERES = 16_000_000;
+let caracteres = 0;
+
+function recordar(clave: string, html: string) {
+  // A single unusually large render must not defeat the cache's memory budget.
+  if (html.length > MAX_CARACTERES) return;
+  const previo = dibujados.get(clave);
+  if (previo !== undefined) caracteres -= previo.length;
+  dibujados.delete(clave);
+  dibujados.set(clave, html);
+  caracteres += html.length;
+  for (const [k, v] of dibujados) {
+    if (caracteres <= MAX_CARACTERES || k === clave) break;
+    dibujados.delete(k);
+    caracteres -= v.length;
+  }
+}
+
+/** Clave del dibujo de un nodo pendiente y el atributo que lo marca como pendiente. */
+function pendiente(nodo: HTMLElement, oscuro: boolean): [clave: string, atributo: string] | undefined {
+  const d = nodo.dataset;
+  if (d.codigo !== undefined) return [`mermaid|${oscuro}|${d.codigo}`, 'data-codigo'];
+  if (d.consulta !== undefined) return [`molecula|${oscuro}|${d.consulta}`, 'data-consulta'];
+  if (d.contenido !== undefined) return [`${d.tipo}|${oscuro}|${d.base ?? ''}|${d.contenido}`, 'data-contenido'];
+}
+
+/**
+ * Pone al momento los dibujos que ya se hicieron con el mismo contenido. Se llama justo después de
+ * cambiar el HTML de la vista previa, antes de que se pinte, para que no parpadeen.
+ */
+export function dibujarRecordados(contenedor: HTMLElement) {
+  const oscuro = document.documentElement.classList.contains('dark');
+  for (const nodo of contenedor.querySelectorAll<HTMLElement>('.mermaid[data-codigo], .molecula[data-consulta], .bloque-dibujado[data-contenido]')) {
+    const p = pendiente(nodo, oscuro);
+    const html = p && dibujados.get(p[0]);
+    if (!p || html === undefined) continue;
+    nodo.innerHTML = html;
+    nodo.removeAttribute(p[1]);
+    recordar(p[0], html); // pasa a ser el más reciente
+  }
+}
+
 /** Dibuja las moléculas pendientes dentro de un contenedor. */
 async function dibujarMoleculas(contenedor: HTMLElement) {
   const oscuro = document.documentElement.classList.contains('dark');
   for (const nodo of contenedor.querySelectorAll<HTMLElement>('.molecula[data-consulta]')) {
+    const [clave] = pendiente(nodo, oscuro)!;
     const consulta = decodeURIComponent(nodo.dataset.consulta ?? '');
     nodo.removeAttribute('data-consulta');
     nodo.textContent = 'Buscando la molécula…';
@@ -107,6 +156,7 @@ async function dibujarMoleculas(contenedor: HTMLElement) {
       info.textContent = [m.nombre ?? consulta, m.formula].filter(Boolean).join(' · ') + (m.verificada ? '' : ' · SMILES no comprobado en PubChem');
       info.title = m.iupac ? `IUPAC: ${m.iupac}\nSMILES: ${m.smiles}` : `SMILES: ${m.smiles}`;
       nodo.appendChild(info);
+      recordar(clave, nodo.innerHTML);
     } catch (e) {
       nodo.innerHTML = '';
       const err = document.createElement('div');
@@ -121,11 +171,14 @@ async function dibujarMoleculas(contenedor: HTMLElement) {
 async function dibujarBloques(contenedor: HTMLElement) {
   const oscuro = document.documentElement.classList.contains('dark');
   for (const nodo of contenedor.querySelectorAll<HTMLElement>('.bloque-dibujado[data-contenido]')) {
+    const [clave] = pendiente(nodo, oscuro)!;
     const tipo = nodo.dataset.tipo as TipoBloque;
     const contenido = decodeURIComponent(nodo.dataset.contenido ?? '');
     nodo.removeAttribute('data-contenido');
     try {
-      nodo.innerHTML = await dibujarBloque(tipo, contenido, { oscuro, base: nodo.dataset.base });
+      const html = await dibujarBloque(tipo, contenido, { oscuro, base: nodo.dataset.base });
+      nodo.innerHTML = html;
+      recordar(clave, html);
     } catch (e) {
       nodo.innerHTML = '';
       const err = document.createElement('div');
@@ -138,6 +191,7 @@ async function dibujarBloques(contenedor: HTMLElement) {
 
 /** Dibuja los diagramas Mermaid, las moléculas y los demás bloques pendientes dentro de un contenedor. */
 export async function dibujarDiagramas(contenedor: HTMLElement) {
+  dibujarRecordados(contenedor);
   void dibujarMoleculas(contenedor);
   void dibujarBloques(contenedor);
   const nodos = [...contenedor.querySelectorAll<HTMLElement>('.mermaid[data-codigo]')];
@@ -150,11 +204,14 @@ export async function dibujarDiagramas(contenedor: HTMLElement) {
   const oscuro = document.documentElement.classList.contains('dark');
   mermaid.initialize({ startOnLoad: false, theme: oscuro ? 'dark' : 'default', securityLevel: 'strict', fontFamily: 'Inter Variable' });
   for (const nodo of nodos) {
-    const codigo = decodeURIComponent(nodo.dataset.codigo ?? '');
+    if (nodo.dataset.codigo === undefined) continue; // ya estaba dibujado
+    const [clave] = pendiente(nodo, oscuro)!;
+    const codigo = decodeURIComponent(nodo.dataset.codigo);
     nodo.removeAttribute('data-codigo');
     try {
       const { svg } = await mermaid.render(`mmd-${++contador}`, codigo);
       nodo.innerHTML = svg;
+      recordar(clave, svg);
     } catch (e) {
       nodo.innerHTML = '';
       const err = document.createElement('div');

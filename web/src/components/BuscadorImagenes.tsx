@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Download, ExternalLink, Landmark, Search } from 'lucide-react';
 import type { BusquedaImagenes, ResultadoImagen, Seccion } from '../../../shared/tipos';
 import { api } from '../lib/api';
-import { useEstado } from '../lib/estado';
+import { useCampos } from '../lib/estado';
 import { Boton, Entrada, Insignia, cx } from './ui';
 import { Visor } from './Visor';
 
@@ -15,7 +15,7 @@ const miniaturaPorApp = (url: string) => `/api/imagenes-web/miniatura?url=${enco
  * Cada imagen se puede guardar en los recursos del documento o insertar al final de una sección.
  */
 export function BuscadorImagenes({ a, d, onGuardada }: { a: string; d: string; onGuardada: () => void }) {
-  const { avisar, ajustes } = useEstado();
+  const { avisar, ajustes } = useCampos('avisar', 'ajustes');
   const [texto, setTexto] = useState('');
   const [ingles, setIngles] = useState('');
   const [buscando, setBuscando] = useState(false);

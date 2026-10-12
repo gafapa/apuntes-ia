@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ChevronRight, FileText, FolderOpen, Moon, Plus, Settings, Sun } from 'lucide-react';
-import { useEstado } from '../lib/estado';
+import { useCampos } from '../lib/estado';
 import { api } from '../lib/api';
 import { BotonIcono, cx } from './ui';
 import { ModalNuevaAsignatura, ModalNuevoDocumento } from './Modales';
@@ -8,16 +8,16 @@ import { ModalAjustes } from './ModalAjustes';
 import { NavegacionDocumento } from './flujo/NavegacionDocumento';
 import { ContadorTokensPie } from './ContadorTokens';
 import { Logo } from './Logo';
-import { useFlujoActual } from './flujo/pasos';
+import { useHayFlujo } from './flujo/pasos';
 
 export function BarraLateral() {
-  const { asignaturas, seleccion, seleccionar } = useEstado();
+  const { asignaturas, seleccion, seleccionar } = useCampos('asignaturas', 'seleccion', 'seleccionar');
   const [plegadas, setPlegadas] = useState<Record<string, boolean>>({});
   const [nuevaAsig, setNuevaAsig] = useState(false);
   const [nuevoDocEn, setNuevoDocEn] = useState<string>();
   const [ajustes, setAjustes] = useState(false);
   const [enVivo, setEnVivo] = useState(false);
-  const flujo = useFlujoActual();
+  const flujo = useHayFlujo();
   useEffect(() => {
     api.version().then((v) => setEnVivo(v.version === 'en vivo')).catch(() => {});
   }, []);
@@ -147,7 +147,7 @@ export function BarraLateral() {
 }
 
 function PieBarra({ onAjustes }: { onAjustes: () => void }) {
-  const { uso, motores, conectado, actualizacion } = useEstado();
+  const { uso, motores, conectado, actualizacion } = useCampos('uso', 'motores', 'conectado', 'actualizacion');
   const [oscuro, setOscuro] = useState(() => document.documentElement.classList.contains('dark'));
   const cambiarTema = () => {
     const v = !oscuro;

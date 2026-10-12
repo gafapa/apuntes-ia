@@ -1,12 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useEstado } from '../lib/estado';
+import { useCampos } from '../lib/estado';
 import { api } from '../lib/api';
 import { AreaTexto, Boton, Campo, Entrada, Modal } from './ui';
 import { SelectorEnsenanza, type ValorEnsenanza } from './SelectorEnsenanza';
 import { describirNivel, destinatariosSugeridos } from '../../../shared/catalogo/educacion';
 
 export function ModalNuevaAsignatura({ abierto, onCerrar }: { abierto: boolean; onCerrar: () => void }) {
-  const { cargarAsignaturas, seleccionar, avisar } = useEstado();
+  const { cargarAsignaturas, seleccionar, avisar } = useCampos('cargarAsignaturas', 'seleccionar', 'avisar');
   const vacio: ValorEnsenanza = { nombre: '', nivelLibre: '', idioma: 'Castellano' };
   const [v, setV] = useState<ValorEnsenanza>(vacio);
   const [destinatarios, setDestinatarios] = useState('');
@@ -87,7 +87,7 @@ export function ModalNuevaAsignatura({ abierto, onCerrar }: { abierto: boolean; 
 }
 
 export function ModalNuevoDocumento({ asignatura, onCerrar }: { asignatura?: string; onCerrar: () => void }) {
-  const { asignaturas, cargarAsignaturas, seleccionar, avisar } = useEstado();
+  const { asignaturas, cargarAsignaturas, seleccionar, avisar } = useCampos('asignaturas', 'cargarAsignaturas', 'seleccionar', 'avisar');
   const asig = asignaturas.find((a) => a.id === asignatura);
   const vacio = { titulo: '', objetivo: '', destinatarios: '', extension: '' };
   const [f, setF] = useState(vacio);

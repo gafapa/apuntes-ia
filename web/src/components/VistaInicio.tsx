@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Archive, BookOpen, Plus, Trash2 } from 'lucide-react';
 import type { Documento, Trabajo } from '../../../shared/tipos';
 import { api, type AsignaturaResumen } from '../lib/api';
-import { useEstado } from '../lib/estado';
+import { useEstado, useCampos } from '../lib/estado';
 import { Boton, Vacio } from './ui';
 import { ModalNuevaAsignatura } from './Modales';
 import { BotonRestaurarCopia, ModalPapelera } from './Gestion';
@@ -30,7 +30,7 @@ function haceTiempo(iso: string) {
 }
 
 export function VistaInicio() {
-  const { asignaturas, seleccionar } = useEstado();
+  const { asignaturas, seleccionar } = useCampos('asignaturas', 'seleccionar');
   const trabajos = useEstado((s) => s.trabajos);
   const [nueva, setNueva] = useState(false);
   const [papelera, setPapelera] = useState(false);

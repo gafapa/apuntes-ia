@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { History, Loader2, RotateCcw } from 'lucide-react';
 import type { VersionSeccion } from '../../../shared/tipos';
 import { api } from '../lib/api';
-import { useEstado } from '../lib/estado';
+import { useCampos } from '../lib/estado';
 import { diferenciasLineas, type Linea } from '../lib/diff';
 import { Boton, Modal, Vacio, confirmar, cx } from './ui';
 
@@ -30,7 +30,7 @@ export function HistorialSeccion({
   abierto: boolean;
   onCerrar: () => void;
 }) {
-  const { avisar } = useEstado();
+  const { avisar } = useCampos('avisar');
   const [versiones, setVersiones] = useState<VersionSeccion[]>();
   const [elegida, setElegida] = useState<string>();
   const [texto, setTexto] = useState<string>();

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { dibujarDiagramas, renderizar } from '../lib/markdown';
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { dibujarDiagramas, dibujarRecordados, renderizar } from '../lib/markdown';
 import { useEstado } from '../lib/estado';
 import { Visor, type ContenidoVisor } from './Visor';
 import { Estrella } from './Logo';
@@ -36,14 +36,20 @@ function nombreFigura(b: HTMLElement): string {
  * Con `seccion`, se puede seleccionar texto (arrastrando), una figura (botón «Pedir cambios» al pasar
  * el ratón) o elementos enteros (Ctrl+clic), y el chat de la derecha actúa solo sobre ese fragmento.
  */
-export function VistaPrevia({ texto, base, seccion }: { texto: string; base: string; seccion?: string }) {
+export function VistaPrevia({ texto: textoActual, base, seccion }: { texto: string; base: string; seccion?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const caja = useRef<HTMLDivElement>(null);
+  // Mientras se escribe, la vista previa va un paso por detrás: convertir el Markdown (con fórmulas)
+  // no retrasa cada tecla. Todo lo de abajo usa este texto, el que corresponde al HTML mostrado.
+  const texto = useDeferredValue(textoActual);
   const html = useMemo(() => renderizar(texto, base), [texto, base]);
   const [ampliado, setAmpliado] = useState<ContenidoVisor>();
   const [figura, setFigura] = useState<{ el: HTMLElement; top: number; left: number }>();
   const seleccion = useEstado((s) => (seccion && s.seleccionTexto?.seccion === seccion ? s.seleccionTexto : undefined));
 
+  useLayoutEffect(() => {
+    if (ref.current) dibujarRecordados(ref.current);
+  }, [html]);
   useEffect(() => {
     if (!ref.current) return;
     const t = setTimeout(() => ref.current && dibujarDiagramas(ref.current), 150);

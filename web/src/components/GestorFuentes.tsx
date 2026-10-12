@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { File, FileImage, FileText, FolderOpen, Trash2, Upload } from 'lucide-react';
 import type { Fuente } from '../../../shared/tipos';
 import { api, urlDatos } from '../lib/api';
-import { useEstado } from '../lib/estado';
+import { useCampos } from '../lib/estado';
 import { Boton, BotonIcono, Entrada, confirmar, cx } from './ui';
 import { BuscadorFuentes } from './BuscadorFuentes';
 import { BuscadorIndice } from './BuscadorIndice';
@@ -21,7 +21,7 @@ function IconoArchivo({ nombre }: { nombre: string }) {
 
 /** Material aportado (opcional) para una asignatura o un documento. */
 export function GestorFuentes({ asignatura, documento, descripcion }: { asignatura: string; documento?: string; descripcion: string }) {
-  const { avisar, versiones, reconexion } = useEstado();
+  const { avisar, versiones, reconexion } = useCampos('avisar', 'versiones', 'reconexion');
   const [fuentes, setFuentes] = useState<Fuente[]>([]);
   const [arrastrando, setArrastrando] = useState(false);
   const [subiendo, setSubiendo] = useState(false);

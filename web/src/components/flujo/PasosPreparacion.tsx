@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, BookOpen, Check, CheckCircle2, CircleDashed, CornerDownRight, FileSearch, ListTree, Loader2, Pencil, Plus, Save, Trash2 } from 'lucide-react';
 import type { Apartado, EntradaIndice, EstadoFlujo, Indice, Profundidad, Trabajo } from '../../../../shared/tipos';
 import { api, urlDatos } from '../../lib/api';
-import { useEstado } from '../../lib/estado';
+import { useCampos } from '../../lib/estado';
 import { AreaTexto, Boton, BotonIcono, Entrada, Insignia, Modal, confirmar, cx } from '../ui';
 import { VistaPrevia } from '../VistaPrevia';
 import { ActividadAgente, BotonAgente, Paso, fechaCorta, trabajosDe } from './comun';
@@ -76,7 +76,7 @@ export function PasoInvestigacion({ a, d, estado, trabajos, recargar }: Props) {
 
 /** Preguntas concretas que el usuario quiere que responda la investigación. */
 function Preguntas({ a, d, estado, recargar, hayDossier }: { a: string; d: string; estado: EstadoFlujo; recargar: () => void; hayDossier: boolean }) {
-  const { avisar } = useEstado();
+  const { avisar } = useCampos('avisar');
   const [texto, setTexto] = useState('');
   const [abierta, setAbierta] = useState<string>();
   const [enviando, setEnviando] = useState(false);
@@ -165,7 +165,7 @@ function Preguntas({ a, d, estado, recargar, hayDossier }: { a: string; d: strin
 }
 
 function ModalDossier({ a, d, abierto, onCerrar }: { a: string; d: string; abierto: boolean; onCerrar: () => void }) {
-  const { avisar } = useEstado();
+  const { avisar } = useCampos('avisar');
   const [texto, setTexto] = useState('');
   const [editando, setEditando] = useState(false);
   useEffect(() => {
@@ -240,7 +240,7 @@ function recortar(l: Apartado[], niveles: number): Apartado[] {
 }
 
 export function PasoIndice({ a, d, estado, trabajos, recargar }: Props) {
-  const { avisar } = useEstado();
+  const { avisar } = useCampos('avisar');
   const activos = trabajosDe(trabajos, 'indice');
   const [indice, setIndice] = useState<Indice | undefined>(normalizar(estado.indice));
   const [sucio, setSucio] = useState(false);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -22,10 +22,11 @@ import { permisosEfectivos } from '../../../shared/tipos';
 import { EditorPermisos } from './EditorPermisos';
 import { BotonAgente } from './flujo/comun';
 import { api, urlDatos } from '../lib/api';
-import { useEstado } from '../lib/estado';
+import { useEstado, useCampos } from '../lib/estado';
 import { AreaTexto, Boton, BotonIcono, Campo, Entrada, Insignia, Vacio, confirmar, cx } from './ui';
 import { GastoTokens } from './ContadorTokens';
-import { Editor } from './Editor';
+// CodeMirror se carga al abrir el editor, no al arrancar la app
+const Editor = lazy(() => import('./Editor').then((m) => ({ default: m.Editor })));
 import { VistaPrevia } from './VistaPrevia';
 import { GestorFuentes } from './GestorFuentes';
 import { abreviar } from '../lib/formato';
@@ -40,7 +41,7 @@ type Modo = 'editar' | 'dividido' | 'vista';
 const TODO = '__todo__';
 
 export function VistaDocumento({ asignatura, documento }: { asignatura: string; documento: string }) {
-  const { asignaturas, seleccionar, avisar, cargarAsignaturas } = useEstado();
+  const { asignaturas, seleccionar, avisar, cargarAsignaturas } = useCampos('asignaturas', 'seleccionar', 'avisar', 'cargarAsignaturas');
   const asig = asignaturas.find((a) => a.id === asignatura);
   const [doc, setDoc] = useState<Documento>();
   const [importOpen, setImportOpen] = useState(false);
@@ -139,8 +140,9 @@ export function VistaDocumento({ asignatura, documento }: { asignatura: string; 
 
 // ---------------------------------------------------------------------------
 
-function Apuntes({ asignatura, documento }: { asignatura: string; documento: string }) {
-  const { avisar, versiones, reconexion } = useEstado();
+/** Editor y vista previa. Con memo, los mensajes de los agentes (que cambian el flujo) no lo redibujan. */
+const Apuntes = memo(function Apuntes({ asignatura, documento }: { asignatura: string; documento: string }) {
+  const { avisar, versiones, reconexion } = useCampos('avisar', 'versiones', 'reconexion');
   // La selección de la vista previa es de este documento: al salir de él, se olvida
   useEffect(() => () => useEstado.setState({ seleccionTexto: undefined }), [asignatura, documento]);
   const version = `${versiones[`${asignatura}/${documento}`] ?? 0}-${reconexion}`; // también al reconectar con el servidor
@@ -462,7 +464,9 @@ function Apuntes({ asignatura, documento }: { asignatura: string; documento: str
             <div className="flex min-h-0 flex-1">
               {modo !== 'vista' && (
                 <div className={cx('min-w-0 bg-panel', modo === 'dividido' ? 'w-1/2 border-r border-borde' : 'flex-1')}>
-                  <Editor key={activa} valor={texto} onCambio={alCambiar} />
+                  <Suspense>
+                    <Editor key={activa} valor={texto} onCambio={alCambiar} />
+                  </Suspense>
                 </div>
               )}
               {modo !== 'editar' && (
@@ -487,7 +491,7 @@ function Apuntes({ asignatura, documento }: { asignatura: string; documento: str
       </div>
     </div>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 
@@ -511,7 +515,7 @@ function FichaDocumento({
   permisosAsignatura?: Permisos;
   onGuardado: (d: Documento) => void;
 }) {
-  const { avisar, seleccionar, cargarAsignaturas } = useEstado();
+  const { avisar, seleccionar, cargarAsignaturas } = useCampos('avisar', 'seleccionar', 'cargarAsignaturas');
   const inicial = { titulo: doc.titulo, objetivo: doc.objetivo, destinatarios: doc.destinatarios, extension: doc.extension, permisos: doc.permisos ?? {}, presupuesto: doc.presupuesto ?? 0 };
   const gastado = useEstado((s) => Object.values(s.tokens?.porAsignatura?.[doc.asignatura]?.documentos[doc.id] ?? {}).reduce((n, t) => n + t.entrada + t.salida, 0));
   const [f, setF] = useState(inicial);

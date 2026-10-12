@@ -2,14 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Copy, FolderOpen, ImageOff, Trash2 } from 'lucide-react';
 import type { Recurso } from '../../../shared/tipos';
 import { api, urlDatos } from '../lib/api';
-import { useEstado } from '../lib/estado';
+import { useCampos } from '../lib/estado';
 import { BotonIcono, Insignia, Vacio, confirmar } from './ui';
 import { Visor } from './Visor';
 import { BuscadorImagenes } from './BuscadorImagenes';
 
 /** Imágenes de los apuntes: las que crean o descargan los agentes y aparecen en el documento. */
 export function GaleriaRecursos({ a, d }: { a: string; d: string }) {
-  const { avisar, versiones, reconexion } = useEstado();
+  const { avisar, versiones, reconexion } = useCampos('avisar', 'versiones', 'reconexion');
   const version = `${versiones[`${a}/${d}`] ?? 0}-${reconexion}`; // también al reconectar con el servidor
   const [recursos, setRecursos] = useState<Recurso[]>([]);
   const [ampliada, setAmpliada] = useState<string>();

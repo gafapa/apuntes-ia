@@ -3,7 +3,7 @@ import { FileUp, Loader2 } from 'lucide-react';
 import type { EstadoFlujo, Trabajo } from '../../../shared/tipos';
 import { bloqueAMarkdown } from '../../../shared/actividades';
 import { api, urlDatos } from '../lib/api';
-import { useEstado } from '../lib/estado';
+import { useCampos } from '../lib/estado';
 import { Boton, Campo, Entrada, Modal } from './ui';
 import { VistaPrevia } from './VistaPrevia';
 import { isImportProcessing } from '../lib/import-status';
@@ -16,7 +16,7 @@ function ImportReport({ assignment, document, onOpen, onProcessingChange, upload
   const [jobs, setJobs] = useState<Trabajo[]>([]);
   const [error, setError] = useState('');
   const [loaded, setLoaded] = useState(false);
-  const { avisar } = useEstado();
+  const { avisar } = useCampos('avisar');
   useEffect(() => {
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -85,7 +85,7 @@ function ImportReport({ assignment, document, onOpen, onProcessingChange, upload
 }
 
 export function ImportReviewModal({ assignment, document, onClose }: { assignment: string; document?: ImportedDocument; onClose: () => void }) {
-  const { seleccionar, elegirVista } = useEstado();
+  const { seleccionar, elegirVista } = useCampos('seleccionar', 'elegirVista');
   const [processingByDocument, setProcessingByDocument] = useState<Record<string, boolean>>({});
   const onProcessingChange = useCallback((id: string, processing: boolean) => {
     setProcessingByDocument(previous => previous[id] === processing ? previous : { ...previous, [id]: processing });
@@ -106,7 +106,7 @@ export function ImportReviewModal({ assignment, document, onClose }: { assignmen
 }
 
 export function ImportNotesModal({ asignatura, onCerrar }: { asignatura?: string; onCerrar: () => void }) {
-  const { asignaturas, cargarAsignaturas, seleccionar, elegirVista } = useEstado();
+  const { asignaturas, cargarAsignaturas, seleccionar, elegirVista } = useCampos('asignaturas', 'cargarAsignaturas', 'seleccionar', 'elegirVista');
   const assignment = asignaturas.find(item => item.id === asignatura);
   const [files, setFiles] = useState<File[]>([]);
   const [title, setTitle] = useState('');

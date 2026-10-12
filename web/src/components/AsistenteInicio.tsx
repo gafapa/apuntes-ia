@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { ArrowRight, FolderOpen, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
-import { useEstado } from '../lib/estado';
+import { useCampos } from '../lib/estado';
 import { Boton, cx } from './ui';
 import { TarjetaMotor } from './TarjetaMotor';
 import { Logo } from './Logo';
@@ -14,7 +14,7 @@ const PASOS = [
 
 /** Asistente de primer arranque, a pantalla completa: comprueba Claude Code y Codex y explica cómo funciona la app. */
 export function AsistenteInicio() {
-  const { ajustes, motores, cargarMotores, cargarAjustes } = useEstado();
+  const { ajustes, motores, cargarMotores, cargarAjustes } = useCampos('ajustes', 'motores', 'cargarMotores', 'cargarAjustes');
   const [paso, setPaso] = useState(0);
   const [comprobando, setComprobando] = useState(false);
   const idTitulo = useId();
