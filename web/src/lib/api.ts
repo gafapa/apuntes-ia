@@ -33,7 +33,8 @@ import type {
   UsoSuscripcion,
   ElementoPapelera,
 } from '../../../shared/tipos';
-import type { BloqueActividad, OpcionesActividad } from '../../../shared/actividades';
+import type { BloqueActividad, OpcionesActividad, TipoActividad } from '../../../shared/actividades';
+import type { Examen, OpcionesExamen, PreguntaExamen } from '../../../shared/examenes';
 
 async function pedir<T>(metodo: string, url: string, cuerpo?: unknown): Promise<T> {
   const r = await fetch(url, {
@@ -49,6 +50,15 @@ async function pedir<T>(metodo: string, url: string, cuerpo?: unknown): Promise<
 const e = encodeURIComponent;
 const asig = (a: string) => `/api/asignaturas/${e(a)}`;
 const doc = (a: string, d: string) => `${asig(a)}/documentos/${e(d)}`;
+const exa = (a: string, id: string) => `${asig(a)}/examenes/${e(id)}`;
+
+/** Archivo subido a un examen, con el estado de su texto (si se ha podido leer). */
+export interface FuenteExamen {
+  nombre: string;
+  tamano: number;
+  estado?: 'indexado' | 'sin-texto' | 'no-admitido';
+  paginas?: number;
+}
 
 /** Molécula de un bloque ```molecula (estructura tomada de PubChem). */
 export interface Molecula {
@@ -202,6 +212,34 @@ export const api = {
     pedir<{ documento: Documento; trabajos: number }>('POST', `${doc(a, d)}/version`, { tipo, indicaciones }),
   exportarMoodle: (a: string, d: string, id: string) => pedir<Exportado>('POST', `${doc(a, d)}/actividades/${e(id)}/moodle`),
   abrirExportado: (a: string, d: string, nombre: string) => pedir('POST', `${doc(a, d)}/exportados/${e(nombre)}/abrir`),
+
+  // Exámenes de la asignatura
+  examenes: (a: string) => pedir<Examen[]>('GET', `${asig(a)}/examenes`),
+  examen: (a: string, id: string) => pedir<Examen>('GET', exa(a, id)),
+  crearExamen: (a: string, titulo: string) => pedir<Examen>('POST', `${asig(a)}/examenes`, { titulo }),
+  guardarExamen: (a: string, id: string, datos: { titulo?: string; opciones?: Partial<OpcionesExamen> }) => pedir<Examen>('PUT', exa(a, id), datos),
+  eliminarExamen: (a: string, id: string) => pedir('DELETE', exa(a, id)),
+  generarExamen: (a: string, id: string, opciones?: Partial<OpcionesExamen>) => pedir<Trabajo>('POST', `${exa(a, id)}/generar`, { opciones }),
+  ajustarPuntuacion: (a: string, id: string, total?: number) => pedir<Examen>('POST', `${exa(a, id)}/puntuacion`, { total }),
+  ordenarPreguntasExamen: (a: string, id: string, ids: string[]) => pedir<Examen>('POST', `${exa(a, id)}/orden`, { ids }),
+  nuevaPreguntaExamen: (a: string, id: string, tipo: TipoActividad, indicaciones?: string) => pedir<Trabajo>('POST', `${exa(a, id)}/preguntas`, { tipo, indicaciones }),
+  rehacerPreguntaExamen: (a: string, id: string, p: string, indicaciones?: string) => pedir<Trabajo>('POST', `${exa(a, id)}/preguntas/${e(p)}/rehacer`, { indicaciones }),
+  editarPreguntaExamen: (a: string, id: string, p: string, cambios: Partial<PreguntaExamen>) => pedir<Examen>('PUT', `${exa(a, id)}/preguntas/${e(p)}`, cambios),
+  eliminarPreguntaExamen: (a: string, id: string, p: string) => pedir<Examen>('DELETE', `${exa(a, id)}/preguntas/${e(p)}`),
+  fuentesExamen: (a: string, id: string) => pedir<FuenteExamen[]>('GET', `${exa(a, id)}/fuentes`),
+  subirFuentesExamen: async (a: string, id: string, archivos: File[]) => {
+    const fd = new FormData();
+    for (const f of archivos) fd.append('archivo', f, f.name);
+    const r = await fetch(`${exa(a, id)}/fuentes`, { method: 'POST', body: fd });
+    if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? 'Error al subir');
+    return (await r.json()) as { guardados: string[] };
+  },
+  eliminarFuenteExamen: (a: string, id: string, nombre: string) => pedir('DELETE', `${exa(a, id)}/fuentes/${e(nombre)}`),
+  exportadosExamen: (a: string, id: string) => pedir<Exportado[]>('GET', `${exa(a, id)}/exportados`),
+  exportarExamen: (a: string, id: string, formato: 'pdf' | 'docx' | 'odt') => pedir<Exportado[]>('POST', `${exa(a, id)}/exportar`, { formato }),
+  exportarExamenMoodle: (a: string, id: string) => pedir<Exportado>('POST', `${exa(a, id)}/moodle`),
+  abrirExportadoExamen: (a: string, id: string, nombre: string) => pedir('POST', `${exa(a, id)}/exportados/${e(nombre)}/abrir`),
+  abrirCarpetaExamen: (a: string, id: string) => pedir('POST', `${exa(a, id)}/carpeta`),
 
   glosario: (a: string) => pedir<{ contenido: string }>('GET', `${asig(a)}/glosario`),
   curriculo: (a: string) => pedir<{ contenido: string }>('GET', `${asig(a)}/curriculo`),

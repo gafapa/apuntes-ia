@@ -10,7 +10,8 @@ import { extractSafeArchive, loadSafeArchive, readArchiveText } from './safeArch
 import { writeFileAtomic } from './atomicFiles';
 
 // ---------------------------------------------------------------------------
-// Papelera: .papelera/<fecha>-<asignatura> o .papelera/<fecha>-<asignatura>--<documento>
+// Papelera: .papelera/<fecha>-<asignatura>, .papelera/<fecha>-<asignatura>--<documento> o
+// .papelera/<fecha>-<asignatura>--examen--<examen>
 
 const MARCA = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z-(.+)$/;
 
@@ -45,11 +46,16 @@ export async function listarPapelera(almacen: Almacen): Promise<ElementoPapelera
       res.push({ id: e.name, tipo: 'asignatura', titulo: asig.nombre, asignatura: m[6], eliminado });
       continue;
     }
+    const asignatura = m[6].split('--')[0];
+    const nombreAsignatura = async () => (await leerJson<Asignatura>(path.join(almacen.raiz, asignatura, 'asignatura.json')))?.nombre;
+    const examen = await leerJson<{ titulo: string }>(path.join(ruta, 'examen.json'));
+    if (examen) {
+      res.push({ id: e.name, tipo: 'examen', titulo: examen.titulo, asignatura, nombreAsignatura: await nombreAsignatura(), eliminado });
+      continue;
+    }
     const doc = await leerJson<Documento>(path.join(ruta, 'documento.json'));
     if (!doc) continue;
-    const asignatura = m[6].split('--')[0];
-    const nombreAsignatura = (await leerJson<Asignatura>(path.join(almacen.raiz, asignatura, 'asignatura.json')))?.nombre;
-    res.push({ id: e.name, tipo: 'documento', titulo: doc.titulo, asignatura, nombreAsignatura, eliminado });
+    res.push({ id: e.name, tipo: 'documento', titulo: doc.titulo, asignatura, nombreAsignatura: await nombreAsignatura(), eliminado });
   }
   return res.sort((a, b) => b.eliminado.localeCompare(a.eliminado));
 }
@@ -65,7 +71,18 @@ export async function restaurarDePapelera(almacen: Almacen, id: string): Promise
     return { asignatura: nuevo };
   }
   if (!existsSync(path.join(almacen.raiz, elemento.asignatura, 'asignatura.json'))) {
-    throw new ErrorUsuario('Su asignatura ya no existe: restaura antes la asignatura (o duplica el documento en otra cuando esté restaurado).');
+    throw new ErrorUsuario(
+      elemento.tipo === 'examen'
+        ? 'Su asignatura ya no existe: restaura antes la asignatura.'
+        : 'Su asignatura ya no existe: restaura antes la asignatura (o duplica el documento en otra cuando esté restaurado).',
+    );
+  }
+  if (elemento.tipo === 'examen') {
+    const base = almacen.dirExamenes(elemento.asignatura);
+    await fs.mkdir(base, { recursive: true });
+    const nuevo = await nombreLibre(base, id.match(MARCA)![6].split('--').slice(2).join('--') || slug(elemento.titulo));
+    await fs.rename(origen, path.join(base, nuevo));
+    return { asignatura: elemento.asignatura };
   }
   const base = path.join(almacen.dirAsignatura(elemento.asignatura), 'documentos');
   await fs.mkdir(base, { recursive: true });

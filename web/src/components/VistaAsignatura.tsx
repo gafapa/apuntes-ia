@@ -9,6 +9,7 @@ import { GestorFuentes } from './GestorFuentes';
 import { ModalImportar, ModalNuevoDocumento } from './Modales';
 import { ModalDuplicarAsignatura, ModalExportarTodos } from './Gestion';
 import { PestanaCurriculo, PestanaGlosario, PestanaPlantillas } from './PestanasAsignatura';
+import { PestanaExamenes } from './Examenes';
 import { SelectorEnsenanza, type ValorEnsenanza } from './SelectorEnsenanza';
 import { EditorPermisos } from './EditorPermisos';
 import { describirNivel, type Etapa } from '../../../shared/catalogo/educacion';
@@ -18,7 +19,7 @@ const normalizarIdioma = (i: string) => (/^(español|castellano)$/i.test(i.trim(
 
 const COLORES = ['#7c5cff', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#64748b'];
 
-type Pestana = 'documentos' | 'contexto' | 'material' | 'curriculo' | 'glosario' | 'plantillas';
+type Pestana = 'documentos' | 'examenes' | 'contexto' | 'material' | 'curriculo' | 'glosario' | 'plantillas';
 
 export function VistaAsignatura({ asignatura }: { asignatura: string }) {
   const { seleccionar, cargarAsignaturas, avisar, versiones, reconexion } = useCampos('seleccionar', 'cargarAsignaturas', 'avisar', 'versiones', 'reconexion');
@@ -82,11 +83,12 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
           </Boton>
         </div>
 
-        <div className="mt-8 flex gap-1 border-b border-borde">
+        <div className="mt-8 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-borde">
           {(
             [
               ['documentos', `Documentos (${a.documentos.length})`],
-              ['contexto', 'Contexto y destinatarios'],
+              ['examenes', 'Exámenes'],
+              ['contexto', 'Contexto'],
               ['material', 'Fuentes'],
               ['glosario', 'Glosario'],
               ['curriculo', 'Currículo'],
@@ -97,7 +99,7 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
               key={id}
               onClick={() => setPestana(id)}
               className={cx(
-                '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors cursor-pointer',
+                '-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors cursor-pointer',
                 pestana === id ? 'border-acento text-acento-texto' : 'border-transparent text-texto-2 hover:text-texto',
               )}
             >
@@ -169,6 +171,7 @@ export function VistaAsignatura({ asignatura }: { asignatura: string }) {
             />
           )}
 
+          {pestana === 'examenes' && <PestanaExamenes a={a} />}
           {pestana === 'glosario' && <PestanaGlosario a={a.id} />}
           {pestana === 'curriculo' && (
             <PestanaCurriculo

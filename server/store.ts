@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { Asignatura, AsignaturaDetalle, Documento, Exportado, Fuente, Permisos, Recurso, Seccion } from '../shared/tipos';
 import { PERMISOS } from '../shared/tipos';
+import type { Examen } from '../shared/examenes';
 import { writeFileAtomic } from './atomicFiles';
 
 const COLORES = ['#7c5cff', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#8b5cf6'];
@@ -429,6 +430,52 @@ export class Almacen {
 
   rutaExportado(asig: string, doc: string, nombre: string) {
     return path.join(this.dirDocumento(asig, doc), 'exportados', nombreSeguro(nombre));
+  }
+
+  // ---------- Exámenes de la asignatura (examenes/<id>/: examen.json, fuentes/ y exportados/) ----------
+
+  dirExamenes(asig: string) {
+    return path.join(this.dirAsignatura(asig), 'examenes');
+  }
+
+  dirExamen(asig: string, id: string) {
+    return path.join(this.dirExamenes(asig), nombreSeguro(id));
+  }
+
+  async listarExamenes(asig: string): Promise<Examen[]> {
+    const dir = this.dirExamenes(asig);
+    if (!existsSync(dir)) return [];
+    const res: Examen[] = [];
+    for (const e of await fs.readdir(dir, { withFileTypes: true })) {
+      if (!e.isDirectory() || e.name.startsWith('.')) continue;
+      try {
+        res.push({ ...(await leerJson<Examen>(path.join(dir, e.name, 'examen.json'))), id: e.name });
+      } catch {}
+    }
+    return res.sort((a, b) => b.actualizado.localeCompare(a.actualizado));
+  }
+
+  async leerExamen(asig: string, id: string): Promise<Examen> {
+    try {
+      return { ...(await leerJson<Examen>(path.join(this.dirExamen(asig, id), 'examen.json'))), id };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new ErrorUsuario('Examen no encontrado', 404);
+      throw error;
+    }
+  }
+
+  async guardarExamen(asig: string, examen: Examen) {
+    await fs.mkdir(this.dirExamen(asig, examen.id), { recursive: true });
+    await escribirJson(path.join(this.dirExamen(asig, examen.id), 'examen.json'), examen);
+  }
+
+  /** Carpeta nueva (con un nombre libre) para un examen. */
+  async reservarExamen(asig: string, titulo: string): Promise<string> {
+    return reserveDirectory(this.dirExamenes(asig), slug(titulo));
+  }
+
+  async eliminarExamen(asig: string, id: string) {
+    await this.aPapelera(this.dirExamen(asig, id), `${asig}--examen--${id}`);
   }
 
   // ---------- Glosario y plantillas de la asignatura ----------

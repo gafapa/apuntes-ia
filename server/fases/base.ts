@@ -102,12 +102,12 @@ export class FlujoBase {
     const motor = this.motorPara(l.agente, l.motor);
     const referencia = await this.contenidoReferencia(asignatura.id, documento?.id, l.incluir);
     // Con fuentes indexadas, el agente recibe la herramienta de búsqueda en lugar de leer documentos enteros
-    const carpetas = this.carpetasFuentes(asignatura.id, documento?.id);
+    const carpetas = l.carpetas ?? this.carpetasFuentes(asignatura.id, documento?.id);
     // Lo que la ficha de la asignatura (y la del documento) permite usar a los agentes
     const permisos = permisosEfectivos(asignatura.permisos, documento?.permisos);
     const imagenes = !!l.imagenes && permisos.busquedaImagenes;
     // Calculadora para comprobar ejercicios y datos numéricos (agentes que escriben o revisan contenido)
-    const calculo = ['redactor', 'calidad', 'autoevaluacion', 'orquestador', 'fuentes'].includes(l.agente);
+    const calculo = ['redactor', 'calidad', 'autoevaluacion', 'examinador', 'orquestador', 'fuentes'].includes(l.agente);
     const conIndice = l.fuentes !== false && permisos.fuentes && !!this.dep.mcpFuentes && (await hayIndice(carpetas).catch(() => false));
     const avisoFuentes = conIndice
       ? '\n\n## Material aportado\nEstá indexado. Para consultarlo usa las herramientas `buscar_en_fuentes` (fragmentos relevantes con archivo y página), `listar_fuentes` y `leer_pagina`. No leas los PDF ni documentos largos enteros: busca lo que necesites. Cita la fuente (archivo y página) cuando uses un dato.'

@@ -8,7 +8,7 @@ import path from 'node:path';
 import type { Trabajo } from '../shared/tipos';
 import type { Postproceso } from './agents/cola';
 import { incorporarResultados } from './buscador';
-import { FlujoAsignatura } from './fases/asignatura';
+import { FlujoExamenes } from './fases/examenes';
 import { instantaneaDocumento } from './fases/utilidades';
 import type { Dependencias } from './fases/utilidades';
 
@@ -16,10 +16,11 @@ export type { AmbitoChat, TipoVersion } from './fases/utilidades';
 
 /**
  * Flujo completo de un documento. Cada fase está en su archivo de server/fases/, encadenadas por
- * herencia (base → preparación → escritura → visuales → actividades → importación → asignatura);
+ * herencia (base → preparación → escritura → visuales → actividades → importación → asignatura →
+ * exámenes);
  * aquí se conectan los manejadores de la cola y se procesan los resultados de los agentes.
  */
-export class Flujo extends FlujoAsignatura {
+export class Flujo extends FlujoExamenes {
   constructor(dep: Dependencias) {
     super(dep);
     dep.cola.manejadores = {
@@ -55,6 +56,10 @@ export class Flujo extends FlujoAsignatura {
         return this.postMolecula(t, datos);
       case 'actividad':
         return this.postActividad(t, datos);
+      case 'examen':
+        return this.postExamen(t, datos);
+      case 'examen-pregunta':
+        return this.postPreguntaExamen(t, datos);
       case 'ambito':
         return this.restaurarFueraDeAmbito(t, datos).then((d) =>
           d.length ? `Hecho. Se han deshecho los cambios fuera de la pestaña «${datos.nombre}»: ${d.join(', ')}` : undefined,
@@ -82,6 +87,10 @@ export class Flujo extends FlujoAsignatura {
       await this.restaurarFueraDeAmbito(t, post.datos ?? {}).catch(() => {});
       return;
     }
+    if (post.tipo === 'examen') {
+      await this.alFallarExamen(t, post.datos ?? {});
+      return;
+    }
     if (post.tipo === 'actividad' && t.documento) {
       const ultimo = t.eventos.filter((e) => e.tipo === 'error').at(-1)?.texto;
       await this.cambiarActividades(t.asignatura, t.documento, (l) => {
@@ -104,6 +113,7 @@ export class Flujo extends FlujoAsignatura {
 
   /** Antes de reintentar un trabajo fallido: lo que alFallarPost marcó como error vuelve a «en curso». */
   protected async alReintentarPost(t: Trabajo, post: Postproceso) {
+    if (post.tipo === 'examen') return this.alReintentarExamen(t, post.datos ?? {});
     if (!t.documento) return;
     const { asignatura: asig, documento: doc } = t;
     if (post.tipo === 'ambito') {

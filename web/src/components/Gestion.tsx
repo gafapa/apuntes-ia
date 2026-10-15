@@ -189,7 +189,10 @@ export function ModalPapelera({ abierto, onCerrar }: { abierto: boolean; onCerra
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[13.5px] font-medium">{e.titulo}</div>
                   <div className="text-[12px] text-texto-3">
-                    {e.tipo === 'asignatura' ? 'Asignatura con sus documentos' : `Documento de ${e.nombreAsignatura ?? 'una asignatura eliminada'}`} · eliminado el{' '}
+                    {e.tipo === 'asignatura'
+                      ? 'Asignatura con sus documentos'
+                      : `${e.tipo === 'examen' ? 'Examen' : 'Documento'} de ${e.nombreAsignatura ?? 'una asignatura eliminada'}`}{' '}
+                    · eliminado el{' '}
                     {new Date(e.eliminado).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>

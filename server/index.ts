@@ -21,6 +21,8 @@ import { Flujo, type AmbitoChat, type TipoVersion } from './flujo';
 import { Historial } from './historial';
 import type { OpcionesActividad } from '../shared/actividades';
 import { exportar } from './exportar';
+import { exportarExamen, exportarExamenMoodle, listarExportadosExamen, rutaExportadoExamen, type FormatoExamen } from './exportarExamen';
+import type { OpcionesExamen, PreguntaExamen } from '../shared/examenes';
 import { Contador } from './tokens';
 import { plantillaBase } from './plantillaBase';
 import { borrarDePapelera, crearCopia, duplicarAsignatura, duplicarDocumento, listarPapelera, reunirExportados, restaurarCopia, restaurarDePapelera } from './gestion';
@@ -685,6 +687,76 @@ export async function crearServidor(op: OpcionesServidor) {
 
   // Glosario de la asignatura
   // Currículo oficial de la asignatura
+  // ---------- Exámenes de la asignatura ----------
+  type PE = PA & { id: string };
+  type PP = PE & { p: string };
+  const E = '/api/asignaturas/:a/examenes/:id';
+  const pe = (req: FastifyRequest) => req.params as PE;
+  app.get('/api/asignaturas/:a/examenes', async (req) => flujo.listarExamenes((req.params as PA).a));
+  app.post('/api/asignaturas/:a/examenes', async (req) =>
+    flujo.crearExamen((req.params as PA).a, (req.body ?? {}) as { titulo?: string; opciones?: Partial<OpcionesExamen> }),
+  );
+  app.get(E, async (req) => flujo.examen(pe(req).a, pe(req).id));
+  app.put(E, async (req) => flujo.editarExamen(pe(req).a, pe(req).id, (req.body ?? {}) as { titulo?: string; opciones?: Partial<OpcionesExamen> }));
+  app.delete(E, async (req) => flujo.eliminarExamen(pe(req).a, pe(req).id));
+  app.post(`${E}/generar`, async (req) => flujo.generarExamen(pe(req).a, pe(req).id, (req.body as { opciones?: Partial<OpcionesExamen> } | undefined)?.opciones));
+  app.post(`${E}/puntuacion`, async (req) => flujo.ajustarPuntuacion(pe(req).a, pe(req).id, (req.body as { total?: number } | undefined)?.total));
+  app.post(`${E}/orden`, async (req) => flujo.ordenarPreguntasExamen(pe(req).a, pe(req).id, ((req.body as { ids?: string[] })?.ids ?? []).map(String)));
+  // Preguntas: nueva (con IA), rehacer (con IA), editar y quitar
+  app.post(`${E}/preguntas`, async (req) => {
+    const b = (req.body ?? {}) as { tipo?: PreguntaExamen['tipo']; indicaciones?: string };
+    return flujo.pedirPreguntaExamen(pe(req).a, pe(req).id, { tipo: b.tipo, indicaciones: b.indicaciones });
+  });
+  app.post(`${E}/preguntas/:p/rehacer`, async (req) => {
+    const { a, id, p } = req.params as PP;
+    return flujo.pedirPreguntaExamen(a, id, { preguntaId: p, indicaciones: (req.body as { indicaciones?: string } | undefined)?.indicaciones });
+  });
+  app.put(`${E}/preguntas/:p`, async (req) => {
+    const { a, id, p } = req.params as PP;
+    return flujo.editarPreguntaExamen(a, id, p, (req.body ?? {}) as Partial<PreguntaExamen>);
+  });
+  app.delete(`${E}/preguntas/:p`, async (req) => {
+    const { a, id, p } = req.params as PP;
+    return flujo.eliminarPreguntaExamen(a, id, p);
+  });
+  // Archivos propios del examen (apuntes, libros, exámenes anteriores… que no se han hecho con la app)
+  app.get(`${E}/fuentes`, async (req) => flujo.fuentesExamen(pe(req).a, pe(req).id));
+  app.post(`${E}/fuentes`, async (req) => {
+    const { a, id } = pe(req);
+    const guardados: string[] = [];
+    for await (const parte of req.files()) {
+      const destino = await flujo.rutaFuenteExamen(a, id, parte.filename);
+      await saveUpload(parte.file, destino);
+      guardados.push(path.basename(destino));
+    }
+    await flujo.prepararFuentesExamen(a, id).catch(() => {});
+    return { guardados };
+  });
+  app.delete(`${E}/fuentes/:nombre`, async (req) => flujo.eliminarFuenteExamen(pe(req).a, pe(req).id, (req.params as { nombre: string }).nombre));
+  // Exportación: examen, solucionario y rúbrica (PDF, Word o LibreOffice) y Moodle
+  app.get(`${E}/exportados`, async (req) => listarExportadosExamen(almacen, pe(req).a, pe(req).id));
+  app.post(`${E}/exportar`, async (req) => {
+    const formato = (req.body as { formato?: string } | undefined)?.formato as FormatoExamen;
+    if (!['pdf', 'docx', 'odt'].includes(formato)) throw new ErrorUsuario('Formato no válido');
+    if (!dirBin) throw new ErrorUsuario('La exportación no está disponible en este modo');
+    return exportarExamen(almacen, dirBin, pe(req).a, await flujo.examen(pe(req).a, pe(req).id), formato);
+  });
+  app.post(`${E}/moodle`, async (req) => exportarExamenMoodle(almacen, pe(req).a, await flujo.examen(pe(req).a, pe(req).id)));
+  app.post(`${E}/exportados/:nombre/abrir`, async (req) => {
+    const ruta = rutaExportadoExamen(almacen, pe(req).a, pe(req).id, (req.params as { nombre: string }).nombre);
+    if (!fs.existsSync(ruta)) throw new ErrorUsuario('El archivo ya no existe', 404);
+    abrirArchivo(ruta);
+    return { ok: true };
+  });
+  app.post(`${E}/carpeta`, async (req) => {
+    const { a, id } = pe(req);
+    await flujo.examen(a, id);
+    const dir = path.join(almacen.dirExamen(a, id), 'exportados');
+    await fsp.mkdir(dir, { recursive: true });
+    abrirCarpeta(dir);
+    return { ok: true };
+  });
+
   app.get('/api/asignaturas/:a/curriculo', async (req) => ({ contenido: await almacen.leerCurriculo((req.params as PA).a) }));
   app.put('/api/asignaturas/:a/curriculo', async (req) => {
     await almacen.guardarCurriculo((req.params as PA).a, String((req.body as { contenido?: string })?.contenido ?? ''));

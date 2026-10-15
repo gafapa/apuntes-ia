@@ -10,6 +10,8 @@ import { generarGift } from '../moodle';
 import {
   DIFICULTADES,
   TIPOS_ACTIVIDAD,
+  maximoTipo,
+  preguntaValida,
   resumenTipos,
   tiposDe,
   type BloqueActividad,
@@ -18,6 +20,32 @@ import {
   type TipoActividad,
 } from '../../shared/actividades';
 import { FlujoVisuales } from './visuales';
+
+/** Formato JSON de cada tipo de pregunta, para pedírselo a la IA (actividades y exámenes). */
+export const FORMATO_PREGUNTA: Record<TipoActividad, string> = {
+  test: '{"enunciado": "…", "opciones": ["…", "…", "…", "…"], "correcta": 0, "explicacion": "por qué es la correcta"}   («correcta»: índice desde 0; distractores verosímiles)',
+  multiple: '{"enunciado": "…", "opciones": ["…", "…", "…", "…", "…"], "correctas": [0, 2], "explicacion": "por qué son esas"}   (4-6 opciones y al menos dos correctas; índices desde 0)',
+  numerica: '{"enunciado": "problema con todos los datos y lo que hay que calcular", "valor": 2.5, "tolerancia": 0.05, "unidades": "mol/L", "explicacion": "resolución paso a paso"}   («valor»: número, con punto decimal; «tolerancia»: margen admitido por el redondeo; comprueba el cálculo con la herramienta calcular si la tienes)',
+  banco: '{"enunciado": "párrafo con 4-8 huecos marcados así: ___", "respuestas": ["palabra del primer hueco", "del segundo", "…"], "opciones": ["palabra de más", "otra de más"], "explicacion": "…"}   (tantas «respuestas» como huecos, en orden; 2-3 palabras de más verosímiles)',
+  tabla: '{"enunciado": "Completa la tabla…", "material": "tabla en Markdown con 3-8 casillas vacías marcadas así: ___", "respuestas": ["lo de la primera casilla vacía", "…"], "explicacion": "…"}   (tantas «respuestas» como casillas vacías, en orden de lectura: por filas, de izquierda a derecha)',
+  vfjustificada: '{"enunciado": "afirmación", "correcta": false, "explicacion": "justificación modelo: por qué es verdadera o falsa"}   (las falsas, con un error que haya que razonar)',
+  ordenar: '{"enunciado": "Ordena…", "elementos": ["primero", "segundo", "…"], "explicacion": "…"}   (4-7 elementos EN EL ORDEN CORRECTO: la aplicación los desordena)',
+  clasificar: '{"enunciado": "Clasifica…", "categorias": [{"nombre": "categoría", "elementos": ["…", "…"]}, …], "explicacion": "…"}   (2-4 categorías y 6-12 elementos en total, sin ambigüedad)',
+  error: '{"enunciado": "afirmación o resolución breve con un error", "respuestas": ["versión corregida"], "explicacion": "cuál es el error y por qué"}   (un solo error, conceptual o de cálculo)',
+  definicion: '{"enunciado": "Define «…»", "explicacion": "definición modelo, precisa y breve"}',
+  esquema: '{"enunciado": "qué hay que dibujar, representar o esquematizar, y qué debe incluir", "explicacion": "descripción del dibujo o esquema correcto: elementos, rótulos y relaciones que debe tener"}',
+  redaccion: '{"enunciado": "tarea de escritura con su situación, destinatario, tipo de texto y extensión (p. ej., 150-200 palabras)", "explicacion": "puntos que debe tratar o un ejemplo de respuesta"}',
+  abierta: '{"enunciado": "pregunta que se responde razonando en unas líneas (explica, justifica, compara, valora…)", "explicacion": "respuesta modelo breve"}',
+  caso: '{"enunciado": "situación real o verosímil con todos los datos y lo que se pide, en apartados a), b), c)…", "explicacion": "respuesta modelo de cada apartado"}   (cada apartado en su propio párrafo: separados por \n\n)',
+  datos: '{"material": "tabla en Markdown (o serie de datos) que analizar", "enunciado": "lo que se pide, en apartados a), b), c)…", "explicacion": "respuesta modelo"}   (datos coherentes y verosímiles; si son reales, de las fuentes; cada apartado en su propio párrafo: separados por \n\n)',
+  comentario: '{"material": "texto o fragmento que comentar (de las fuentes o escrito para la pregunta)", "enunciado": "preguntas sobre el texto, en apartados a), b), c)…", "explicacion": "respuesta modelo"}   (cada apartado en su propio párrafo: separados por \n\n)',
+  vf: '{"enunciado": "afirmación", "correcta": true, "explicacion": "…"}   (mezcla verdaderas y falsas; las falsas, con un error claro)',
+  corta: '{"enunciado": "…", "respuestas": ["respuesta aceptada", "otra forma válida"], "explicacion": "…"}   (respuestas breves y cerradas)',
+  huecos: '{"enunciado": "frase con el hueco marcado así: ___", "respuestas": ["palabra que falta", "sinónimo válido"], "explicacion": "…"}   (un solo hueco por frase)',
+  emparejar: '{"enunciado": "Relaciona…", "pares": [["elemento", "su pareja"], …], "explicacion": "…"}   (cada pregunta, con 5-8 pares; la cantidad es el número de preguntas)',
+  desarrollo: '{"enunciado": "…", "explicacion": "respuesta modelo con los puntos que debe incluir"}',
+  ejercicio: '{"enunciado": "problema o caso con todos los datos", "respuestas": ["resultado final"], "explicacion": "resolución paso a paso"}   (comprueba los cálculos con la herramienta calcular si la tienes)',
+};
 
 export class FlujoActividades extends FlujoVisuales {
 
@@ -34,7 +62,7 @@ export class FlujoActividades extends FlujoVisuales {
   async generarActividad(asig: string, doc: string, entrada: Partial<OpcionesActividad>, id?: string) {
     // Cuántas preguntas de cada tipo (se admite también el formato antiguo: un tipo y una cantidad)
     const pedidas = tiposDe({ tipos: entrada.tipos ?? {}, tipo: entrada.tipo, cantidad: entrada.cantidad } as OpcionesActividad).map(
-      ([t, n]) => [t, Math.min(n, t === 'emparejar' ? 5 : 25)] as [TipoActividad, number],
+      ([t, n]) => [t, Math.min(n, maximoTipo(t))] as [TipoActividad, number],
     );
     if (!pedidas.length) throw new ErrorUsuario('Elige al menos un tipo de actividad');
     const total = pedidas.reduce((a, [, n]) => a + n, 0);
@@ -71,15 +99,6 @@ export class FlujoActividades extends FlujoVisuales {
     });
     const salida = this.salida(`actividad-${bloqueId}`);
     const dificultad = DIFICULTADES.find((d) => d.id === op.dificultad)!.nombre.toLowerCase();
-    const formato: Record<TipoActividad, string> = {
-      test: '{"enunciado": "…", "opciones": ["…", "…", "…", "…"], "correcta": 0, "explicacion": "por qué es la correcta"}   («correcta»: índice desde 0; distractores verosímiles)',
-      vf: '{"enunciado": "afirmación", "correcta": true, "explicacion": "…"}   (mezcla verdaderas y falsas; las falsas, con un error claro)',
-      corta: '{"enunciado": "…", "respuestas": ["respuesta aceptada", "otra forma válida"], "explicacion": "…"}   (respuestas breves y cerradas)',
-      huecos: '{"enunciado": "frase con el hueco marcado así: ___", "respuestas": ["palabra que falta", "sinónimo válido"], "explicacion": "…"}   (un solo hueco por frase)',
-      emparejar: '{"enunciado": "Relaciona…", "pares": [["elemento", "su pareja"], …], "explicacion": "…"}   (cada pregunta, con 5-8 pares; la cantidad es el número de preguntas)',
-      desarrollo: '{"enunciado": "…", "explicacion": "respuesta modelo con los puntos que debe incluir"}',
-      ejercicio: '{"enunciado": "problema o caso con todos los datos", "respuestas": ["resultado final"], "explicacion": "resolución paso a paso"}   (comprueba los cálculos con la herramienta calcular si la tienes)',
-    };
     await this.lanzar({
       agente: 'autoevaluacion',
       asignatura: asig,
@@ -100,7 +119,7 @@ ${pedidas.map(([t, n]) => `  · ${n} de tipo «${t}» (${nombreTipo(t).nombre}: 
 
 NO modifiques las secciones. Escribe SOLO en \`${salida}\` este JSON exacto, con las preguntas agrupadas por tipo en ese orden y el campo «tipo» en cada una:
 {"titulo": "título breve del bloque", "preguntas": [
-${pedidas.map(([t]) => `  {"tipo": "${t}", ${formato[t].slice(1)}`).join(',\n')}
+${pedidas.map(([t]) => `  {"tipo": "${t}", ${FORMATO_PREGUNTA[t].slice(1)}`).join(',\n')}
 ]}`,
       post: { tipo: 'actividad', datos: { salida, id: bloqueId } },
     });
@@ -139,16 +158,7 @@ ${pedidas.map(([t]) => `  {"tipo": "${t}", ${formato[t].slice(1)}`).join(',\n')}
     // Cada pregunta, con su tipo (si falta y solo se pidió uno, es ese) y con el formato que le corresponde
     const validas = (r.preguntas ?? [])
       .map((p) => ({ ...p, tipo: p?.tipo ?? (pedidas.length === 1 ? pedidas[0][0] : undefined) }))
-      .filter((p) => {
-        const tipo = p.tipo;
-        if (!tipo || !tiposValidos.has(tipo)) return false;
-        if (!p.enunciado && tipo !== 'emparejar') return false;
-        if (tipo === 'test') return (p.opciones?.length ?? 0) >= 2 && typeof p.correcta === 'number' && p.correcta >= 0 && p.correcta < p.opciones!.length;
-        if (tipo === 'vf') return typeof p.correcta === 'boolean';
-        if (tipo === 'corta' || tipo === 'huecos') return (p.respuestas?.length ?? 0) > 0 && (tipo !== 'huecos' || /_{3,}/.test(p.enunciado));
-        if (tipo === 'emparejar') return (p.pares?.length ?? 0) >= 2 && p.pares!.every((x) => Array.isArray(x) && x.length === 2);
-        return true;
-      })
+      .filter((p) => !!p.tipo && tiposValidos.has(p.tipo) && preguntaValida(p as PreguntaActividad))
       // Agrupadas por tipo, en el orden de la lista de tipos
       .sort((a, b) => TIPOS_ACTIVIDAD.findIndex((t) => t.id === a.tipo) - TIPOS_ACTIVIDAD.findIndex((t) => t.id === b.tipo)) as PreguntaActividad[];
     if (!validas.length) {

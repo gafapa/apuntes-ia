@@ -251,7 +251,7 @@ export async function exportar(
 }
 
 /** Plantilla de Typst para Pandoc (la importa el template por defecto como `conf`). */
-function plantillaTypst(color: string, op: OpcionesExportacion): string {
+export function plantillaTypst(color: string, op: Pick<OpcionesExportacion, 'portada' | 'saltoSeccion'>): string {
   const acento = /^#[0-9a-f]{6}$/i.test(color) ? color : '#6d4aff';
   return `
 #let acento = rgb("${acento}")

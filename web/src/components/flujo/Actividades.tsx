@@ -4,8 +4,8 @@ import type { EstadoFlujo, Trabajo } from '../../../../shared/tipos';
 import { ARCHIVO_AUTOEVALUACION } from '../../../../shared/tipos';
 import {
   DIFICULTADES,
-  TIPOS_ACTIVIDAD,
   bloqueAMarkdown,
+  maximoTipo,
   resumenTipos,
   tiposDe,
   type BloqueActividad,
@@ -17,6 +17,7 @@ import { api, urlDatos } from '../../lib/api';
 import { useCampos } from '../../lib/estado';
 import { AreaTexto, Boton, Entrada, Insignia, Modal, confirmar, cx } from '../ui';
 import { VistaPrevia } from '../VistaPrevia';
+import { SelectorTipos } from '../SelectorTipos';
 import { ActividadAgente, Paso } from './comun';
 
 /**
@@ -182,9 +183,7 @@ function ModalBloque({
   const [indicaciones, setIndicaciones] = useState(inicial?.indicaciones ?? '');
   const [enviando, setEnviando] = useState(false);
   const todas = elegidas.size === 0;
-  const maximo = (t: TipoActividad) => (t === 'emparejar' ? 5 : t === 'desarrollo' || t === 'ejercicio' ? 10 : 25);
   const total = useMemo(() => Object.values(cantidades).reduce((a, n) => a + (n ?? 0), 0), [cantidades]);
-  const fijar = (t: TipoActividad, n: number) => setCantidades({ ...cantidades, [t]: Math.max(0, Math.min(maximo(t), n)) });
 
   const enviar = async () => {
     setEnviando(true);
@@ -213,32 +212,7 @@ function ModalBloque({
           <div className="mb-1.5 flex items-baseline gap-2 text-[12.5px] font-medium text-texto-2">
             Tipos de actividad <span className="font-normal text-texto-3">(puedes mezclar varios en el mismo bloque · {total} preguntas)</span>
           </div>
-          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            {TIPOS_ACTIVIDAD.map((t) => {
-              const n = cantidades[t.id] ?? 0;
-              return (
-                <div
-                  key={t.id}
-                  className={cx('flex items-center gap-2 rounded-lg border px-2.5 py-1.5', n > 0 ? 'border-acento bg-acento-suave' : 'border-borde')}
-                  title={t.ayuda}
-                >
-                  <button className="min-w-0 flex-1 text-left cursor-pointer" onClick={() => fijar(t.id, n > 0 ? 0 : t.id === 'emparejar' ? 1 : 5)}>
-                    <span className={cx('block text-[12.5px]', n > 0 && 'font-medium')}>{t.nombre}</span>
-                    <span className="block truncate text-[11px] text-texto-3">{t.ayuda}</span>
-                  </button>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button className="size-6 rounded-md border border-borde text-[13px] hover:bg-panel-2 cursor-pointer disabled:opacity-40" disabled={!n} onClick={() => fijar(t.id, n - 1)}>
-                      −
-                    </button>
-                    <span className="w-6 text-center text-[13px] tabular-nums">{n}</span>
-                    <button className="size-6 rounded-md border border-borde text-[13px] hover:bg-panel-2 cursor-pointer disabled:opacity-40" disabled={n >= maximo(t.id)} onClick={() => fijar(t.id, n + 1)}>
-                      +
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <SelectorTipos valor={cantidades} onCambio={setCantidades} maximo={maximoTipo} />
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>

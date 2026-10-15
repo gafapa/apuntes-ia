@@ -37,6 +37,7 @@ export interface Lanzamiento {
   imagenes?: boolean; // herramienta de búsqueda de imágenes en museos y bibliotecas
   guardarImagenes?: boolean; // y la de descargarlas a recursos/ (para peticiones libres)
   fuentes?: boolean; // false: sin la búsqueda en las fuentes aunque estén indexadas
+  carpetas?: Record<string, string>; // carpetas de fuentes para la búsqueda (por defecto, las del documento y la asignatura)
   esfuerzo?: Esfuerzo; // sobrescribe el esfuerzo del agente para esta tarea
   /** Contenido que se incluye en el mensaje para que el agente no tenga que leerlo (ahorra tokens). */
   incluir?: { dossier?: boolean; secciones?: string[]; glosario?: boolean; consulta?: string };

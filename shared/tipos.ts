@@ -290,7 +290,8 @@ export type PasoFlujo =
   | 'curriculo'
   | 'fuentes'
   | 'importacion'
-  | 'diagnostico';
+  | 'diagnostico'
+  | 'examen';
 
 export type TipoBusqueda = 'cualquiera' | 'academico' | 'educativo' | 'video';
 
@@ -490,7 +491,7 @@ export interface BusquedaImagenes {
 /** Asignatura o documento en la papelera (carpeta .papelera de los datos). */
 export interface ElementoPapelera {
   id: string; // nombre de la carpeta en la papelera
-  tipo: 'asignatura' | 'documento';
+  tipo: 'asignatura' | 'documento' | 'examen';
   titulo: string;
   asignatura: string; // id de la asignatura (la propia o a la que pertenecía el documento)
   nombreAsignatura?: string; // de un documento, si su asignatura sigue existiendo
